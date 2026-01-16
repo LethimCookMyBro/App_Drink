@@ -1,26 +1,438 @@
 @import "tailwindcss";
 
+/* ========================================
+   วงแตก (Wong Taek) Design System
+   Dark Mode Neon Theme
+   ======================================== */
+
+/* Color Variables */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary */
+  --primary: #c73df5;
+  --primary-glow: rgba(199, 61, 245, 0.5);
+
+  /* Neon Accents */
+  --neon-blue: #00ffff;
+  --neon-red: #ff0040;
+  --neon-green: #80ff00;
+  --neon-yellow: #fbff00;
+
+  /* Backgrounds */
+  --background-dark: #1e1022;
+  --surface-dark: #161118;
+  --card-bg: #1f1f1f;
+
+  /* Text */
+  --foreground: #ffffff;
+  --foreground-muted: rgba(255, 255, 255, 0.6);
+  --foreground-subtle: rgba(255, 255, 255, 0.4);
 }
 
+/* Tailwind v4 Theme */
 @theme inline {
-  --color-background: var(--background);
+  /* Colors */
+  --color-primary: var(--primary);
+  --color-primary-glow: var(--primary-glow);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-red: var(--neon-red);
+  --color-neon-green: var(--neon-green);
+  --color-neon-yellow: var(--neon-yellow);
+  --color-background: var(--background-dark);
+  --color-surface: var(--surface-dark);
+  --color-card: var(--card-bg);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  /* Fonts */
+  --font-display: "Kanit", "Space Grotesk", sans-serif;
+  --font-body: "Kanit", sans-serif;
+
+  /* Border Radius */
+  --radius-default: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+
+  /* Shadows - Neon effects */
+  --shadow-neon-purple: 0 0 20px rgba(199, 61, 245, 0.5),
+    0 0 40px rgba(199, 61, 245, 0.2);
+  --shadow-neon-blue: 0 0 15px rgba(0, 255, 255, 0.4),
+    inset 0 0 10px rgba(0, 255, 255, 0.1);
+  --shadow-neon-red: 0 0 20px rgba(255, 0, 64, 0.4),
+    0 0 40px rgba(255, 0, 64, 0.1);
+  --shadow-neon-green: 0 0 15px rgba(128, 255, 0, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base Styles */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  background: var(--background-dark);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-display);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection */
+::selection {
+  background: var(--primary);
+  color: white;
+}
+
+/* Hide scrollbar but allow scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ========================================
+   Component Styles
+   ======================================== */
+
+/* Glass Panel Effect */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Neon Shadows */
+.shadow-neon-purple {
+  box-shadow: 0 0 20px rgba(199, 61, 245, 0.5), 0 0 40px rgba(199, 61, 245, 0.2);
+}
+
+.shadow-neon-blue {
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.4),
+    inset 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.shadow-neon-red {
+  box-shadow: 0 0 20px rgba(255, 0, 64, 0.4), 0 0 40px rgba(255, 0, 64, 0.1);
+}
+
+.shadow-neon-green {
+  box-shadow: 0 0 15px rgba(128, 255, 0, 0.3);
+}
+
+/* Glow Text */
+.text-glow {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.text-glow-purple {
+  text-shadow: 0 0 15px rgba(199, 61, 245, 0.6);
+}
+
+.text-glow-red {
+  text-shadow: 0 0 15px rgba(255, 0, 64, 0.6);
+}
+
+/* Material Symbols Filled */
+.material-symbols-filled {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+/* ========================================
+   Background Effects
+   ======================================== */
+
+/* Smoke/Gradient Background */
+.smoke-bg {
+  background: radial-gradient(
+    circle at 50% 30%,
+    rgba(199, 61, 245, 0.15) 0%,
+    rgba(30, 16, 34, 0) 60%
+  );
+  filter: blur(40px);
+}
+
+/* Noise Texture Overlay */
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+}
+
+/* CRT Effect for Chaos Mode */
+.crt-overlay {
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.06),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.06)
+    );
+  background-size: 100% 4px, 6px 100%;
+}
+
+/* Hazard Stripe */
+.hazard-stripe {
+  background: repeating-linear-gradient(
+    45deg,
+    #ff0040,
+    #ff0040 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+/* ========================================
+   Animations
+   ======================================== */
+
+/* Shimmer Animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Pulse Glow */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(199, 61, 245, 0.4);
+  }
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 10px rgba(199, 61, 245, 0.2);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Slow Pulse */
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Glitch Text Effect */
+.glitch-text {
+  text-shadow: 2px 0 #00ffff, -2px 0 #ff00ff;
+}
+
+/* ========================================
+   Button Styles
+   ======================================== */
+
+/* Primary Button */
+.btn-primary {
+  @apply relative overflow-hidden rounded-2xl bg-primary text-white font-bold text-xl
+         shadow-neon-purple transition-all duration-200
+         active:scale-[0.98] hover:brightness-110;
+}
+
+.btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transform: translateX(-100%);
+  transition: transform 0.7s ease;
+}
+
+.btn-primary:hover::before {
+  transform: translateX(100%);
+}
+
+/* Outline Button */
+.btn-outline {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 2px solid;
+  background: transparent;
+  font-weight: 700;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+}
+.btn-outline:active {
+  transform: scale(0.98);
+}
+
+/* Neon Blue Button */
+.btn-neon-blue {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 2px solid var(--neon-blue);
+  background: transparent;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--neon-blue);
+  box-shadow: var(--shadow-neon-blue);
+  transition: all 0.2s;
+}
+.btn-neon-blue:hover {
+  background: rgba(0, 255, 255, 0.1);
+}
+.btn-neon-blue:active {
+  transform: scale(0.98);
+}
+
+/* Neon Red Button */
+.btn-neon-red {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--neon-red);
+  color: white;
+  font-weight: 700;
+  box-shadow: 0 4px 0 #990026, 0 10px 20px rgba(255, 0, 64, 0.3);
+  transition: all 0.2s;
+}
+.btn-neon-red:active {
+  box-shadow: none;
+  transform: translateY(4px);
+}
+
+/* Neon Green Button */
+.btn-neon-green {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--neon-green);
+  color: black;
+  font-weight: 700;
+  box-shadow: 0 4px 0 #4d9900, 0 10px 20px rgba(128, 255, 0, 0.3);
+  transition: all 0.2s;
+}
+.btn-neon-green:active {
+  box-shadow: none;
+  transform: translateY(4px);
+}
+
+/* ========================================
+   Card Styles
+   ======================================== */
+
+.game-card {
+  position: relative;
+  border-radius: 1rem;
+  border: 2px solid;
+  background: rgba(31, 31, 31, 0.9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.game-card-blue {
+  border-color: var(--neon-blue);
+  box-shadow: var(--shadow-neon-blue);
+}
+
+.game-card-purple {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-neon-purple);
+}
+
+.game-card-green {
+  border-color: var(--neon-green);
+  box-shadow: var(--shadow-neon-green);
+}
+
+.game-card-red {
+  border-color: var(--neon-red);
+  box-shadow: var(--shadow-neon-red);
+}
+
+/* ========================================
+   Input Styles
+   ======================================== */
+
+.input-neon {
+  @apply w-full bg-white/5 border-2 border-transparent border-b-primary/50
+         text-white placeholder-white/20 py-4 px-4 rounded-xl
+         focus:border-primary focus:ring-0 focus:outline-none 
+         focus:bg-white/10 focus:shadow-neon-purple transition-all;
+}
+
+/* Range Slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 28px;
+  width: 28px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  margin-top: -12px;
+  box-shadow: 0 0 10px #ffffff;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: #3a2e42;
+  border-radius: 999px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  @apply relative w-14 h-8 bg-white/10 rounded-full cursor-pointer transition-colors;
+}
+
+.toggle-switch::after {
+  content: "";
+  @apply absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform;
+}
+
+.toggle-switch.active {
+  @apply bg-primary shadow-neon-purple;
+}
+
+.toggle-switch.active::after {
+  @apply translate-x-6;
+}
+
+/* ========================================
+   Layout Utilities
+   ======================================== */
+
+.container-mobile {
+  @apply relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col;
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
 }

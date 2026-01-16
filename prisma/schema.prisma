@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// Room (วง) - The drinking circle
+// ==========================================
+model Room {
+  id          String   @id @default(cuid())
+  code        String   @unique @db.VarChar(4)
+  name        String   @db.VarChar(100)
+  hostId      String
+  difficulty  Int      @default(3) // 1-5 stars
+  is18Plus    Boolean  @default(false)
+  maxPlayers  Int      @default(8)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  players     Player[]
+  sessions    GameSession[]
+  
+  @@index([code])
+  @@index([isActive])
+}
+
+// ==========================================
+// Player (ผู้เล่น)
+// ==========================================
+model Player {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(50)
+  roomId      String
+  isHost      Boolean  @default(false)
+  isReady     Boolean  @default(false)
+  isOnline    Boolean  @default(true)
+  drinkCount  Int      @default(0)
+  skipCount   Int      @default(0)
+  joinedAt    DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  events      GameEvent[]
+  
+  @@index([roomId])
+  @@index([isOnline])
+}
+
+// ==========================================
+// Question (คำถาม)
+// ==========================================
+model Question {
+  id          String   @id @default(cuid())
+  text        String   @db.Text
+  type        QuestionType
+  level       Int      // 1=chill, 2=mid, 3=spicy
+  is18Plus    Boolean  @default(false)
+  isPublic    Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?  // null = system, otherwise admin id
+  
+  events      GameEvent[]
+  
+  @@index([type])
+  @@index([level])
+  @@index([is18Plus])
+  @@index([isActive])
+}
+
+enum QuestionType {
+  QUESTION  // คำถามทั่วไป
+  TRUTH     // ความจริง
+  DARE      // คำท้า
+  CHAOS     // โกลาหล
+  VOTE      // โหวต
+}
+
+// ==========================================
+// GameSession (เซสชันการเล่น)
+// ==========================================
+model GameSession {
+  id          String      @id @default(cuid())
+  roomId      String
+  mode        GameMode
+  roundCount  Int         @default(0)
+  status      SessionStatus @default(ACTIVE)
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  
+  room        Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  events      GameEvent[]
+  
+  @@index([roomId])
+  @@index([status])
+}
+
+enum GameMode {
+  QUESTION      // โหมดคำถาม
+  VOTE          // โหมดโหวต
+  TRUTH_OR_DARE // ความจริงหรือท้า
+  CHAOS         // โกลาหล
+  MIXED         // ผสม
+}
+
+enum SessionStatus {
+  ACTIVE    // กำลังเล่น
+  PAUSED    // หยุดพัก
+  COMPLETED // จบเกม
+  ABANDONED // ยกเลิก
+}
+
+// ==========================================
+// GameEvent (เหตุการณ์ในเกม)
+// ==========================================
+model GameEvent {
+  id          String   @id @default(cuid())
+  sessionId   String
+  playerId    String
+  questionId  String?
+  type        EventType
+  data        Json?    // Additional event data
+  createdAt   DateTime @default(now())
+  
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player      Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  question    Question?   @relation(fields: [questionId], references: [id])
+  
+  @@index([sessionId])
+  @@index([playerId])
+  @@index([type])
+}
+
+enum EventType {
+  ANSWERED      // ตอบคำถาม
+  SKIPPED       // ข้าม (ดื่ม)
+  DRANK         // ดื่ม
+  COMPLETED     // ทำภารกิจสำเร็จ
+  GAVE_UP       // ยอมแพ้
+  VOTED         // โหวต
+  TIMEOUT       // หมดเวลา
+}
+
+// ==========================================
+// Admin (ผู้ดูแลระบบ)
+// ==========================================
+model Admin {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String   // hashed
+  name        String
+  role        AdminRole @default(MODERATOR)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  lastLoginAt DateTime?
+  
+  @@index([email])
+}
+
+enum AdminRole {
+  SUPER_ADMIN   // เต็มสิทธิ์
+  ADMIN         // จัดการคำถาม
+  MODERATOR     // ดูสถิติ
+}
+
+// ==========================================
+// AppSettings (ตั้งค่าแอป)
+// ==========================================
+model AppSettings {
+  id          String   @id @default("app_settings")
+  is18PlusEnabled Boolean @default(true)
+  defaultDifficulty Int @default(3)
+  defaultMaxPlayers Int @default(8)
+  defaultTimerSeconds Int @default(30)
+  updatedAt   DateTime @updatedAt
+}

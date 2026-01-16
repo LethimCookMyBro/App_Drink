@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# วงแตก (Wong Taek) 🍻
+
+เกมวงเหล้าสำหรับเพื่อนสนิท - เล่นบนมือถือหรือแท็บเล็ตเครื่องเดียวร่วมกัน
+
+## Features
+
+### สำหรับผู้เล่น
+
+- **3 ระดับความเดือด**: ชิลล์ๆ 🧊, เริ่มเดือด 🍻, เดือดสุด 18+ 🔥
+- **หลายโหมดเกม**: คำถาม, Truth or Dare, โหวต, โกลาหล
+- **สุ่มคำถาม**: ไม่ซ้ำจนกว่าจะหมด pool
+- **สุ่มผู้เล่น**: เปลี่ยนตาเล่นแบบ random ทุกรอบ
+- **Timer**: นับถอยหลัง 30 วินาทีต่อรอบ
+- **Settings**: เปิด/ปิด 18+ mode, เสียง, vibration
+
+### Admin Panel
+
+- **Dashboard**: ดูสถิติคำถามทั้งหมด
+- **จัดการคำถาม**: เพิ่ม/แก้ไข/ลบ คำถาม
+- **Filter**: กรองตามประเภท, ระดับ, 18+
+- **Responsive**: ใช้งานได้ทั้ง Desktop และ Tablet
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Styling**: Tailwind CSS + Custom CSS
+- **Animation**: Framer Motion
+- **State**: Zustand
+- **Database**: Prisma + PostgreSQL (optional)
+- **Icons**: Google Material Symbols
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เปิด [http://localhost:3000](http://localhost:3000) เพื่อเริ่มเล่น
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/                  # Next.js App Router pages
+│   ├── admin/           # Admin panel
+│   │   ├── page.tsx     # Dashboard
+│   │   └── questions/   # Question management
+│   ├── game/            # Game pages
+│   │   ├── modes/       # Mode selection
+│   │   └── play/        # Gameplay
+│   ├── lobby/           # Player setup
+│   ├── settings/        # App settings
+│   └── page.tsx         # Welcome page
+├── components/          # Reusable UI components
+│   └── ui/              # Button, Timer, GlassPanel, etc.
+├── store/               # Zustand store
+└── styles/              # Global CSS
+```
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+```env
+DATABASE_URL="postgresql://..."  # Optional, for real DB
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Screenshots
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Welcome Page
 
-## Deploy on Vercel
+เลือกระดับความเดือดก่อนเริ่มเกม
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Game Play
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+คำถามแบบ random พร้อม timer และปุ่ม ข้าม/ตอบแล้ว
+
+### Admin Dashboard
+
+จัดการคำถามทั้งหมดผ่าน web interface
+
+## License
+
+MIT License - ใช้งานได้ฟรี
+
+---
+
+**ดื่มอย่างรับผิดชอบ** 🍺
