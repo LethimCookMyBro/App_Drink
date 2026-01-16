@@ -12,11 +12,12 @@ export default function CreateCirclePage() {
   const { createRoom, vibeLevel } = useGameStore();
 
   const [circleName, setCircleName] = useState("สายแข็ง 2024");
+  const [playerName, setPlayerName] = useState("");
   const [playerCount, setPlayerCount] = useState(8);
 
   const handleCreate = () => {
-    // 18+ mode is now controlled via Settings, not here
-    createRoom(circleName, "ฉัน", 3, false, playerCount);
+    const name = playerName.trim() || "ผู้เล่น 1";
+    createRoom(circleName, name, 3, false, playerCount);
     router.push("/lobby/new");
   };
 
@@ -66,7 +67,26 @@ export default function CreateCirclePage() {
       </div>
 
       {/* Form */}
-      <div className="flex-1 px-5 space-y-8">
+      <div className="flex-1 px-5 space-y-6">
+        {/* Player Name */}
+        <div className="flex flex-col gap-3">
+          <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase ml-1">
+            ชื่อของคุณ
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="ใส่ชื่อของคุณ..."
+              className="input-neon text-xl font-bold"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
+              person
+            </span>
+          </div>
+        </div>
+
         {/* Circle Name */}
         <div className="flex flex-col gap-3">
           <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase ml-1">
@@ -78,7 +98,7 @@ export default function CreateCirclePage() {
               value={circleName}
               onChange={(e) => setCircleName(e.target.value)}
               placeholder="ตั้งชื่อวง..."
-              className="input-neon text-3xl font-bold"
+              className="input-neon text-xl font-bold"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
               edit
