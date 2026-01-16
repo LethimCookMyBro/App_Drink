@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
-import { QuestionType } from "@prisma/client";
 
-// Fallback questions when database is offline
+// Fallback questions when database is offline - organized by type and level
 const fallbackQuestions = [
   // QUESTION type - Level 1
   {
@@ -64,7 +62,7 @@ const fallbackQuestions = [
     is18Plus: false,
   },
 
-  // VOTE type
+  // VOTE type - Level 1, 2, 3
   {
     id: "fb-v1",
     text: "ใครโมโหง่ายที่สุดในวง?",
@@ -100,8 +98,15 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  {
+    id: "fb-v6",
+    text: "ใครแอบหลอกลวงเก่งที่สุด?",
+    type: "VOTE",
+    level: 3,
+    is18Plus: false,
+  },
 
-  // TRUTH type
+  // TRUTH type - Level 1, 2, 3
   {
     id: "fb-t1",
     text: "เคยแอบชอบเพื่อนสนิทไหม?",
@@ -137,8 +142,15 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  {
+    id: "fb-t6",
+    text: "เคยทำอะไรผิดกฎหมายบ้าง?",
+    type: "TRUTH",
+    level: 3,
+    is18Plus: false,
+  },
 
-  // DARE type
+  // DARE type - Level 1, 2, 3
   {
     id: "fb-d1",
     text: "โทรหาคนสุดท้ายในประวัติโทรแล้วบอกรัก",
@@ -174,8 +186,15 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  {
+    id: "fb-d6",
+    text: "ให้คนซ้ายมือเขียนอะไรก็ได้บนหน้า",
+    type: "DARE",
+    level: 3,
+    is18Plus: false,
+  },
 
-  // CHAOS type
+  // CHAOS type - Level 1, 2, 3
   {
     id: "fb-c1",
     text: "ทุกคนดื่ม! ใครไม่ดื่มต้องตอบคำถาม",
@@ -211,20 +230,50 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  {
+    id: "fb-c6",
+    text: "ทุกคนแข่งดื่ม คนสุดท้ายต้องตอบคำถาม!",
+    type: "CHAOS",
+    level: 3,
+    is18Plus: false,
+  },
 ];
+
+// Helper to filter fallback questions
+function getFilteredFallback(
+  type: string | null,
+  level: string | null,
+  is18Plus: string | null
+) {
+  let filtered = [...fallbackQuestions];
+
+  if (type) {
+    filtered = filtered.filter((q) => q.type === type);
+  }
+  if (level) {
+    filtered = filtered.filter((q) => q.level <= parseInt(level));
+  }
+  if (is18Plus !== null && is18Plus !== "true") {
+    filtered = filtered.filter((q) => !q.is18Plus);
+  }
+
+  return filtered;
+}
 
 // GET /api/questions - List questions with filters
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const type = searchParams.get("type");
+  const level = searchParams.get("level");
+  const is18Plus = searchParams.get("is18Plus");
+  const limit = parseInt(searchParams.get("limit") || "50");
+  const offset = parseInt(searchParams.get("offset") || "0");
+
   try {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") as QuestionType | null;
-    const level = searchParams.get("level");
-    const is18Plus = searchParams.get("is18Plus");
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    // Try to dynamically import and use Prisma
+    const { default: prisma } = await import("@/lib/db");
 
-    const where: any = { isActive: true };
-
+    const where: Record<string, unknown> = { isActive: true };
     if (type) where.type = type;
     if (level) where.level = parseInt(level);
     if (is18Plus !== null) where.is18Plus = is18Plus === "true";
@@ -247,28 +296,20 @@ export async function GET(request: NextRequest) {
       hasMore: offset + questions.length < total,
     });
   } catch (error) {
-    console.error("Error fetching questions:", error);
+    console.error("Database error, using fallback:", error);
 
     // Return fallback questions when database is offline
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type");
-    const level = searchParams.get("level");
-
-    let filtered = fallbackQuestions;
-    if (type) {
-      filtered = filtered.filter((q) => q.type === type);
-    }
-    if (level) {
-      filtered = filtered.filter((q) => q.level <= parseInt(level));
-    }
+    const filtered = getFilteredFallback(type, level, is18Plus);
+    const paged = filtered.slice(offset, offset + limit);
 
     return NextResponse.json({
-      questions: filtered,
+      questions: paged,
       total: filtered.length,
-      limit: 50,
-      offset: 0,
-      hasMore: false,
+      limit,
+      offset,
+      hasMore: offset + paged.length < filtered.length,
       fallback: true,
+      message: "ใช้ข้อมูลตัวอย่าง (กรุณาเชื่อมต่อ Database เพื่อใช้งานจริง)",
     });
   }
 }
@@ -287,24 +328,21 @@ export async function POST(request: NextRequest) {
 
     if (!text || text.trim().length < 5) {
       return NextResponse.json(
-        { error: "Question text must be at least 5 characters" },
+        { error: "คำถามต้องมีอย่างน้อย 5 ตัวอักษร" },
         { status: 400 }
       );
     }
 
-    const validTypes: QuestionType[] = [
-      "QUESTION",
-      "TRUTH",
-      "DARE",
-      "CHAOS",
-      "VOTE",
-    ];
+    const validTypes = ["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"];
     if (!validTypes.includes(type)) {
       return NextResponse.json(
-        { error: "Invalid question type" },
+        { error: "ประเภทคำถามไม่ถูกต้อง" },
         { status: 400 }
       );
     }
+
+    // Try to dynamically import and use Prisma
+    const { default: prisma } = await import("@/lib/db");
 
     const question = await prisma.question.create({
       data: {
@@ -321,8 +359,9 @@ export async function POST(request: NextRequest) {
     console.error("Error creating question:", error);
     return NextResponse.json(
       {
-        error:
-          "ไม่สามารถเพิ่มคำถามได้ กรุณาเชื่อมต่อ Database ก่อน (รัน PostgreSQL และ npx prisma db push)",
+        error: "ไม่สามารถเพิ่มคำถามได้",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
       { status: 500 }
     );
