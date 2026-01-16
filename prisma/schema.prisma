@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ==========================================
@@ -87,11 +86,47 @@ enum QuestionType {
 }
 
 // ==========================================
+// User (ผู้ใช้งาน)
+// ==========================================
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // hashed with bcrypt
+  name          String    @db.VarChar(50)
+  avatarUrl     String?
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  lastLoginAt   DateTime?
+  
+  sessions      UserSession[]
+  gameSessions  GameSession[]
+  
+  @@index([email])
+}
+
+// ==========================================
+// UserSession (เซสชันผู้ใช้)
+// ==========================================
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+}
+
+// ==========================================
 // GameSession (เซสชันการเล่น)
 // ==========================================
 model GameSession {
   id          String      @id @default(cuid())
   roomId      String
+  userId      String?     // Link to user who created session
   mode        GameMode
   roundCount  Int         @default(0)
   status      SessionStatus @default(ACTIVE)
@@ -99,9 +134,11 @@ model GameSession {
   endedAt     DateTime?
   
   room        Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id])
   events      GameEvent[]
   
   @@index([roomId])
+  @@index([userId])
   @@index([status])
 }
 

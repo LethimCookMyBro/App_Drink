@@ -14,7 +14,7 @@ const navItems: NavItem[] = [
   { href: "/", icon: "home", label: "หน้าหลัก" },
   { href: "/game/modes", icon: "sports_esports", label: "เกม" },
   { href: "/history", icon: "history", label: "ประวัติ" },
-  { href: "/settings", icon: "settings", label: "ตั้งค่า" },
+  { href: "/profile", icon: "person", label: "โปรไฟล์" },
 ];
 
 export function BottomNav() {

@@ -148,11 +148,58 @@ export default function GamePlayPage() {
 
     // Fetch questions from API
     fetchQuestions();
-  }, []);
+  }, [mode]);
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch("/api/questions/random?count=50");
+      // Map mode to question type
+      const modeToType: Record<string, string> = {
+        question: "QUESTION",
+        vote: "VOTE",
+        "truth-or-dare": "TRUTH,DARE", // Both truth and dare
+        chaos: "CHAOS",
+      };
+
+      const questionType = modeToType[mode] || "QUESTION";
+      const is18Plus = localStorage.getItem("wongtaek-18plus") === "true";
+
+      // Build API URL with filters
+      const params = new URLSearchParams({
+        count: "50",
+        is18Plus: is18Plus.toString(),
+      });
+
+      // Add type filter (for truth-or-dare, we'll fetch both and combine)
+      if (mode === "truth-or-dare") {
+        // Fetch both TRUTH and DARE questions
+        const [truthRes, dareRes] = await Promise.all([
+          fetch(
+            `/api/questions/random?count=25&type=TRUTH&is18Plus=${is18Plus}`
+          ),
+          fetch(
+            `/api/questions/random?count=25&type=DARE&is18Plus=${is18Plus}`
+          ),
+        ]);
+
+        const truthData = truthRes.ok
+          ? await truthRes.json()
+          : { questions: [] };
+        const dareData = dareRes.ok ? await dareRes.json() : { questions: [] };
+
+        const combined = [
+          ...(truthData.questions || []),
+          ...(dareData.questions || []),
+        ];
+        if (combined.length > 0) {
+          // Shuffle combined questions
+          setQuestions(combined.sort(() => Math.random() - 0.5));
+        }
+        return;
+      }
+
+      params.set("type", questionType);
+
+      const res = await fetch(`/api/questions/random?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         if (data.questions && data.questions.length > 0) {
