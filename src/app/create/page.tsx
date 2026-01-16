@@ -12,12 +12,11 @@ export default function CreateCirclePage() {
   const { createRoom, vibeLevel } = useGameStore();
 
   const [circleName, setCircleName] = useState("สายแข็ง 2024");
-  const [difficulty, setDifficulty] = useState(3);
   const [playerCount, setPlayerCount] = useState(8);
 
   const handleCreate = () => {
     // 18+ mode is now controlled via Settings, not here
-    createRoom(circleName, "ฉัน", difficulty, false, playerCount);
+    createRoom(circleName, "ฉัน", 3, false, playerCount);
     router.push("/lobby/new");
   };
 
@@ -86,41 +85,6 @@ export default function CreateCirclePage() {
             </span>
           </div>
         </div>
-
-        {/* Difficulty */}
-        <GlassPanel className="flex flex-col gap-3">
-          <div className="flex justify-between items-center mb-2">
-            <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase">
-              ระดับความโหด
-            </label>
-            <span className="text-primary text-xs font-bold bg-primary/10 px-2 py-1 rounded">
-              ระดับ {difficulty}
-            </span>
-          </div>
-          <div className="flex justify-between items-center px-1">
-            {[1, 2, 3, 4, 5].map((level) => (
-              <motion.button
-                key={level}
-                onClick={() => setDifficulty(level)}
-                className="group p-1 transition-transform active:scale-90"
-                whileTap={{ scale: 0.9 }}
-              >
-                <span
-                  className={`material-symbols-outlined text-[32px] ${
-                    level <= difficulty
-                      ? "text-primary material-symbols-filled drop-shadow-[0_0_8px_rgba(199,61,245,0.6)]"
-                      : "text-white/20 group-hover:text-primary/50"
-                  }`}
-                >
-                  star
-                </span>
-              </motion.button>
-            ))}
-          </div>
-          <p className="text-white/40 text-[10px] text-center mt-2">
-            ระดับยิ่งสูง คำถามยิ่งแรง
-          </p>
-        </GlassPanel>
 
         {/* Player Count */}
         <GlassPanel className="flex flex-col gap-3">
