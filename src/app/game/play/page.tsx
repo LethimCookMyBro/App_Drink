@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button, Timer, GlassPanel } from "@/components/ui";
+import { Button, Timer } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
 
 // Force dynamic rendering to avoid prerender errors with useSearchParams
@@ -91,6 +91,41 @@ const fallbackQuestions: GameQuestion[] = [
     level: 3,
     is18Plus: true,
   },
+  {
+    id: "11",
+    text: "เคยแอบชอบเพื่อนสนิทไหม?",
+    type: "TRUTH",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "12",
+    text: "เคยนอนดึกเพราะอะไรบ้าง?",
+    type: "TRUTH",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "13",
+    text: "ร้องเพลงโปรดให้เพื่อนฟัง",
+    type: "DARE",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "14",
+    text: "ใครจะแต่งงานเป็นคนแรก?",
+    type: "VOTE",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "15",
+    text: "ทุกคนดื่มพร้อมกัน!",
+    type: "CHAOS",
+    level: 2,
+    is18Plus: false,
+  },
 ];
 
 // Player names for demo (will be replaced with actual players from lobby)
@@ -116,14 +151,12 @@ function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode") || "question";
+  const level = parseInt(searchParams.get("level") || "3"); // Default to max level
   const { vibeLevel } = useGameStore();
 
   const [questions, setQuestions] = useState<GameQuestion[]>(fallbackQuestions);
-  const [usedQuestionIds, setUsedQuestionIds] = useState<Set<string>>(
-    new Set()
-  );
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
-    null
+    null,
   );
   const [players, setPlayers] = useState<string[]>(demoPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -131,6 +164,30 @@ function GamePlayContent() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [timerKey, setTimerKey] = useState(0);
   const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
+
+  // NEW: Track answered questions per player
+  const [playerAnsweredQuestions, setPlayerAnsweredQuestions] = useState<
+    Record<string, Set<string>>
+  >({});
+
+  // NEW: Player turn queue for fair rotation (shuffled order)
+  const [playerQueue, setPlayerQueue] = useState<number[]>([]);
+  const [queuePosition, setQueuePosition] = useState(0);
+
+  // NEW: Track last N players to avoid repeats
+  const recentPlayersRef = useRef<number[]>([]);
+
+  // Initialize player queue with shuffled order
+  const initializePlayerQueue = useCallback((playerCount: number) => {
+    const indices = Array.from({ length: playerCount }, (_, i) => i);
+    // Shuffle using Fisher-Yates
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    setPlayerQueue(indices);
+    setQueuePosition(0);
+  }, []);
 
   // Load 18+ setting and fetch questions
   useEffect(() => {
@@ -144,15 +201,24 @@ function GamePlayContent() {
         const parsed = JSON.parse(savedPlayers);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setPlayers(parsed);
+          initializePlayerQueue(parsed.length);
+          // Initialize answered questions tracking for each player
+          const initialTracking: Record<string, Set<string>> = {};
+          parsed.forEach((name: string) => {
+            initialTracking[name] = new Set();
+          });
+          setPlayerAnsweredQuestions(initialTracking);
         }
       } catch {
-        // Use demo players
+        initializePlayerQueue(demoPlayers.length);
       }
+    } else {
+      initializePlayerQueue(demoPlayers.length);
     }
 
     // Fetch questions from API
     fetchQuestions();
-  }, [mode]);
+  }, [mode, initializePlayerQueue]);
 
   const fetchQuestions = async () => {
     try {
@@ -160,7 +226,7 @@ function GamePlayContent() {
       const modeToType: Record<string, string> = {
         question: "QUESTION",
         vote: "VOTE",
-        "truth-or-dare": "TRUTH,DARE", // Both truth and dare
+        "truth-or-dare": "TRUTH,DARE",
         chaos: "CHAOS",
       };
 
@@ -171,17 +237,17 @@ function GamePlayContent() {
       const params = new URLSearchParams({
         count: "50",
         is18Plus: is18Plus.toString(),
+        level: level.toString(),
       });
 
       // Add type filter (for truth-or-dare, we'll fetch both and combine)
       if (mode === "truth-or-dare") {
-        // Fetch both TRUTH and DARE questions
         const [truthRes, dareRes] = await Promise.all([
           fetch(
-            `/api/questions/random?count=25&type=TRUTH&is18Plus=${is18Plus}`
+            `/api/questions/random?count=25&type=TRUTH&is18Plus=${is18Plus}&level=${level}`,
           ),
           fetch(
-            `/api/questions/random?count=25&type=DARE&is18Plus=${is18Plus}`
+            `/api/questions/random?count=25&type=DARE&is18Plus=${is18Plus}&level=${level}`,
           ),
         ]);
 
@@ -195,7 +261,6 @@ function GamePlayContent() {
           ...(dareData.questions || []),
         ];
         if (combined.length > 0) {
-          // Shuffle combined questions
           setQuestions(combined.sort(() => Math.random() - 0.5));
         }
         return;
@@ -215,67 +280,122 @@ function GamePlayContent() {
     }
   };
 
-  // Filter questions based on settings
-  const getAvailableQuestions = useCallback(() => {
-    return questions.filter((q) => {
-      // Filter out used questions
-      if (usedQuestionIds.has(q.id)) return false;
-      // Filter out 18+ if not enabled
-      if (q.is18Plus && !is18PlusEnabled) return false;
-      // If chaos mode, include higher level questions
-      if (vibeLevel === "chaos") return true;
-      // If tipsy, include level 1-2
-      if (vibeLevel === "tipsy") return q.level <= 2;
-      // Chilling = level 1 only
-      return q.level === 1;
-    });
-  }, [questions, usedQuestionIds, is18PlusEnabled, vibeLevel]);
+  // Get questions available for a specific player
+  const getAvailableQuestionsForPlayer = useCallback(
+    (playerName: string) => {
+      const answeredSet = playerAnsweredQuestions[playerName] || new Set();
 
-  // Get random question
-  const getRandomQuestion = useCallback(() => {
-    const available = getAvailableQuestions();
-    if (available.length === 0) {
-      // Reset used questions if all have been used
-      setUsedQuestionIds(new Set());
-      return questions[Math.floor(Math.random() * questions.length)];
-    }
-    return available[Math.floor(Math.random() * available.length)];
-  }, [getAvailableQuestions, questions]);
+      return questions.filter((q) => {
+        // Filter out questions this player already answered
+        if (answeredSet.has(q.id)) return false;
+        // Filter out 18+ if not enabled
+        if (q.is18Plus && !is18PlusEnabled) return false;
+        // Filter by level based on vibeLevel
+        if (vibeLevel === "chaos") return true;
+        if (vibeLevel === "tipsy") return q.level <= 2;
+        return q.level === 1;
+      });
+    },
+    [questions, playerAnsweredQuestions, is18PlusEnabled, vibeLevel],
+  );
 
-  // Get random player (different from current)
-  const getRandomPlayer = useCallback(() => {
+  // Get random question for current player
+  const getRandomQuestion = useCallback(
+    (playerName: string) => {
+      const available = getAvailableQuestionsForPlayer(playerName);
+
+      if (available.length === 0) {
+        // Reset this player's answered questions if all have been used
+        setPlayerAnsweredQuestions((prev) => ({
+          ...prev,
+          [playerName]: new Set(),
+        }));
+        // Return a random question from all available
+        const allAvailable = questions.filter(
+          (q) => !q.is18Plus || is18PlusEnabled,
+        );
+        return allAvailable[Math.floor(Math.random() * allAvailable.length)];
+      }
+
+      // If 18+ enabled, prioritize 18+ questions (80% chance)
+      if (is18PlusEnabled && Math.random() < 0.8) {
+        const adultQuestions = available.filter((q) => q.is18Plus);
+        if (adultQuestions.length > 0) {
+          return adultQuestions[
+            Math.floor(Math.random() * adultQuestions.length)
+          ];
+        }
+      }
+
+      return available[Math.floor(Math.random() * available.length)];
+    },
+    [getAvailableQuestionsForPlayer, questions, is18PlusEnabled],
+  );
+
+  // Get next player using fair rotation
+  const getNextPlayer = useCallback(() => {
     if (players.length <= 1) return 0;
-    let newIndex;
-    do {
-      newIndex = Math.floor(Math.random() * players.length);
-    } while (newIndex === currentPlayerIndex && players.length > 1);
-    return newIndex;
-  }, [players.length, currentPlayerIndex]);
+
+    // Move to next position in queue
+    let nextPos = (queuePosition + 1) % playerQueue.length;
+
+    // If we've gone through everyone, reshuffle the queue
+    if (nextPos === 0) {
+      const newQueue = [...playerQueue];
+      // Shuffle again, but try to avoid repeating the last player
+      const lastPlayer = playerQueue[playerQueue.length - 1];
+      for (let i = newQueue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newQueue[i], newQueue[j]] = [newQueue[j], newQueue[i]];
+      }
+      // If first of new queue is same as last of old queue, swap
+      if (newQueue[0] === lastPlayer && newQueue.length > 1) {
+        [newQueue[0], newQueue[1]] = [newQueue[1], newQueue[0]];
+      }
+      setPlayerQueue(newQueue);
+    }
+
+    setQueuePosition(nextPos);
+    return playerQueue[nextPos] ?? 0;
+  }, [players.length, playerQueue, queuePosition]);
 
   // Initialize first question
   useEffect(() => {
-    if (!currentQuestion && questions.length > 0) {
-      setCurrentQuestion(getRandomQuestion());
+    if (!currentQuestion && questions.length > 0 && players.length > 0) {
+      const firstPlayerIndex = playerQueue[0] ?? 0;
+      setCurrentPlayerIndex(firstPlayerIndex);
+      setCurrentQuestion(getRandomQuestion(players[firstPlayerIndex]));
     }
-  }, [currentQuestion, questions, getRandomQuestion]);
+  }, [currentQuestion, questions, players, playerQueue, getRandomQuestion]);
 
   const handleSkip = () => {
     nextRound();
   };
 
   const handleDone = () => {
+    // Mark question as answered by current player
+    const currentPlayer = players[currentPlayerIndex];
+    if (currentQuestion && currentPlayer) {
+      setPlayerAnsweredQuestions((prev) => ({
+        ...prev,
+        [currentPlayer]: new Set([
+          ...(prev[currentPlayer] || []),
+          currentQuestion.id,
+        ]),
+      }));
+    }
     nextRound();
   };
 
   const nextRound = () => {
     setIsAnimating(true);
     setTimeout(() => {
-      const newQuestion = getRandomQuestion();
-      if (currentQuestion) {
-        setUsedQuestionIds((prev) => new Set([...prev, currentQuestion.id]));
-      }
+      const nextPlayerIdx = getNextPlayer();
+      const nextPlayer = players[nextPlayerIdx];
+      const newQuestion = getRandomQuestion(nextPlayer);
+
       setCurrentQuestion(newQuestion);
-      setCurrentPlayerIndex(getRandomPlayer());
+      setCurrentPlayerIndex(nextPlayerIdx);
       setRoundNumber((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
       setIsAnimating(false);
@@ -379,9 +499,7 @@ function GamePlayContent() {
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
 
                 {/* Question Type Badge */}
-                <div
-                  className={`mb-4 sm:mb-6 inline-flex items-center gap-2 px-3 py-1 rounded border border-white/10 bg-white/5`}
-                >
+                <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 px-3 py-1 rounded border border-white/10 bg-white/5">
                   <span
                     className={`material-symbols-outlined text-sm ${questionType.color}`}
                   >
