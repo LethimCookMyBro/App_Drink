@@ -14,11 +14,7 @@ import {
 } from "@/hooks";
 import { QUESTION_TYPES, GAME_SETTINGS } from "@/config/gameConstants";
 
-// Force dynamic rendering
 export const dynamic = "force-dynamic";
-
-// Demo players fallback
-const demoPlayers = ["ฉัน", "เพื่อน 1", "เพื่อน 2", "เพื่อน 3", "เพื่อน 4"];
 
 function GamePlayContent() {
   const searchParams = useSearchParams();
@@ -26,8 +22,9 @@ function GamePlayContent() {
   const mode = searchParams.get("mode") || "question";
   const { vibeLevel, soundEnabled, vibrationEnabled } = useGameStore();
 
-  // Load players and settings
-  const [players, setPlayers] = useState<string[]>(demoPlayers);
+  // State
+  const [players, setPlayers] = useState<string[]>([]);
+  const [isReady, setIsReady] = useState(false);
   const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
   const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
   const [roundNumber, setRoundNumber] = useState(1);
@@ -36,9 +33,8 @@ function GamePlayContent() {
   );
   const [timerKey, setTimerKey] = useState(0);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
-  const [isAnimating, setIsAnimating] = useState(false);
 
-  // Load settings on mount
+  // Load players from localStorage on mount
   useEffect(() => {
     const stored18Plus = localStorage.getItem("wongtaek-18plus");
     setIs18PlusEnabled(stored18Plus === "true");
@@ -49,17 +45,23 @@ function GamePlayContent() {
         const parsed = JSON.parse(savedPlayers);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setPlayers(parsed);
-          // Initialize drink counts
           setPlayerDrinks(
             Object.fromEntries(parsed.map((p: string) => [p, 0])),
           );
+          setIsReady(true);
+        } else {
+          // No players, redirect to lobby
+          router.push("/lobby/new");
         }
       } catch {
-        setPlayerDrinks(Object.fromEntries(demoPlayers.map((p) => [p, 0])));
+        router.push("/lobby/new");
       }
+    } else {
+      // No players saved, redirect to lobby
+      router.push("/lobby/new");
     }
 
-    // Load custom questions from lobby
+    // Load custom questions
     const savedCustom = localStorage.getItem("wongtaek-custom-questions");
     if (savedCustom) {
       try {
@@ -68,12 +70,12 @@ function GamePlayContent() {
         // Ignore
       }
     }
-  }, []);
+  }, [router]);
 
-  // Custom hooks
+  // Hooks - only initialize when players are ready
   const { currentPlayerIndex, currentPlayer, getNextPlayer, playerTurnCount } =
     usePlayerQueue({
-      players,
+      players: isReady ? players : ["Loading"],
       avoidRepeats: true,
     });
 
@@ -82,7 +84,7 @@ function GamePlayContent() {
       mode,
       level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
       is18PlusEnabled,
-      players,
+      players: isReady ? players : ["Loading"],
       customQuestions,
     });
 
@@ -98,9 +100,9 @@ function GamePlayContent() {
     hapticEnabled: vibrationEnabled,
   });
 
-  // Initialize first question
+  // Initialize first question when ready
   useEffect(() => {
-    if (!currentQuestion && !isLoading && players.length > 0) {
+    if (!currentQuestion && !isLoading && isReady && players.length > 0) {
       const q = getQuestionForPlayer(currentPlayer);
       setCurrentQuestion(q);
       playNewQuestion();
@@ -108,6 +110,7 @@ function GamePlayContent() {
   }, [
     currentQuestion,
     isLoading,
+    isReady,
     players,
     currentPlayer,
     getQuestionForPlayer,
@@ -115,7 +118,6 @@ function GamePlayContent() {
   ]);
 
   const handleSkip = () => {
-    // Player skips = must drink
     setPlayerDrinks((prev) => ({
       ...prev,
       [currentPlayer]: (prev[currentPlayer] || 0) + 1,
@@ -126,7 +128,6 @@ function GamePlayContent() {
   };
 
   const handleDone = () => {
-    // Mark question as answered by this player
     if (currentQuestion) {
       markQuestionAnswered(currentPlayer, currentQuestion.id);
     }
@@ -135,8 +136,6 @@ function GamePlayContent() {
   };
 
   const nextRound = () => {
-    setIsAnimating(true);
-
     setTimeout(() => {
       const nextIdx = getNextPlayer();
       const nextPlayer = players[nextIdx];
@@ -145,7 +144,6 @@ function GamePlayContent() {
       setCurrentQuestion(newQuestion);
       setRoundNumber((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
-      setIsAnimating(false);
       playNewQuestion();
     }, 300);
   };
@@ -160,7 +158,6 @@ function GamePlayContent() {
   };
 
   const handleEndGame = () => {
-    // Save stats for summary page
     const stats = players.map((name) => ({
       name,
       drinkCount: playerDrinks[name] || 0,
@@ -171,50 +168,60 @@ function GamePlayContent() {
     router.push("/game/summary");
   };
 
+  // Don't render until players are loaded
+  if (!isReady || players.length === 0) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-24 h-24 bg-white/10 rounded-full"></div>
+          <div className="h-6 w-40 bg-white/10 rounded"></div>
+        </div>
+      </main>
+    );
+  }
+
   const questionType = currentQuestion
     ? QUESTION_TYPES[currentQuestion.type] || QUESTION_TYPES.QUESTION
     : QUESTION_TYPES.QUESTION;
 
   return (
     <main className="container-mobile min-h-screen flex flex-col overflow-hidden relative">
-      {/* Background effects */}
+      {/* Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] mix-blend-screen animate-pulse-slow" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-neon-red/10 rounded-full blur-[100px] mix-blend-screen" />
       </div>
 
       {/* Header */}
-      <header className="relative z-20 flex items-center justify-between p-4 sm:p-6 w-full">
+      <header className="relative z-20 flex items-center justify-between p-3 sm:p-5 w-full">
         <Link href="/game/modes">
-          <button className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95 group">
-            <span className="material-symbols-outlined text-white/80 group-hover:text-white text-xl sm:text-[28px]">
+          <button className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95">
+            <span className="material-symbols-outlined text-white/80 text-2xl sm:text-3xl">
               arrow_back
             </span>
           </button>
         </Link>
 
         <div className="flex flex-col items-center">
-          <span className="text-white/40 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">
-            สถานะเกม
-          </span>
           <div className="flex items-center gap-2">
-            <div className="px-3 py-1 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
-              <span className="text-primary text-xs font-bold tracking-widest uppercase text-glow-purple">
-                รอบที่ {roundNumber}
+            <div className="px-3 py-1.5 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
+              <span className="text-primary text-sm font-bold tracking-widest uppercase text-glow-purple">
+                รอบ {roundNumber}
               </span>
             </div>
             <button
               onClick={handleEndGame}
-              className="px-2 py-1 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-xs font-bold transition-colors"
+              className="px-3 py-1.5 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-sm font-bold transition-colors flex items-center gap-1"
             >
-              จบเกม
+              <span className="material-symbols-outlined text-lg">stop</span>
+              จบ
             </button>
           </div>
         </div>
 
         <Link href="/settings">
-          <button className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95 group">
-            <span className="material-symbols-outlined text-white/80 group-hover:text-white text-xl sm:text-[28px]">
+          <button className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95">
+            <span className="material-symbols-outlined text-white/80 text-2xl sm:text-3xl">
               settings
             </span>
           </button>
@@ -222,39 +229,37 @@ function GamePlayContent() {
       </header>
 
       {/* Main Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto px-4 sm:px-5 gap-4 sm:gap-6">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto px-4 gap-5">
         {/* Current Player */}
         <AnimatePresence mode="wait">
           <motion.div
             key={`player-${currentPlayerIndex}`}
-            className="flex flex-col items-center gap-2 sm:gap-3"
+            className="flex flex-col items-center gap-3"
             initial={{ opacity: 0, scale: 0.8, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
           >
-            <div className="relative group">
-              <div className="absolute -inset-1 rounded-full bg-gradient-to-b from-primary to-transparent opacity-50 blur-md" />
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] border-primary/50 p-1 bg-background shadow-neon-purple">
+            <div className="relative">
+              <div className="absolute -inset-2 rounded-full bg-gradient-to-b from-primary to-transparent opacity-50 blur-lg" />
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-[3px] border-primary/50 p-1 bg-background shadow-neon-purple">
                 <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-purple-900 flex items-center justify-center">
-                  <span className="text-3xl sm:text-4xl font-bold text-white">
+                  <span className="text-4xl sm:text-5xl font-bold text-white">
                     {currentPlayer?.charAt(0).toUpperCase() || "?"}
                   </span>
                 </div>
-                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold px-3 py-0.5 rounded-full border-2 border-background shadow-lg whitespace-nowrap z-10">
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full border-2 border-background shadow-lg whitespace-nowrap z-10">
                   ตาเล่น
                 </div>
               </div>
             </div>
             <div className="text-center">
-              <h2 className="text-white text-xl sm:text-2xl font-bold tracking-tight drop-shadow-md">
+              <h2 className="text-white text-2xl sm:text-3xl font-bold tracking-tight">
                 {currentPlayer}
               </h2>
-              <div className="flex items-center justify-center gap-2 mt-1">
-                <span className="text-white/40 text-xs sm:text-sm font-medium">
-                  🍺 {playerDrinks[currentPlayer] || 0} แก้ว
-                </span>
-              </div>
+              <span className="text-white/50 text-sm">
+                🍺 {playerDrinks[currentPlayer] || 0} แก้ว
+              </span>
             </div>
           </motion.div>
         </AnimatePresence>
@@ -270,30 +275,35 @@ function GamePlayContent() {
               exit={{ opacity: 0, scale: 0.9, rotateY: 15, x: -100 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
-              <div className="relative bg-[#26182c]/80 backdrop-blur-xl border border-white/10 p-5 sm:p-6 pt-8 sm:pt-10 pb-6 sm:pb-8 rounded-2xl flex flex-col items-center text-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
+              <div className="relative bg-[#26182c]/80 backdrop-blur-xl border border-white/10 p-5 sm:p-6 pt-8 pb-6 rounded-2xl flex flex-col items-center text-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
 
                 {/* Question Type Badge */}
-                <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 px-3 py-1 rounded border border-white/10 bg-white/5">
+                <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5">
                   <span
-                    className={`material-symbols-outlined text-sm ${questionType.color}`}
+                    className={`material-symbols-outlined text-lg ${questionType.color}`}
                   >
                     {questionType.icon}
                   </span>
                   <span
-                    className={`text-xs font-bold tracking-widest uppercase ${questionType.color}`}
+                    className={`text-sm font-bold tracking-wider uppercase ${questionType.color}`}
                   >
                     {questionType.label}
                   </span>
                   {currentQuestion.is18Plus && (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-neon-red text-white">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neon-red text-white">
                       18+
+                    </span>
+                  )}
+                  {currentQuestion.isCustom && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary text-white">
+                      พิเศษ
                     </span>
                   )}
                 </div>
 
                 {/* Question Text */}
-                <h1 className="text-white text-xl sm:text-[26px] leading-[1.3] font-bold tracking-tight mb-6 sm:mb-8 drop-shadow-lg mx-2">
+                <h1 className="text-white text-xl sm:text-2xl leading-relaxed font-bold tracking-tight mb-6 drop-shadow-lg">
                   {currentQuestion.text}
                 </h1>
 
@@ -318,21 +328,21 @@ function GamePlayContent() {
       </div>
 
       {/* Action Buttons */}
-      <footer className="relative z-20 w-full p-4 sm:p-5 pb-6 sm:pb-8 max-w-lg mx-auto">
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full">
+      <footer className="relative z-20 w-full p-4 pb-6 max-w-lg mx-auto">
+        <div className="grid grid-cols-2 gap-4 w-full">
           <Button
             onClick={handleSkip}
             variant="neon-red"
             size="xl"
-            className="flex flex-col items-center justify-center h-20 sm:h-24"
+            className="flex flex-col items-center justify-center h-24"
           >
-            <span className="material-symbols-outlined text-white text-2xl sm:text-3xl mb-1">
+            <span className="material-symbols-outlined text-white text-3xl mb-1">
               local_bar
             </span>
-            <span className="text-white text-lg sm:text-xl font-bold uppercase tracking-wider leading-none">
+            <span className="text-white text-xl font-bold uppercase tracking-wider">
               ข้าม
             </span>
-            <span className="text-white/70 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-1">
+            <span className="text-white/70 text-[10px] font-bold uppercase tracking-widest mt-1">
               (ต้องดื่ม!)
             </span>
           </Button>
@@ -341,15 +351,15 @@ function GamePlayContent() {
             onClick={handleDone}
             variant="neon-green"
             size="xl"
-            className="flex flex-col items-center justify-center h-20 sm:h-24"
+            className="flex flex-col items-center justify-center h-24"
           >
-            <span className="material-symbols-outlined text-black text-2xl sm:text-3xl mb-1">
+            <span className="material-symbols-outlined text-black text-3xl mb-1">
               check_circle
             </span>
-            <span className="text-black text-lg sm:text-xl font-bold uppercase tracking-wider leading-none">
+            <span className="text-black text-xl font-bold uppercase tracking-wider">
               ตอบแล้ว
             </span>
-            <span className="text-black/60 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-1">
+            <span className="text-black/60 text-[10px] font-bold uppercase tracking-widest mt-1">
               ตาต่อไป
             </span>
           </Button>
@@ -359,14 +369,13 @@ function GamePlayContent() {
   );
 }
 
-// Loading fallback
 function GamePlayLoading() {
   return (
     <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
       <div className="animate-pulse flex flex-col items-center gap-4">
-        <div className="w-20 h-20 bg-white/10 rounded-full"></div>
-        <div className="h-6 w-32 bg-white/10 rounded"></div>
-        <div className="h-40 w-full max-w-md bg-white/10 rounded-2xl"></div>
+        <div className="w-24 h-24 bg-white/10 rounded-full"></div>
+        <div className="h-6 w-40 bg-white/10 rounded"></div>
+        <div className="h-48 w-full max-w-md bg-white/10 rounded-2xl"></div>
       </div>
     </main>
   );

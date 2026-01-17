@@ -1,9 +1,10 @@
 /**
  * useQuestionPool - Smart Question Management
  * โหลด กรอง และจัดการคำถามแบบไม่ซ้ำต่อผู้เล่น
+ * Custom questions แทรกสุ่มบ้าง (ไม่ใช่ทุกรอบ)
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 
 export interface GameQuestion {
@@ -12,6 +13,7 @@ export interface GameQuestion {
   type: string;
   level: number;
   is18Plus: boolean;
+  isCustom?: boolean;
 }
 
 interface UseQuestionPoolOptions {
@@ -19,7 +21,8 @@ interface UseQuestionPoolOptions {
   level?: number;
   is18PlusEnabled: boolean;
   players: string[];
-  customQuestions?: GameQuestion[]; // คำถามที่ผู้เล่นเพิ่มเอง
+  customQuestions?: GameQuestion[];
+  customQuestionChance?: number; // 0-1, chance to show custom question (default 0.3 = 30%)
 }
 
 interface UseQuestionPoolReturn {
@@ -112,6 +115,7 @@ export function useQuestionPool({
   is18PlusEnabled,
   players,
   customQuestions = [],
+  customQuestionChance = 0.25, // 25% chance to show custom question
 }: UseQuestionPoolOptions): UseQuestionPoolReturn {
   const [questions, setQuestions] = useState<GameQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,6 +124,9 @@ export function useQuestionPool({
   const [playerAnswered, setPlayerAnswered] = useState<
     Record<string, Set<string>>
   >(() => Object.fromEntries(players.map((name) => [name, new Set<string>()])));
+
+  // Track used custom questions (globally)
+  const usedCustomQuestionsRef = useRef<Set<string>>(new Set());
 
   // Fetch questions from API
   useEffect(() => {
@@ -142,7 +149,6 @@ export function useQuestionPool({
           type: questionType,
         });
 
-        // For truth-or-dare, fetch both types
         if (mode === "truth-or-dare") {
           const [truthRes, dareRes] = await Promise.all([
             fetch(
@@ -186,25 +192,41 @@ export function useQuestionPool({
     fetchQuestions();
   }, [mode, level, is18PlusEnabled]);
 
-  // Get available questions for a specific player
+  // Get available questions for a specific player (without custom)
   const getAvailableForPlayer = useCallback(
     (playerName: string): GameQuestion[] => {
       const answered = playerAnswered[playerName] || new Set<string>();
-      const allQuestions = [...questions, ...customQuestions];
 
-      return allQuestions.filter((q) => {
+      return questions.filter((q) => {
         if (answered.has(q.id)) return false;
         if (q.is18Plus && !is18PlusEnabled) return false;
         if (q.level > level) return false;
         return true;
       });
     },
-    [questions, customQuestions, playerAnswered, is18PlusEnabled, level],
+    [questions, playerAnswered, is18PlusEnabled, level],
   );
+
+  // Get available custom questions (not used yet)
+  const getAvailableCustomQuestions = useCallback((): GameQuestion[] => {
+    return customQuestions.filter(
+      (q) => !usedCustomQuestionsRef.current.has(q.id),
+    );
+  }, [customQuestions]);
 
   // Get a random question for a player
   const getQuestionForPlayer = useCallback(
     (playerName: string): GameQuestion | null => {
+      const availableCustom = getAvailableCustomQuestions();
+
+      // Random chance to show custom question (if available)
+      if (availableCustom.length > 0 && Math.random() < customQuestionChance) {
+        const customQ =
+          availableCustom[Math.floor(Math.random() * availableCustom.length)];
+        usedCustomQuestionsRef.current.add(customQ.id);
+        return { ...customQ, isCustom: true };
+      }
+
       const available = getAvailableForPlayer(playerName);
 
       if (available.length === 0) {
@@ -213,12 +235,11 @@ export function useQuestionPool({
           ...prev,
           [playerName]: new Set<string>(),
         }));
-        // Return random from all
-        const allQuestions = [...questions, ...customQuestions].filter(
+        const allAvailable = questions.filter(
           (q) => (!q.is18Plus || is18PlusEnabled) && q.level <= level,
         );
         return (
-          allQuestions[Math.floor(Math.random() * allQuestions.length)] || null
+          allAvailable[Math.floor(Math.random() * allAvailable.length)] || null
         );
       }
 
@@ -234,7 +255,14 @@ export function useQuestionPool({
 
       return available[Math.floor(Math.random() * available.length)];
     },
-    [getAvailableForPlayer, questions, customQuestions, is18PlusEnabled, level],
+    [
+      getAvailableForPlayer,
+      getAvailableCustomQuestions,
+      questions,
+      customQuestionChance,
+      is18PlusEnabled,
+      level,
+    ],
   );
 
   // Mark a question as answered by a player
@@ -261,6 +289,7 @@ export function useQuestionPool({
     setPlayerAnswered(
       Object.fromEntries(players.map((name) => [name, new Set<string>()])),
     );
+    usedCustomQuestionsRef.current.clear();
   }, [players]);
 
   // Count answered questions per player
@@ -269,7 +298,7 @@ export function useQuestionPool({
   );
 
   return {
-    questions: [...questions, ...customQuestions],
+    questions,
     isLoading,
     getQuestionForPlayer,
     markQuestionAnswered,

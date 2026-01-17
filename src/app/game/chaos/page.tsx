@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui";
+import { useSoundEffects, usePlayerQueue } from "@/hooks";
 
 const chaosRules = [
   { target: "ใครที่ใส่เสื้อสีดำ", action: "ดื่มให้หมดแก้ว!" },
@@ -11,23 +11,92 @@ const chaosRules = [
   { target: "คนที่ถือมือถือ", action: "ดื่มทันทีแล้ววางมือถือ" },
   { target: "ทุกคนในวง", action: "ดื่มพร้อมกัน 3 วิ!" },
   { target: "คนที่หัวเราะก่อน", action: "โดนจี้ 10 ครั้ง" },
+  { target: "คนนั่งซ้ายมือ", action: "เลือกเพลงให้ร้อง!" },
+  { target: "คนใส่แว่น", action: "ดื่ม 2 แก้ว!" },
+  { target: "คนผมยาวสุด", action: "แชร์ความลับ 1 เรื่อง" },
 ];
 
 export default function ChaosModePage() {
   const router = useRouter();
-  const [sequence, setSequence] = useState(4);
+  const [players, setPlayers] = useState<string[]>([]);
+  const [isReady, setIsReady] = useState(false);
+  const [sequence, setSequence] = useState(1);
   const [currentRule, setCurrentRule] = useState(chaosRules[0]);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+
+  const { playNewQuestion, playDrink, vibrateLong, vibratePattern } =
+    useSoundEffects({
+      enabled: true,
+      hapticEnabled: true,
+    });
+
+  // Load players
+  useEffect(() => {
+    const savedPlayers = localStorage.getItem("wongtaek-players");
+    if (savedPlayers) {
+      try {
+        const parsed = JSON.parse(savedPlayers);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPlayers(parsed);
+          setPlayerDrinks(
+            Object.fromEntries(parsed.map((p: string) => [p, 0])),
+          );
+          setIsReady(true);
+        } else {
+          router.push("/lobby/new");
+        }
+      } catch {
+        router.push("/lobby/new");
+      }
+    } else {
+      router.push("/lobby/new");
+    }
+  }, [router]);
+
+  const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
+    players: isReady ? players : ["Loading"],
+    avoidRepeats: true,
+  });
 
   const handleNext = () => {
-    setIsAnimating(true);
+    // Track drink for current player (chaos mode always drinks)
+    setPlayerDrinks((prev) => ({
+      ...prev,
+      [currentPlayer]: (prev[currentPlayer] || 0) + 1,
+    }));
+    playDrink();
+    vibratePattern([50, 30, 100]);
+
     setTimeout(() => {
+      getNextPlayer();
       const randomIndex = Math.floor(Math.random() * chaosRules.length);
       setCurrentRule(chaosRules[randomIndex]);
       setSequence((prev) => prev + 1);
-      setIsAnimating(false);
+      playNewQuestion();
     }, 300);
   };
+
+  const handleEndGame = () => {
+    const stats = players.map((name) => ({
+      name,
+      drinkCount: playerDrinks[name] || 0,
+      questionsAnswered: playerTurnCount[name] || 0,
+    }));
+    localStorage.setItem("wongtaek-game-stats", JSON.stringify(stats));
+    localStorage.setItem("wongtaek-rounds", sequence.toString());
+    router.push("/game/summary");
+  };
+
+  if (!isReady || players.length === 0) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center bg-[#0a050b]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-24 h-24 bg-white/10 rounded-full"></div>
+          <div className="h-6 w-40 bg-white/10 rounded"></div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container-mobile min-h-screen flex flex-col relative overflow-hidden bg-[#0a050b]">
@@ -39,7 +108,31 @@ export default function ChaosModePage() {
 
       <div className="relative z-10 flex flex-col h-screen justify-between p-4 safe-area-bottom">
         {/* Top Section */}
-        <div className="w-full flex flex-col gap-6 pt-8">
+        <div className="w-full flex flex-col gap-4 pt-6">
+          {/* Header with End Game */}
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-neon-red to-orange-600 flex items-center justify-center">
+                <span className="text-xl font-bold text-white">
+                  {currentPlayer?.charAt(0).toUpperCase() || "?"}
+                </span>
+              </div>
+              <div>
+                <p className="text-white/50 text-xs uppercase tracking-wider">
+                  ตาของ
+                </p>
+                <p className="text-white text-lg font-bold">{currentPlayer}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleEndGame}
+              className="px-4 py-2 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-sm font-bold transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">stop</span>
+              จบเกม
+            </button>
+          </div>
+
           {/* Hazard Stripe */}
           <div className="w-full h-3 hazard-stripe opacity-80 border-x-4 border-white/20" />
 
@@ -48,7 +141,7 @@ export default function ChaosModePage() {
             {[1, 2, 3].map((i) => (
               <motion.span
                 key={i}
-                className="material-symbols-outlined text-neon-yellow text-4xl material-symbols-filled"
+                className="material-symbols-outlined text-neon-yellow text-5xl material-symbols-filled"
                 animate={{ scale: [1, 1.1, 1], opacity: [1, 0.8, 1] }}
                 transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
               >
@@ -92,17 +185,17 @@ export default function ChaosModePage() {
             <div className="absolute bottom-0 left-2 w-8 h-8 border-b-4 border-l-4 border-neon-red" />
             <div className="absolute bottom-0 right-2 w-8 h-8 border-b-4 border-r-4 border-neon-red" />
 
-            <h2 className="text-[3.5rem] md:text-[4.5rem] leading-[1.1] font-black text-white uppercase tracking-tighter glitch-text transform -rotate-1 whitespace-pre-wrap break-words">
+            <h2 className="text-[3rem] md:text-[4rem] leading-[1.1] font-black text-white uppercase tracking-tighter glitch-text transform -rotate-1 whitespace-pre-wrap break-words">
               {currentRule.action}
             </h2>
           </div>
 
           {/* Mandatory Label */}
           <div className="flex items-center gap-2 bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
-            <span className="material-symbols-outlined text-neon-red text-sm">
+            <span className="material-symbols-outlined text-neon-red text-lg">
               lock
             </span>
-            <span className="text-xs font-mono text-gray-400 uppercase tracking-widest">
+            <span className="text-sm font-mono text-gray-400 uppercase tracking-widest">
               กฎบังคับ (Mandatory)
             </span>
           </div>
@@ -126,7 +219,7 @@ export default function ChaosModePage() {
                   ไปต่อ
                 </span>
               </div>
-              <div className="w-12 h-12 bg-black/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-black/10">
+              <div className="w-14 h-14 bg-black/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-black/10">
                 <span className="material-symbols-outlined text-black text-3xl font-bold">
                   arrow_forward
                 </span>

@@ -1,6 +1,6 @@
 /**
  * useSoundEffects - Sound Effects & Haptic Feedback
- * เสียงเอฟเฟกต์และการสั่นสำหรับเกม
+ * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ปรับปรุงให้ดีขึ้น)
  */
 
 import { useCallback, useRef, useEffect } from "react";
@@ -25,24 +25,9 @@ interface UseSoundEffectsReturn {
   vibratePattern: (pattern: number[]) => void;
 }
 
-// Pre-defined sound URLs (using Web Audio API for better performance)
-const SOUNDS = {
-  tick: "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAAC/v7+/v7+/v7+/",
-  countdown:
-    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA",
-  timeUp:
-    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA",
-  newQuestion:
-    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA",
-  drink:
-    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA",
-  celebration:
-    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA",
-};
-
 export function useSoundEffects({
   enabled = true,
-  volume = 0.5,
+  volume = 0.6,
   hapticEnabled = true,
 }: UseSoundEffectsOptions = {}): UseSoundEffectsReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -70,7 +55,6 @@ export function useSoundEffects({
       }
     };
 
-    // Initialize on user interaction
     const handleInteraction = () => {
       initAudio();
       if (audioContextRef.current?.state === "suspended") {
@@ -87,85 +71,104 @@ export function useSoundEffects({
     };
   }, [volume]);
 
-  // Update volume when it changes
   useEffect(() => {
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = volume;
     }
   }, [volume]);
 
-  // Play sound using Web Audio API
-  const playSound = useCallback(
+  // Play a nice bell/chime sound
+  const playNote = useCallback(
     (
       frequency: number,
-      duration: number = 0.1,
+      duration: number,
       type: OscillatorType = "sine",
+      delay: number = 0,
     ) => {
-      if (!enabled || !audioContextRef.current || !gainNodeRef.current) return;
+      if (!enabled || !audioContextRef.current) return;
 
       try {
-        const oscillator = audioContextRef.current.createOscillator();
+        const ctx = audioContextRef.current;
+        const now = ctx.currentTime + delay;
+
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+
         oscillator.type = type;
-        oscillator.frequency.setValueAtTime(
-          frequency,
-          audioContextRef.current.currentTime,
-        );
-        oscillator.connect(gainNodeRef.current);
-        oscillator.start();
-        oscillator.stop(audioContextRef.current.currentTime + duration);
+        oscillator.frequency.setValueAtTime(frequency, now);
+
+        // Smooth attack and decay
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(volume * 0.3, now + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        oscillator.start(now);
+        oscillator.stop(now + duration);
       } catch {
         // Ignore errors
       }
     },
-    [enabled],
+    [enabled, volume],
   );
 
-  // Tick sound (for countdown each second)
+  // Nice tick sound
   const playTick = useCallback(() => {
-    playSound(800, 0.05, "sine");
-  }, [playSound]);
-
-  // Countdown warning sound (last 5 seconds)
-  const playCountdown = useCallback(() => {
-    playSound(600, 0.15, "square");
+    playNote(1200, 0.05, "sine");
     if (hapticEnabled) {
       vibrateShort();
     }
-  }, [playSound, hapticEnabled]);
+  }, [playNote, hapticEnabled]);
 
-  // Time's up sound
+  // Warning countdown - descending notes
+  const playCountdown = useCallback(() => {
+    playNote(880, 0.15, "sine");
+    if (hapticEnabled) {
+      vibratePattern([30, 20, 30]);
+    }
+  }, [playNote, hapticEnabled]);
+
+  // Time's up - dramatic descending
   const playTimeUp = useCallback(() => {
-    playSound(200, 0.3, "sawtooth");
-    setTimeout(() => playSound(150, 0.4, "sawtooth"), 300);
+    playNote(440, 0.2, "sine", 0);
+    playNote(330, 0.2, "sine", 0.15);
+    playNote(220, 0.4, "sine", 0.3);
     if (hapticEnabled) {
-      vibrateLong();
+      vibratePattern([100, 50, 200]);
     }
-  }, [playSound, hapticEnabled]);
+  }, [playNote, hapticEnabled]);
 
-  // New question whoosh
+  // New question - ascending whoosh
   const playNewQuestion = useCallback(() => {
-    playSound(400, 0.1, "sine");
-    setTimeout(() => playSound(600, 0.1, "sine"), 50);
-    setTimeout(() => playSound(800, 0.1, "sine"), 100);
-  }, [playSound]);
-
-  // Drink sound
-  const playDrink = useCallback(() => {
-    playSound(300, 0.2, "triangle");
+    playNote(400, 0.08, "sine", 0);
+    playNote(600, 0.08, "sine", 0.05);
+    playNote(800, 0.12, "sine", 0.1);
     if (hapticEnabled) {
-      vibratePattern([50, 50, 100]);
+      vibrateShort();
     }
-  }, [playSound, hapticEnabled]);
+  }, [playNote, hapticEnabled]);
 
-  // Celebration sound
+  // Drink sound - bubble pop
+  const playDrink = useCallback(() => {
+    playNote(300, 0.1, "sine", 0);
+    playNote(400, 0.15, "sine", 0.08);
+    if (hapticEnabled) {
+      vibratePattern([50, 30, 80]);
+    }
+  }, [playNote, hapticEnabled]);
+
+  // Celebration - happy ascending scale
   const playCelebration = useCallback(() => {
-    [400, 500, 600, 700, 800].forEach((freq, i) => {
-      setTimeout(() => playSound(freq, 0.1, "sine"), i * 80);
+    const notes = [523, 659, 784, 1047]; // C, E, G, C octave
+    notes.forEach((freq, i) => {
+      playNote(freq, 0.2, "sine", i * 0.1);
     });
     if (hapticEnabled) {
-      vibratePattern([50, 30, 50, 30, 100]);
+      vibratePattern([50, 30, 50, 30, 100, 50, 150]);
     }
-  }, [playSound, hapticEnabled]);
+  }, [playNote, hapticEnabled]);
 
   // Play custom audio file
   const playCustom = useCallback(
@@ -200,8 +203,8 @@ export function useSoundEffects({
     [hapticEnabled],
   );
 
-  const vibrateShort = useCallback(() => vibrate(30), [vibrate]);
-  const vibrateLong = useCallback(() => vibrate(200), [vibrate]);
+  const vibrateShort = useCallback(() => vibrate(25), [vibrate]);
+  const vibrateLong = useCallback(() => vibrate(150), [vibrate]);
   const vibratePattern = useCallback(
     (pattern: number[]) => vibrate(pattern),
     [vibrate],
