@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { validateSession, getTokenFromRequest } from "@/lib/auth";
 
 export async function GET(request: Request) {
@@ -7,17 +6,33 @@ export async function GET(request: Request) {
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+      return NextResponse.json(
+        {
+          user: null,
+          stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+          authenticated: false,
+          message: "กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโปรไฟล์",
+        },
+        { status: 200 }
+      );
     }
 
     const session = await validateSession(token);
 
     if (!session) {
       return NextResponse.json(
-        { error: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
+        {
+          user: null,
+          stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+          authenticated: false,
+          message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
+        },
+        { status: 200 }
       );
     }
+
+    // Get Prisma client dynamically
+    const { default: prisma } = await import("@/lib/db");
 
     // Get user's game stats
     const gameSessions = await prisma.gameSession.findMany({
@@ -53,6 +68,7 @@ export async function GET(request: Request) {
       Math.round((totalPlayTimeMs / (1000 * 60 * 60)) * 10) / 10;
 
     return NextResponse.json({
+      authenticated: true,
       user: {
         id: session.user.id,
         email: session.user.email,
@@ -68,10 +84,12 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Profile error:", error);
-    return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการดึงข้อมูล" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      user: null,
+      stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+      authenticated: false,
+      error: "เกิดข้อผิดพลาดในการดึงข้อมูล - กรุณาเชื่อมต่อ Database",
+    });
   }
 }
 
@@ -92,6 +110,9 @@ export async function PATCH(request: Request) {
         { status: 401 }
       );
     }
+
+    // Get Prisma client dynamically
+    const { default: prisma } = await import("@/lib/db");
 
     const body = await request.json();
     const { name, avatarUrl } = body;
@@ -132,7 +153,7 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Update profile error:", error);
     return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการอัพเดทข้อมูล" },
+      { error: "เกิดข้อผิดพลาดในการอัพเดทข้อมูล - กรุณาเชื่อมต่อ Database" },
       { status: 500 }
     );
   }

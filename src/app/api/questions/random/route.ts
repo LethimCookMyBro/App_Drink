@@ -1,26 +1,177 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
-import { QuestionType } from "@prisma/client";
+
+// Fallback questions when database is offline
+const fallbackQuestions = [
+  // QUESTION type
+  {
+    id: "fb-q1",
+    text: "ถ้าชนะ lottery 100 ล้าน จะทำอะไรเป็นอย่างแรก?",
+    type: "QUESTION",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-q2",
+    text: "ถ้าได้กลับไปแก้อดีต จะแก้เรื่องอะไร?",
+    type: "QUESTION",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-q3",
+    text: "เคยโกหกเพื่อนในวงนี้เรื่องอะไร?",
+    type: "QUESTION",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-q4",
+    text: "ความลับที่ไม่เคยบอกใครคืออะไร?",
+    type: "QUESTION",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-q5",
+    text: "เคยทำอะไรน่าอายที่สุด?",
+    type: "QUESTION",
+    level: 3,
+    is18Plus: false,
+  },
+  {
+    id: "fb-q6",
+    text: "ถ้าต้องเลือกแฟนจากคนในวงนี้?",
+    type: "QUESTION",
+    level: 3,
+    is18Plus: false,
+  },
+  // VOTE type
+  {
+    id: "fb-v1",
+    text: "ใครโมโหง่ายที่สุดในวง?",
+    type: "VOTE",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-v2",
+    text: "ใครน่าจะเป็นเศรษฐีในอนาคต?",
+    type: "VOTE",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-v3",
+    text: "ใครหล่อ/สวยที่สุดในวง?",
+    type: "VOTE",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-v4",
+    text: "ใครน่าจะขี้โกงที่สุด?",
+    type: "VOTE",
+    level: 3,
+    is18Plus: false,
+  },
+  // TRUTH type
+  {
+    id: "fb-t1",
+    text: "เคยแอบชอบเพื่อนสนิทไหม?",
+    type: "TRUTH",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-t2",
+    text: "เคยนินทาใครในวงนี้บ้าง?",
+    type: "TRUTH",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-t3",
+    text: "เคยแอบอิจฉาใครในวงนี้บ้าง?",
+    type: "TRUTH",
+    level: 3,
+    is18Plus: false,
+  },
+  // DARE type
+  {
+    id: "fb-d1",
+    text: "โทรหาคนสุดท้ายในประวัติโทรแล้วบอกรัก",
+    type: "DARE",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-d2",
+    text: "ให้คนขวามือเลือกเพลงแล้วร้องเต็มเพลง",
+    type: "DARE",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-d3",
+    text: "เต้นกลางวงแบบไม่มียางอาย",
+    type: "DARE",
+    level: 3,
+    is18Plus: false,
+  },
+  // CHAOS type
+  {
+    id: "fb-c1",
+    text: "ทุกคนดื่ม! ใครไม่ดื่มต้องตอบคำถาม",
+    type: "CHAOS",
+    level: 1,
+    is18Plus: false,
+  },
+  {
+    id: "fb-c2",
+    text: "แข่งเป่ายิงฉุบ แพ้ดื่ม!",
+    type: "CHAOS",
+    level: 2,
+    is18Plus: false,
+  },
+  {
+    id: "fb-c3",
+    text: "จิ้มคนที่ต้องดื่ม 3 แก้วเลย!",
+    type: "CHAOS",
+    level: 3,
+    is18Plus: false,
+  },
+];
+
+// Shuffle array helper
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 // GET /api/questions/random - Get random question(s)
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const type = searchParams.get("type");
+  const level = searchParams.get("level");
+  const is18Plus = searchParams.get("is18Plus") === "true";
+  const count = Math.min(10, parseInt(searchParams.get("count") || "1"));
+  const excludeIds =
+    searchParams.get("exclude")?.split(",").filter(Boolean) || [];
+
   try {
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") as QuestionType | null;
-    const level = searchParams.get("level");
-    const is18Plus = searchParams.get("is18Plus") === "true";
-    const count = Math.min(10, parseInt(searchParams.get("count") || "1"));
-    const excludeIds =
-      searchParams.get("exclude")?.split(",").filter(Boolean) || [];
+    // Dynamic import to prevent module crash
+    const { default: prisma } = await import("@/lib/db");
 
-    const where: any = { isActive: true };
-
+    const where: Record<string, unknown> = { isActive: true };
     if (type) where.type = type;
     if (level) where.level = parseInt(level);
-    if (!is18Plus) where.is18Plus = false; // Only filter if we want safe content
+    if (!is18Plus) where.is18Plus = false;
     if (excludeIds.length > 0) where.id = { notIn: excludeIds };
 
-    // Get total count for random selection
     const total = await prisma.question.count({ where });
 
     if (total === 0) {
@@ -30,7 +181,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get random questions using skip
     const questions = [];
     const usedIndexes = new Set<number>();
 
@@ -50,8 +200,6 @@ export async function GET(request: NextRequest) {
 
       if (question) {
         questions.push(question);
-
-        // Increment usage count
         await prisma.question.update({
           where: { id: question.id },
           data: { usageCount: { increment: 1 } },
@@ -64,10 +212,23 @@ export async function GET(request: NextRequest) {
       count: questions.length,
     });
   } catch (error) {
-    console.error("Error fetching random questions:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch questions" },
-      { status: 500 }
-    );
+    console.error("Database error, using fallback:", error);
+
+    // Return fallback random questions
+    let filtered = [...fallbackQuestions];
+    if (type) filtered = filtered.filter((q) => q.type === type);
+    if (level) filtered = filtered.filter((q) => q.level <= parseInt(level));
+    if (!is18Plus) filtered = filtered.filter((q) => !q.is18Plus);
+    filtered = filtered.filter((q) => !excludeIds.includes(q.id));
+
+    const shuffled = shuffleArray(filtered);
+    const selected = shuffled.slice(0, count);
+
+    return NextResponse.json({
+      questions: selected,
+      count: selected.length,
+      fallback: true,
+      message: "ใช้ข้อมูลตัวอย่าง (กรุณาเชื่อมต่อ Database เพื่อใช้งานจริง)",
+    });
   }
 }

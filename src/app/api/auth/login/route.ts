@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import {
   verifyPassword,
   generateToken,
@@ -27,6 +26,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Dynamic import to prevent crash when database is offline
+    const { default: prisma } = await import("@/lib/db");
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -91,7 +93,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ" },
+      {
+        error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
       { status: 500 }
     );
   }

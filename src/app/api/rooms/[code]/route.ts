@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
 
 // GET /api/rooms/[code] - Get room by code
 export async function GET(
@@ -9,6 +8,9 @@ export async function GET(
   try {
     const { code } = await params;
     const roomCode = code.toUpperCase();
+
+    // Dynamic import to prevent crash when database is offline
+    const { default: prisma } = await import("@/lib/db");
 
     const room = await prisma.room.findUnique({
       where: { code: roomCode },
@@ -24,21 +26,22 @@ export async function GET(
     });
 
     if (!room) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
     }
 
     if (!room.isActive) {
-      return NextResponse.json(
-        { error: "Room is no longer active" },
-        { status: 410 }
-      );
+      return NextResponse.json({ error: "ห้องนี้ถูกปิดแล้ว" }, { status: 410 });
     }
 
     return NextResponse.json({ room });
   } catch (error) {
     console.error("Error fetching room:", error);
     return NextResponse.json(
-      { error: "Failed to fetch room" },
+      {
+        error: "ไม่สามารถดึงข้อมูลห้องได้",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
       { status: 500 }
     );
   }
@@ -53,17 +56,24 @@ export async function DELETE(
     const { code } = await params;
     const roomCode = code.toUpperCase();
 
+    // Dynamic import to prevent crash when database is offline
+    const { default: prisma } = await import("@/lib/db");
+
     // In real app, verify host authorization here
     const room = await prisma.room.update({
       where: { code: roomCode },
       data: { isActive: false },
     });
 
-    return NextResponse.json({ message: "Room closed", room });
+    return NextResponse.json({ message: "ห้องถูกปิดแล้ว", room });
   } catch (error) {
     console.error("Error closing room:", error);
     return NextResponse.json(
-      { error: "Failed to close room" },
+      {
+        error: "ไม่สามารถปิดห้องได้",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
       { status: 500 }
     );
   }

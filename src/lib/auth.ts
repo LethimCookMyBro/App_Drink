@@ -1,6 +1,5 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "./prisma";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "wong-taek-super-secret-key-change-in-production";
@@ -44,8 +43,15 @@ export function verifyToken(token: string): JWTPayload | null {
   }
 }
 
+// Helper to get Prisma client with dynamic import
+async function getPrisma() {
+  const { default: prisma } = await import("./db");
+  return prisma;
+}
+
 // Create user session in database
 export async function createSession(userId: string, token: string) {
+  const prisma = await getPrisma();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 
@@ -60,25 +66,32 @@ export async function createSession(userId: string, token: string) {
 
 // Validate session
 export async function validateSession(token: string) {
-  const session = await prisma.userSession.findUnique({
-    where: { token },
-    include: { user: true },
-  });
+  try {
+    const prisma = await getPrisma();
+    const session = await prisma.userSession.findUnique({
+      where: { token },
+      include: { user: true },
+    });
 
-  if (!session) return null;
+    if (!session) return null;
 
-  // Check if expired
-  if (session.expiresAt < new Date()) {
-    await prisma.userSession.delete({ where: { id: session.id } });
+    // Check if expired
+    if (session.expiresAt < new Date()) {
+      await prisma.userSession.delete({ where: { id: session.id } });
+      return null;
+    }
+
+    return session;
+  } catch (error) {
+    console.error("validateSession error:", error);
     return null;
   }
-
-  return session;
 }
 
 // Delete session (logout)
 export async function deleteSession(token: string) {
   try {
+    const prisma = await getPrisma();
     await prisma.userSession.delete({ where: { token } });
     return true;
   } catch {
@@ -88,7 +101,12 @@ export async function deleteSession(token: string) {
 
 // Delete all sessions for a user
 export async function deleteAllUserSessions(userId: string) {
-  await prisma.userSession.deleteMany({ where: { userId } });
+  try {
+    const prisma = await getPrisma();
+    await prisma.userSession.deleteMany({ where: { userId } });
+  } catch (error) {
+    console.error("deleteAllUserSessions error:", error);
+  }
 }
 
 // Get user from request cookies/headers

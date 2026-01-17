@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
 
 // Generate 4-character room code
 function generateRoomCode(): string {
@@ -14,6 +13,8 @@ function generateRoomCode(): string {
 // GET /api/rooms - List active rooms (for admin)
 export async function GET() {
   try {
+    const { default: prisma } = await import("@/lib/db");
+
     const rooms = await prisma.room.findMany({
       where: { isActive: true },
       include: {
@@ -27,16 +28,20 @@ export async function GET() {
     return NextResponse.json({ rooms });
   } catch (error) {
     console.error("Error fetching rooms:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch rooms" },
-      { status: 500 }
-    );
+    // Return empty rooms list when database is offline
+    return NextResponse.json({
+      rooms: [],
+      fallback: true,
+      message: "ไม่สามารถเชื่อมต่อ Database กรุณาเริ่ม PostgreSQL",
+    });
   }
 }
 
 // POST /api/rooms - Create a new room
 export async function POST(request: NextRequest) {
   try {
+    const { default: prisma } = await import("@/lib/db");
+
     const body = await request.json();
     const {
       name,
@@ -48,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     if (!name || !hostName) {
       return NextResponse.json(
-        { error: "Room name and host name are required" },
+        { error: "กรุณากรอกชื่อวงและชื่อผู้เล่น" },
         { status: 400 }
       );
     }
@@ -103,7 +108,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating room:", error);
     return NextResponse.json(
-      { error: "Failed to create room" },
+      {
+        error: "ไม่สามารถสร้างห้องได้",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
       { status: 500 }
     );
   }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
 
 // POST /api/rooms/[code]/join - Join a room
 export async function POST(
@@ -14,10 +13,13 @@ export async function POST(
 
     if (!playerName) {
       return NextResponse.json(
-        { error: "Player name is required" },
+        { error: "กรุณากรอกชื่อผู้เล่น" },
         { status: 400 }
       );
     }
+
+    // Dynamic import to prevent crash when database is offline
+    const { default: prisma } = await import("@/lib/db");
 
     // Find room
     const room = await prisma.room.findUnique({
@@ -26,18 +28,15 @@ export async function POST(
     });
 
     if (!room) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
     }
 
     if (!room.isActive) {
-      return NextResponse.json(
-        { error: "Room is no longer active" },
-        { status: 410 }
-      );
+      return NextResponse.json({ error: "ห้องนี้ถูกปิดแล้ว" }, { status: 410 });
     }
 
     if (room.players.length >= room.maxPlayers) {
-      return NextResponse.json({ error: "Room is full" }, { status: 400 });
+      return NextResponse.json({ error: "ห้องเต็มแล้ว" }, { status: 400 });
     }
 
     // Check if name is taken
@@ -46,7 +45,7 @@ export async function POST(
     );
     if (nameTaken) {
       return NextResponse.json(
-        { error: "Name already taken in this room" },
+        { error: "ชื่อนี้ถูกใช้แล้วในห้องนี้" },
         { status: 400 }
       );
     }
@@ -76,6 +75,13 @@ export async function POST(
     );
   } catch (error) {
     console.error("Error joining room:", error);
-    return NextResponse.json({ error: "Failed to join room" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "ไม่สามารถเข้าร่วมห้องได้",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
+      { status: 500 }
+    );
   }
 }

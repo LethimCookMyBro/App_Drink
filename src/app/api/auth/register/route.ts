@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import {
   hashPassword,
   generateToken,
@@ -37,6 +36,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Dynamic import to prevent crash when database is offline
+    const { default: prisma } = await import("@/lib/db");
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
@@ -102,7 +104,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Register error:", error);
     return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการสมัครสมาชิก" },
+      {
+        error: "เกิดข้อผิดพลาดในการสมัครสมาชิก",
+        detail:
+          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+      },
       { status: 500 }
     );
   }

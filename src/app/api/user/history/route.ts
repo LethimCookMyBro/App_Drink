@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { validateSession, getTokenFromRequest } from "@/lib/auth";
 
 export async function GET(request: Request) {
@@ -7,17 +6,27 @@ export async function GET(request: Request) {
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+      return NextResponse.json({
+        authenticated: false,
+        stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+        history: [],
+        message: "กรุณาเข้าสู่ระบบเพื่อดูประวัติการเล่น",
+      });
     }
 
     const session = await validateSession(token);
 
     if (!session) {
-      return NextResponse.json(
-        { error: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
-      );
+      return NextResponse.json({
+        authenticated: false,
+        stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+        history: [],
+        message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
+      });
     }
+
+    // Get Prisma client dynamically
+    const { default: prisma } = await import("@/lib/db");
 
     // Get user's game sessions with statistics
     const gameSessions = await prisma.gameSession.findMany({
@@ -84,6 +93,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({
+      authenticated: true,
       stats: {
         totalGames,
         totalDrinks,
@@ -93,10 +103,12 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("History error:", error);
-    return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการดึงข้อมูล" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      authenticated: false,
+      stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+      history: [],
+      error: "เกิดข้อผิดพลาดในการดึงข้อมูล - กรุณาเชื่อมต่อ Database",
+    });
   }
 }
 
