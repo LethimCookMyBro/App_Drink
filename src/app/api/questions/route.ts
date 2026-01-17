@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+ import { NextRequest, NextResponse } from "next/server";
 
 // Fallback questions when database is offline - organized by type and level
 const fallbackQuestions = [

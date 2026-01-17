@@ -79,13 +79,25 @@ DATABASE_URL="postgresql://..."  # Optional, for real DB
 
 เลือกระดับความเดือดก่อนเริ่มเกม
 
+![Welcome Page](docs/screenshots/home.png)
+
+### Game Modes
+
+เลือกโหมดเกมที่ต้องการ: คำถาม, โหวต, Truth or Dare, โกลาหล
+
+![Game Modes](docs/screenshots/modes.png)
+
 ### Game Play
 
 คำถามแบบ random พร้อม timer และปุ่ม ข้าม/ตอบแล้ว
 
+![Gameplay](docs/screenshots/gameplay.png)
+
 ### Admin Dashboard
 
 จัดการคำถามทั้งหมดผ่าน web interface
+
+![Admin Dashboard](docs/screenshots/admin.png)
 
 ## License
 

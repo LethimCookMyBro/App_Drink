@@ -36,7 +36,6 @@ export function Timer({
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          onComplete?.();
           return 0;
         }
         return prev - 1;
@@ -44,7 +43,14 @@ export function Timer({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPaused, onComplete]);
+  }, [isPaused]);
+
+  // Call onComplete when timer reaches 0
+  useEffect(() => {
+    if (timeLeft === 0) {
+      onComplete?.();
+    }
+  }, [timeLeft, onComplete]);
 
   // Reset timer when duration changes
   useEffect(() => {
