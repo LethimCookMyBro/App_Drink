@@ -6,9 +6,11 @@ import { motion } from "framer-motion";
 interface TimerProps {
   duration: number;
   onComplete?: () => void;
+  onWarning?: () => void; // Called when entering warning zone (last 5 seconds)
   isPaused?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
+  warningThreshold?: number;
 }
 
 const sizes = {
@@ -20,10 +22,13 @@ const sizes = {
 export function Timer({
   duration,
   onComplete,
+  onWarning,
   isPaused = false,
   size = "md",
   className = "",
+  warningThreshold = 5,
 }: TimerProps) {
+  const [hasTriggeredWarning, setHasTriggeredWarning] = useState(false);
   const [timeLeft, setTimeLeft] = useState(duration);
   const circumference = 2 * Math.PI * 46; // radius = 46 for viewBox 0 0 100 100
   const progress = (timeLeft / duration) * circumference;
@@ -52,9 +57,18 @@ export function Timer({
     }
   }, [timeLeft, onComplete]);
 
+  // Call onWarning when entering warning zone
+  useEffect(() => {
+    if (timeLeft <= warningThreshold && timeLeft > 0 && !hasTriggeredWarning) {
+      setHasTriggeredWarning(true);
+      onWarning?.();
+    }
+  }, [timeLeft, warningThreshold, hasTriggeredWarning, onWarning]);
+
   // Reset timer when duration changes
   useEffect(() => {
     setTimeLeft(duration);
+    setHasTriggeredWarning(false);
   }, [duration]);
 
   // Determine color based on time left

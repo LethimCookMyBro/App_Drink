@@ -1,415 +1,179 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, Timer } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
+import {
+  usePlayerQueue,
+  useQuestionPool,
+  useSoundEffects,
+  type GameQuestion,
+} from "@/hooks";
+import { QUESTION_TYPES, GAME_SETTINGS } from "@/config/gameConstants";
 
-// Force dynamic rendering to avoid prerender errors with useSearchParams
+// Force dynamic rendering
 export const dynamic = "force-dynamic";
 
-// Question interface
-interface GameQuestion {
-  id: string;
-  text: string;
-  type: string;
-  level: number;
-  is18Plus: boolean;
-}
-
-// Fallback questions when API is unavailable
-const fallbackQuestions: GameQuestion[] = [
-  {
-    id: "1",
-    text: "ความลับเรื่องหนึ่งที่คุณปิดบังทุกคนในห้องนี้คืออะไร?",
-    type: "QUESTION",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "2",
-    text: "เคยโกหกแม่เรื่องอะไรที่ร้ายแรงที่สุด?",
-    type: "QUESTION",
-    level: 1,
-    is18Plus: false,
-  },
-  {
-    id: "3",
-    text: "ถ้าต้องเลือกคนในวงนี้ไปติดเกาะด้วย จะเลือกใคร?",
-    type: "QUESTION",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "4",
-    text: "เรื่องที่ทำแล้วอายที่สุดในชีวิตคืออะไร?",
-    type: "QUESTION",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "5",
-    text: "คนในวงนี้ที่คุณเคยนินทาลับหลังคือใคร?",
-    type: "QUESTION",
-    level: 3,
-    is18Plus: false,
-  },
-  {
-    id: "6",
-    text: "อาหารที่แอบกินคนเดียวไม่แบ่งใครคืออะไร?",
-    type: "QUESTION",
-    level: 1,
-    is18Plus: false,
-  },
-  {
-    id: "7",
-    text: "โทรหาแฟนเก่าแล้วบอกว่าคิดถึงหมาของเขา",
-    type: "DARE",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "8",
-    text: "ใครมีเกณฑ์จะเป็นคนรวยที่สุด?",
-    type: "VOTE",
-    level: 1,
-    is18Plus: false,
-  },
-  {
-    id: "9",
-    text: "ใครที่ใส่เสื้อสีดำ → ดื่มให้หมดแก้ว!",
-    type: "CHAOS",
-    level: 3,
-    is18Plus: false,
-  },
-  {
-    id: "10",
-    text: "ถ้าต้องเลือกจีบคนในวงได้ 1 คน เลือกใคร?",
-    type: "QUESTION",
-    level: 3,
-    is18Plus: true,
-  },
-  {
-    id: "11",
-    text: "เคยแอบชอบเพื่อนสนิทไหม?",
-    type: "TRUTH",
-    level: 1,
-    is18Plus: false,
-  },
-  {
-    id: "12",
-    text: "เคยนอนดึกเพราะอะไรบ้าง?",
-    type: "TRUTH",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "13",
-    text: "ร้องเพลงโปรดให้เพื่อนฟัง",
-    type: "DARE",
-    level: 1,
-    is18Plus: false,
-  },
-  {
-    id: "14",
-    text: "ใครจะแต่งงานเป็นคนแรก?",
-    type: "VOTE",
-    level: 2,
-    is18Plus: false,
-  },
-  {
-    id: "15",
-    text: "ทุกคนดื่มพร้อมกัน!",
-    type: "CHAOS",
-    level: 2,
-    is18Plus: false,
-  },
-];
-
-// Player names for demo (will be replaced with actual players from lobby)
+// Demo players fallback
 const demoPlayers = ["ฉัน", "เพื่อน 1", "เพื่อน 2", "เพื่อน 3", "เพื่อน 4"];
 
-const questionTypeMap: Record<
-  string,
-  { label: string; icon: string; color: string }
-> = {
-  QUESTION: { label: "เจาะลึก", icon: "psychology_alt", color: "text-primary" },
-  TRUTH: { label: "ความจริง", icon: "verified", color: "text-neon-blue" },
-  DARE: {
-    label: "ท้าทาย",
-    icon: "local_fire_department",
-    color: "text-neon-red",
-  },
-  CHAOS: { label: "โกลาหล", icon: "bolt", color: "text-neon-yellow" },
-  VOTE: { label: "โหวต", icon: "how_to_vote", color: "text-neon-green" },
-};
-
-// Inner component that uses useSearchParams
 function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode") || "question";
-  const level = parseInt(searchParams.get("level") || "3"); // Default to max level
-  const { vibeLevel } = useGameStore();
+  const { vibeLevel, soundEnabled, vibrationEnabled } = useGameStore();
 
-  const [questions, setQuestions] = useState<GameQuestion[]>(fallbackQuestions);
+  // Load players and settings
+  const [players, setPlayers] = useState<string[]>(demoPlayers);
+  const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
+  const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
+  const [roundNumber, setRoundNumber] = useState(1);
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
     null,
   );
-  const [players, setPlayers] = useState<string[]>(demoPlayers);
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
-  const [roundNumber, setRoundNumber] = useState(1);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [timerKey, setTimerKey] = useState(0);
-  const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
+  const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [isAnimating, setIsAnimating] = useState(false);
 
-  // NEW: Track answered questions per player
-  const [playerAnsweredQuestions, setPlayerAnsweredQuestions] = useState<
-    Record<string, Set<string>>
-  >({});
-
-  // NEW: Player turn queue for fair rotation (shuffled order)
-  const [playerQueue, setPlayerQueue] = useState<number[]>([]);
-  const [queuePosition, setQueuePosition] = useState(0);
-
-  // NEW: Track last N players to avoid repeats
-  const recentPlayersRef = useRef<number[]>([]);
-
-  // Initialize player queue with shuffled order
-  const initializePlayerQueue = useCallback((playerCount: number) => {
-    const indices = Array.from({ length: playerCount }, (_, i) => i);
-    // Shuffle using Fisher-Yates
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    setPlayerQueue(indices);
-    setQueuePosition(0);
-  }, []);
-
-  // Load 18+ setting and fetch questions
+  // Load settings on mount
   useEffect(() => {
-    const stored = localStorage.getItem("wongtaek-18plus");
-    setIs18PlusEnabled(stored === "true");
+    const stored18Plus = localStorage.getItem("wongtaek-18plus");
+    setIs18PlusEnabled(stored18Plus === "true");
 
-    // Try to load players from localStorage (set by lobby)
     const savedPlayers = localStorage.getItem("wongtaek-players");
     if (savedPlayers) {
       try {
         const parsed = JSON.parse(savedPlayers);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setPlayers(parsed);
-          initializePlayerQueue(parsed.length);
-          // Initialize answered questions tracking for each player
-          const initialTracking: Record<string, Set<string>> = {};
-          parsed.forEach((name: string) => {
-            initialTracking[name] = new Set();
-          });
-          setPlayerAnsweredQuestions(initialTracking);
+          // Initialize drink counts
+          setPlayerDrinks(
+            Object.fromEntries(parsed.map((p: string) => [p, 0])),
+          );
         }
       } catch {
-        initializePlayerQueue(demoPlayers.length);
+        setPlayerDrinks(Object.fromEntries(demoPlayers.map((p) => [p, 0])));
       }
-    } else {
-      initializePlayerQueue(demoPlayers.length);
     }
 
-    // Fetch questions from API
-    fetchQuestions();
-  }, [mode, initializePlayerQueue]);
-
-  const fetchQuestions = async () => {
-    try {
-      // Map mode to question type
-      const modeToType: Record<string, string> = {
-        question: "QUESTION",
-        vote: "VOTE",
-        "truth-or-dare": "TRUTH,DARE",
-        chaos: "CHAOS",
-      };
-
-      const questionType = modeToType[mode] || "QUESTION";
-      const is18Plus = localStorage.getItem("wongtaek-18plus") === "true";
-
-      // Build API URL with filters
-      const params = new URLSearchParams({
-        count: "50",
-        is18Plus: is18Plus.toString(),
-        level: level.toString(),
-      });
-
-      // Add type filter (for truth-or-dare, we'll fetch both and combine)
-      if (mode === "truth-or-dare") {
-        const [truthRes, dareRes] = await Promise.all([
-          fetch(
-            `/api/questions/random?count=25&type=TRUTH&is18Plus=${is18Plus}&level=${level}`,
-          ),
-          fetch(
-            `/api/questions/random?count=25&type=DARE&is18Plus=${is18Plus}&level=${level}`,
-          ),
-        ]);
-
-        const truthData = truthRes.ok
-          ? await truthRes.json()
-          : { questions: [] };
-        const dareData = dareRes.ok ? await dareRes.json() : { questions: [] };
-
-        const combined = [
-          ...(truthData.questions || []),
-          ...(dareData.questions || []),
-        ];
-        if (combined.length > 0) {
-          setQuestions(combined.sort(() => Math.random() - 0.5));
-        }
-        return;
+    // Load custom questions from lobby
+    const savedCustom = localStorage.getItem("wongtaek-custom-questions");
+    if (savedCustom) {
+      try {
+        setCustomQuestions(JSON.parse(savedCustom));
+      } catch {
+        // Ignore
       }
-
-      params.set("type", questionType);
-
-      const res = await fetch(`/api/questions/random?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.questions && data.questions.length > 0) {
-          setQuestions(data.questions);
-        }
-      }
-    } catch {
-      // Use fallback questions
     }
-  };
+  }, []);
 
-  // Get questions available for a specific player
-  const getAvailableQuestionsForPlayer = useCallback(
-    (playerName: string) => {
-      const answeredSet = playerAnsweredQuestions[playerName] || new Set();
+  // Custom hooks
+  const { currentPlayerIndex, currentPlayer, getNextPlayer, playerTurnCount } =
+    usePlayerQueue({
+      players,
+      avoidRepeats: true,
+    });
 
-      return questions.filter((q) => {
-        // Filter out questions this player already answered
-        if (answeredSet.has(q.id)) return false;
-        // Filter out 18+ if not enabled
-        if (q.is18Plus && !is18PlusEnabled) return false;
-        // Filter by level based on vibeLevel
-        if (vibeLevel === "chaos") return true;
-        if (vibeLevel === "tipsy") return q.level <= 2;
-        return q.level === 1;
-      });
-    },
-    [questions, playerAnsweredQuestions, is18PlusEnabled, vibeLevel],
-  );
+  const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
+    useQuestionPool({
+      mode,
+      level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
+      is18PlusEnabled,
+      players,
+      customQuestions,
+    });
 
-  // Get random question for current player
-  const getRandomQuestion = useCallback(
-    (playerName: string) => {
-      const available = getAvailableQuestionsForPlayer(playerName);
-
-      if (available.length === 0) {
-        // Reset this player's answered questions if all have been used
-        setPlayerAnsweredQuestions((prev) => ({
-          ...prev,
-          [playerName]: new Set(),
-        }));
-        // Return a random question from all available
-        const allAvailable = questions.filter(
-          (q) => !q.is18Plus || is18PlusEnabled,
-        );
-        return allAvailable[Math.floor(Math.random() * allAvailable.length)];
-      }
-
-      // If 18+ enabled, prioritize 18+ questions (80% chance)
-      if (is18PlusEnabled && Math.random() < 0.8) {
-        const adultQuestions = available.filter((q) => q.is18Plus);
-        if (adultQuestions.length > 0) {
-          return adultQuestions[
-            Math.floor(Math.random() * adultQuestions.length)
-          ];
-        }
-      }
-
-      return available[Math.floor(Math.random() * available.length)];
-    },
-    [getAvailableQuestionsForPlayer, questions, is18PlusEnabled],
-  );
-
-  // Get next player using fair rotation
-  const getNextPlayer = useCallback(() => {
-    if (players.length <= 1) return 0;
-
-    // Move to next position in queue
-    let nextPos = (queuePosition + 1) % playerQueue.length;
-
-    // If we've gone through everyone, reshuffle the queue
-    if (nextPos === 0) {
-      const newQueue = [...playerQueue];
-      // Shuffle again, but try to avoid repeating the last player
-      const lastPlayer = playerQueue[playerQueue.length - 1];
-      for (let i = newQueue.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newQueue[i], newQueue[j]] = [newQueue[j], newQueue[i]];
-      }
-      // If first of new queue is same as last of old queue, swap
-      if (newQueue[0] === lastPlayer && newQueue.length > 1) {
-        [newQueue[0], newQueue[1]] = [newQueue[1], newQueue[0]];
-      }
-      setPlayerQueue(newQueue);
-    }
-
-    setQueuePosition(nextPos);
-    return playerQueue[nextPos] ?? 0;
-  }, [players.length, playerQueue, queuePosition]);
+  const {
+    playNewQuestion,
+    playCountdown,
+    playTimeUp,
+    playDrink,
+    vibrateShort,
+    vibrateLong,
+  } = useSoundEffects({
+    enabled: soundEnabled,
+    hapticEnabled: vibrationEnabled,
+  });
 
   // Initialize first question
   useEffect(() => {
-    if (!currentQuestion && questions.length > 0 && players.length > 0) {
-      const firstPlayerIndex = playerQueue[0] ?? 0;
-      setCurrentPlayerIndex(firstPlayerIndex);
-      setCurrentQuestion(getRandomQuestion(players[firstPlayerIndex]));
+    if (!currentQuestion && !isLoading && players.length > 0) {
+      const q = getQuestionForPlayer(currentPlayer);
+      setCurrentQuestion(q);
+      playNewQuestion();
     }
-  }, [currentQuestion, questions, players, playerQueue, getRandomQuestion]);
+  }, [
+    currentQuestion,
+    isLoading,
+    players,
+    currentPlayer,
+    getQuestionForPlayer,
+    playNewQuestion,
+  ]);
 
   const handleSkip = () => {
+    // Player skips = must drink
+    setPlayerDrinks((prev) => ({
+      ...prev,
+      [currentPlayer]: (prev[currentPlayer] || 0) + 1,
+    }));
+    playDrink();
+    vibrateLong();
     nextRound();
   };
 
   const handleDone = () => {
-    // Mark question as answered by current player
-    const currentPlayer = players[currentPlayerIndex];
-    if (currentQuestion && currentPlayer) {
-      setPlayerAnsweredQuestions((prev) => ({
-        ...prev,
-        [currentPlayer]: new Set([
-          ...(prev[currentPlayer] || []),
-          currentQuestion.id,
-        ]),
-      }));
+    // Mark question as answered by this player
+    if (currentQuestion) {
+      markQuestionAnswered(currentPlayer, currentQuestion.id);
     }
+    vibrateShort();
     nextRound();
   };
 
   const nextRound = () => {
     setIsAnimating(true);
+
     setTimeout(() => {
-      const nextPlayerIdx = getNextPlayer();
-      const nextPlayer = players[nextPlayerIdx];
-      const newQuestion = getRandomQuestion(nextPlayer);
+      const nextIdx = getNextPlayer();
+      const nextPlayer = players[nextIdx];
+      const newQuestion = getQuestionForPlayer(nextPlayer);
 
       setCurrentQuestion(newQuestion);
-      setCurrentPlayerIndex(nextPlayerIdx);
       setRoundNumber((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
       setIsAnimating(false);
+      playNewQuestion();
     }, 300);
   };
 
   const handleTimerComplete = () => {
+    playTimeUp();
     handleSkip();
   };
 
-  const currentPlayer = players[currentPlayerIndex];
+  const handleTimerWarning = () => {
+    playCountdown();
+  };
+
+  const handleEndGame = () => {
+    // Save stats for summary page
+    const stats = players.map((name) => ({
+      name,
+      drinkCount: playerDrinks[name] || 0,
+      questionsAnswered: playerTurnCount[name] || 0,
+    }));
+    localStorage.setItem("wongtaek-game-stats", JSON.stringify(stats));
+    localStorage.setItem("wongtaek-rounds", roundNumber.toString());
+    router.push("/game/summary");
+  };
+
   const questionType = currentQuestion
-    ? questionTypeMap[currentQuestion.type] || questionTypeMap.QUESTION
-    : questionTypeMap.QUESTION;
+    ? QUESTION_TYPES[currentQuestion.type] || QUESTION_TYPES.QUESTION
+    : QUESTION_TYPES.QUESTION;
 
   return (
     <main className="container-mobile min-h-screen flex flex-col overflow-hidden relative">
@@ -433,10 +197,18 @@ function GamePlayContent() {
           <span className="text-white/40 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">
             สถานะเกม
           </span>
-          <div className="px-3 py-1 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
-            <span className="text-primary text-xs font-bold tracking-widest uppercase text-glow-purple">
-              รอบที่ {roundNumber}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
+              <span className="text-primary text-xs font-bold tracking-widest uppercase text-glow-purple">
+                รอบที่ {roundNumber}
+              </span>
+            </div>
+            <button
+              onClick={handleEndGame}
+              className="px-2 py-1 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-xs font-bold transition-colors"
+            >
+              จบเกม
+            </button>
           </div>
         </div>
 
@@ -454,11 +226,12 @@ function GamePlayContent() {
         {/* Current Player */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentPlayerIndex}
+            key={`player-${currentPlayerIndex}`}
             className="flex flex-col items-center gap-2 sm:gap-3"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0, scale: 0.8, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
           >
             <div className="relative group">
               <div className="absolute -inset-1 rounded-full bg-gradient-to-b from-primary to-transparent opacity-50 blur-md" />
@@ -477,9 +250,11 @@ function GamePlayContent() {
               <h2 className="text-white text-xl sm:text-2xl font-bold tracking-tight drop-shadow-md">
                 {currentPlayer}
               </h2>
-              <p className="text-white/40 text-xs sm:text-sm font-medium uppercase tracking-widest mt-1">
-                ตาของ: {currentPlayer}
-              </p>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <span className="text-white/40 text-xs sm:text-sm font-medium">
+                  🍺 {playerDrinks[currentPlayer] || 0} แก้ว
+                </span>
+              </div>
             </div>
           </motion.div>
         </AnimatePresence>
@@ -488,12 +263,12 @@ function GamePlayContent() {
         <AnimatePresence mode="wait">
           {currentQuestion && (
             <motion.div
-              key={currentQuestion.id}
-              className="w-full relative group"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -20 }}
-              transition={{ duration: 0.3 }}
+              key={`question-${currentQuestion.id}`}
+              className="w-full relative"
+              initial={{ opacity: 0, scale: 0.9, rotateY: -15, x: 100 }}
+              animate={{ opacity: 1, scale: 1, rotateY: 0, x: 0 }}
+              exit={{ opacity: 0, scale: 0.9, rotateY: 15, x: -100 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
               <div className="relative bg-[#26182c]/80 backdrop-blur-xl border border-white/10 p-5 sm:p-6 pt-8 sm:pt-10 pb-6 sm:pb-8 rounded-2xl flex flex-col items-center text-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
@@ -525,14 +300,21 @@ function GamePlayContent() {
                 {/* Timer */}
                 <Timer
                   key={timerKey}
-                  duration={30}
+                  duration={GAME_SETTINGS.defaultTimerDuration}
                   onComplete={handleTimerComplete}
+                  onWarning={handleTimerWarning}
                   size="lg"
                 />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {isLoading && (
+          <div className="text-white/60 text-sm animate-pulse">
+            กำลังโหลดคำถาม...
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
@@ -577,7 +359,7 @@ function GamePlayContent() {
   );
 }
 
-// Loading fallback for Suspense
+// Loading fallback
 function GamePlayLoading() {
   return (
     <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
@@ -590,7 +372,6 @@ function GamePlayLoading() {
   );
 }
 
-// Main export with Suspense boundary
 export default function GamePlayPage() {
   return (
     <Suspense fallback={<GamePlayLoading />}>
