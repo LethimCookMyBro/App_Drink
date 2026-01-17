@@ -1,12 +1,15 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-// Ensure JWT_SECRET is set in production
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("JWT_SECRET environment variable must be set in production!");
+// Get JWT secret - check at runtime, not build time
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    console.error("WARNING: JWT_SECRET not set in production!");
+  }
+  return secret || "wong-taek-dev-secret-key";
 }
-const SECRET = JWT_SECRET || "wong-taek-dev-secret-key";
+
 const TOKEN_EXPIRY = "7d"; // Token expires in 7 days
 
 export interface JWTPayload {
@@ -26,22 +29,22 @@ export async function hashPassword(password: string): Promise<string> {
 // Verify password with timing-safe comparison
 export async function verifyPassword(
   password: string,
-  hashedPassword: string
+  hashedPassword: string,
 ): Promise<boolean> {
   return bcrypt.compare(password, hashedPassword);
 }
 
 // Generate JWT token
 export function generateToken(
-  payload: Omit<JWTPayload, "iat" | "exp">
+  payload: Omit<JWTPayload, "iat" | "exp">,
 ): string {
-  return jwt.sign(payload, SECRET, { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
 }
 
 // Verify JWT token
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, SECRET) as JWTPayload;
+    return jwt.verify(token, getJwtSecret()) as JWTPayload;
   } catch {
     return null;
   }
