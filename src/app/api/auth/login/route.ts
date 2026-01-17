@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }
