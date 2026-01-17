@@ -3,11 +3,11 @@
 
 generator client {
   provider   = "prisma-client-js"
-  engineType = "library"
+  engineType = "client"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 // ==========================================
@@ -27,9 +27,6 @@ model Room {
   
   players     Player[]
   sessions    GameSession[]
-  
-  @@index([code])
-  @@index([isActive])
 }
 
 // ==========================================
@@ -49,9 +46,6 @@ model Player {
   
   room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   events      GameEvent[]
-  
-  @@index([roomId])
-  @@index([isOnline])
 }
 
 // ==========================================
@@ -60,7 +54,7 @@ model Player {
 model Question {
   id          String   @id @default(cuid())
   text        String
-  type        QuestionType
+  type        String   // QUESTION, TRUTH, DARE, CHAOS, VOTE
   level       Int      // 1=chill, 2=mid, 3=spicy
   is18Plus    Boolean  @default(false)
   isPublic    Boolean  @default(true)
@@ -71,19 +65,6 @@ model Question {
   createdBy   String?  // null = system, otherwise admin id
   
   events      GameEvent[]
-  
-  @@index([type])
-  @@index([level])
-  @@index([is18Plus])
-  @@index([isActive])
-}
-
-enum QuestionType {
-  QUESTION  // คำถามทั่วไป
-  TRUTH     // ความจริง
-  DARE      // คำท้า
-  CHAOS     // โกลาหล
-  VOTE      // โหวต
 }
 
 // ==========================================
@@ -101,8 +82,6 @@ model User {
   
   sessions      UserSession[]
   gameSessions  GameSession[]
-  
-  @@index([email])
 }
 
 // ==========================================
@@ -116,46 +95,24 @@ model UserSession {
   createdAt   DateTime @default(now())
   
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([token])
-  @@index([userId])
 }
 
 // ==========================================
 // GameSession (เซสชันการเล่น)
 // ==========================================
 model GameSession {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   roomId      String
-  userId      String?     // Link to user who created session
-  mode        GameMode
-  roundCount  Int         @default(0)
-  status      SessionStatus @default(ACTIVE)
-  startedAt   DateTime    @default(now())
+  userId      String?  // Link to user who created session
+  mode        String   // QUESTION, VOTE, TRUTH_OR_DARE, CHAOS, MIXED
+  roundCount  Int      @default(0)
+  status      String   @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, ABANDONED
+  startedAt   DateTime @default(now())
   endedAt     DateTime?
   
-  room        Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user        User?       @relation(fields: [userId], references: [id])
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id])
   events      GameEvent[]
-  
-  @@index([roomId])
-  @@index([userId])
-  @@index([status])
-}
-
-enum GameMode {
-  QUESTION      // โหมดคำถาม
-  VOTE          // โหมดโหวต
-  TRUTH_OR_DARE // ความจริงหรือท้า
-  CHAOS         // โกลาหล
-  MIXED         // ผสม
-}
-
-enum SessionStatus {
-  ACTIVE    // กำลังเล่น
-  PAUSED    // หยุดพัก
-  COMPLETED // จบเกม
-  ABANDONED // ยกเลิก
 }
 
 // ==========================================
@@ -166,27 +123,13 @@ model GameEvent {
   sessionId   String
   playerId    String
   questionId  String?
-  type        EventType
-  data        Json?    // Additional event data
+  type        String   // ANSWERED, SKIPPED, DRANK, COMPLETED, GAVE_UP, VOTED, TIMEOUT
+  data        String?  // JSON string for additional event data
   createdAt   DateTime @default(now())
   
   session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   player      Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
   question    Question?   @relation(fields: [questionId], references: [id])
-  
-  @@index([sessionId])
-  @@index([playerId])
-  @@index([type])
-}
-
-enum EventType {
-  ANSWERED      // ตอบคำถาม
-  SKIPPED       // ข้าม (ดื่ม)
-  DRANK         // ดื่ม
-  COMPLETED     // ทำภารกิจสำเร็จ
-  GAVE_UP       // ยอมแพ้
-  VOTED         // โหวต
-  TIMEOUT       // หมดเวลา
 }
 
 // ==========================================
@@ -197,28 +140,20 @@ model Admin {
   email       String   @unique
   password    String   // hashed
   name        String
-  role        AdminRole @default(MODERATOR)
+  role        String   @default("MODERATOR") // SUPER_ADMIN, ADMIN, MODERATOR
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   lastLoginAt DateTime?
-  
-  @@index([email])
-}
-
-enum AdminRole {
-  SUPER_ADMIN   // เต็มสิทธิ์
-  ADMIN         // จัดการคำถาม
-  MODERATOR     // ดูสถิติ
 }
 
 // ==========================================
 // AppSettings (ตั้งค่าแอป)
 // ==========================================
 model AppSettings {
-  id          String   @id @default("app_settings")
-  is18PlusEnabled Boolean @default(true)
-  defaultDifficulty Int @default(3)
-  defaultMaxPlayers Int @default(8)
-  defaultTimerSeconds Int @default(30)
-  updatedAt   DateTime @updatedAt
+  id                  String   @id @default("app_settings")
+  is18PlusEnabled     Boolean  @default(true)
+  defaultDifficulty   Int      @default(3)
+  defaultMaxPlayers   Int      @default(8)
+  defaultTimerSeconds Int      @default(30)
+  updatedAt           DateTime @updatedAt
 }

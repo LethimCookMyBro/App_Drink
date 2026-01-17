@@ -1,40 +1,22 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  pool: Pool | undefined;
 };
 
-// Check if DATABASE_URL is set
-if (!process.env.DATABASE_URL) {
-  console.warn(
-    "WARNING: DATABASE_URL is not set. Database operations will fail.",
-  );
-}
+// Initialize LibSQL adapter with database URL
+const dbUrl = process.env.DATABASE_URL || "file:prisma/dev.db";
+const adapter = new PrismaLibSql({ url: dbUrl });
 
-// Create a PostgreSQL Pool for the adapter
-const pool =
-  globalForPrisma.pool ??
-  (process.env.DATABASE_URL
-    ? new Pool({ connectionString: process.env.DATABASE_URL })
-    : undefined);
-
-// Create the Prisma adapter
-const adapter = pool ? new PrismaPg(pool) : undefined;
-
-// Create Prisma client with adapter for Prisma 7
+// Create Prisma client for SQLite
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     adapter,
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-  globalForPrisma.pool = pool;
-}
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export default prisma;
