@@ -15,8 +15,8 @@ datasource db {
 // ==========================================
 model Room {
   id          String   @id @default(cuid())
-  code        String   @unique @db.VarChar(4)
-  name        String   @db.VarChar(100)
+  code        String   @unique
+  name        String
   hostId      String
   difficulty  Int      @default(3) // 1-5 stars
   is18Plus    Boolean  @default(false)
@@ -37,7 +37,7 @@ model Room {
 // ==========================================
 model Player {
   id          String   @id @default(cuid())
-  name        String   @db.VarChar(50)
+  name        String
   roomId      String
   isHost      Boolean  @default(false)
   isReady     Boolean  @default(false)
@@ -59,7 +59,7 @@ model Player {
 // ==========================================
 model Question {
   id          String   @id @default(cuid())
-  text        String   @db.Text
+  text        String
   type        QuestionType
   level       Int      // 1=chill, 2=mid, 3=spicy
   is18Plus    Boolean  @default(false)
@@ -93,7 +93,7 @@ model User {
   id            String    @id @default(cuid())
   email         String    @unique
   password      String    // hashed with bcrypt
-  name          String    @db.VarChar(50)
+  name          String
   avatarUrl     String?
   isVerified    Boolean   @default(false)
   createdAt     DateTime  @default(now())

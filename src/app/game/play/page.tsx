@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, Timer, GlassPanel } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
+
+// Force dynamic rendering to avoid prerender errors with useSearchParams
+export const dynamic = "force-dynamic";
 
 // Question interface
 interface GameQuestion {
@@ -108,7 +111,8 @@ const questionTypeMap: Record<
   VOTE: { label: "โหวต", icon: "how_to_vote", color: "text-neon-green" },
 };
 
-export default function GamePlayPage() {
+// Inner component that uses useSearchParams
+function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode") || "question";
@@ -452,5 +456,27 @@ export default function GamePlayPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+// Loading fallback for Suspense
+function GamePlayLoading() {
+  return (
+    <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
+      <div className="animate-pulse flex flex-col items-center gap-4">
+        <div className="w-20 h-20 bg-white/10 rounded-full"></div>
+        <div className="h-6 w-32 bg-white/10 rounded"></div>
+        <div className="h-40 w-full max-w-md bg-white/10 rounded-2xl"></div>
+      </div>
+    </main>
+  );
+}
+
+// Main export with Suspense boundary
+export default function GamePlayPage() {
+  return (
+    <Suspense fallback={<GamePlayLoading />}>
+      <GamePlayContent />
+    </Suspense>
   );
 }

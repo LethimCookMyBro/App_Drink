@@ -1,8 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "wong-taek-super-secret-key-change-in-production";
+// Ensure JWT_SECRET is set in production
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("JWT_SECRET environment variable must be set in production!");
+}
+const SECRET = JWT_SECRET || "wong-taek-dev-secret-key";
 const TOKEN_EXPIRY = "7d"; // Token expires in 7 days
 
 export interface JWTPayload {
@@ -13,13 +17,13 @@ export interface JWTPayload {
   exp?: number;
 }
 
-// Hash password
+// Hash password with secure salt rounds
 export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 12;
+  const saltRounds = 12; // Higher = more secure but slower
   return bcrypt.hash(password, saltRounds);
 }
 
-// Verify password
+// Verify password with timing-safe comparison
 export async function verifyPassword(
   password: string,
   hashedPassword: string
@@ -31,13 +35,13 @@ export async function verifyPassword(
 export function generateToken(
   payload: Omit<JWTPayload, "iat" | "exp">
 ): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, SECRET, { expiresIn: TOKEN_EXPIRY });
 }
 
 // Verify JWT token
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, SECRET) as JWTPayload;
   } catch {
     return null;
   }
@@ -142,8 +146,22 @@ export function isValidPassword(password: string): {
   valid: boolean;
   message?: string;
 } {
-  if (password.length < 6) {
-    return { valid: false, message: "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" };
+  if (password.length < 8) {
+    return { valid: false, message: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" };
+  }
+  if (!/[A-Za-z]/.test(password)) {
+    return { valid: false, message: "รหัสผ่านต้องมีตัวอักษรอย่างน้อย 1 ตัว" };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว" };
   }
   return { valid: true };
+}
+
+// Sanitize user input - remove potentially dangerous characters
+export function sanitizeInput(input: string): string {
+  return input
+    .trim()
+    .replace(/[<>]/g, "") // Remove HTML-like tags
+    .slice(0, 500); // Limit length
 }
