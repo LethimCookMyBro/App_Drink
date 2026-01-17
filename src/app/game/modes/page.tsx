@@ -22,6 +22,18 @@ interface GameMode {
 
 const gameModes: GameMode[] = [
   {
+    id: "random",
+    name: "โหมดสุ่ม",
+    description: "ไม่รู้จะเจออะไร! ระบบสุ่มโหมดให้แบบลุ้นระทึก ลองดวงกันเลย!",
+    icon: "casino",
+    color: "text-neon-yellow",
+    borderColor: "border-neon-yellow",
+    shadowClass: "shadow-neon-yellow",
+    bgGradient: "from-yellow-500/20 to-transparent",
+    difficulty: 3,
+    route: "random", // Special route to trigger random selection
+  },
+  {
     id: "question",
     name: "โหมดคำถาม",
     description:
@@ -78,6 +90,14 @@ export default function GameModesPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleSelectMode = (mode: GameMode) => {
+    // Handle random mode - pick randomly from other modes
+    if (mode.route === "random") {
+      const otherModes = gameModes.filter((m) => m.route !== "random");
+      const randomMode =
+        otherModes[Math.floor(Math.random() * otherModes.length)];
+      router.push(randomMode.route);
+      return;
+    }
     router.push(mode.route);
   };
 
@@ -158,7 +178,7 @@ export default function GameModesPage() {
                     mode.borderColor
                   }/30 bg-${mode.color.replace(
                     "text-",
-                    ""
+                    "",
                   )}/5 shadow-[0_0_15px_rgba(255,255,255,0.1)]`}
                 >
                   <span
@@ -184,8 +204,8 @@ export default function GameModesPage() {
                     mode.id === "chaos"
                       ? "neon-red"
                       : mode.id === "truth-or-dare"
-                      ? "neon-green"
-                      : "primary"
+                        ? "neon-green"
+                        : "primary"
                   }
                   size="lg"
                   fullWidth

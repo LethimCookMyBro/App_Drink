@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel, PlayerAvatar } from "@/components/ui";
+import { Button, PlayerAvatar } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
 
 interface LocalPlayer {
@@ -15,18 +15,38 @@ interface LocalPlayer {
 }
 
 export default function LobbyPage() {
-  const params = useParams();
   const router = useRouter();
-  const roomCode = (params.roomCode as string)?.toUpperCase() || "GAME";
+  const { room, currentPlayer } = useGameStore();
 
-  const [players, setPlayers] = useState<LocalPlayer[]>([
-    { id: "1", name: "ฉัน", isHost: true, isReady: true },
-  ]);
+  // Initialize players from store or default
+  const [players, setPlayers] = useState<LocalPlayer[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // Get max players from room settings (default 8)
+  const maxPlayers = room?.maxPlayers || 8;
+  const canAddMore = players.length < maxPlayers;
+
+  // Initialize host player from store on mount
+  useEffect(() => {
+    if (currentPlayer && players.length === 0) {
+      setPlayers([
+        {
+          id: currentPlayer.id,
+          name: currentPlayer.name,
+          isHost: true,
+          isReady: true,
+        },
+      ]);
+    } else if (players.length === 0) {
+      // Fallback if no store data
+      setPlayers([{ id: "1", name: "ฉัน", isHost: true, isReady: true }]);
+    }
+  }, [currentPlayer, players.length]);
+
   const handleAddPlayer = () => {
     if (!newPlayerName.trim()) return;
+    if (!canAddMore) return;
 
     const newPlayer: LocalPlayer = {
       id: Date.now().toString(),
@@ -51,7 +71,7 @@ export default function LobbyPage() {
     // Save players to localStorage for the game to use
     localStorage.setItem(
       "wongtaek-players",
-      JSON.stringify(players.map((p) => p.name))
+      JSON.stringify(players.map((p) => p.name)),
     );
     router.push("/game/modes");
   };
@@ -82,6 +102,8 @@ export default function LobbyPage() {
               {players.length} คนในวง
             </p>
           </div>
+          {/* Show max players info */}
+          <p className="text-white/40 text-sm">(สูงสุด {maxPlayers} คน)</p>
         </div>
       </header>
 
@@ -139,15 +161,24 @@ export default function LobbyPage() {
           ))}
         </AnimatePresence>
 
-        {/* Add Player Button */}
-        <motion.button
-          onClick={() => setShowAddModal(true)}
-          className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all h-[76px]"
-          whileTap={{ scale: 0.98 }}
-        >
-          <span className="material-symbols-outlined text-2xl">person_add</span>
-          <p className="font-bold text-lg">เพิ่มเพื่อน</p>
-        </motion.button>
+        {/* Add Player Button - disable if max reached */}
+        {canAddMore ? (
+          <motion.button
+            onClick={() => setShowAddModal(true)}
+            className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all h-[76px]"
+            whileTap={{ scale: 0.98 }}
+          >
+            <span className="material-symbols-outlined text-2xl">
+              person_add
+            </span>
+            <p className="font-bold text-lg">เพิ่มเพื่อน</p>
+          </motion.button>
+        ) : (
+          <div className="w-full border-2 border-dashed border-neon-yellow/30 rounded-xl p-4 flex items-center justify-center gap-2 text-neon-yellow/70 h-[76px]">
+            <span className="material-symbols-outlined text-2xl">group</span>
+            <p className="font-bold text-lg">เต็มแล้ว! ({maxPlayers} คน)</p>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -207,6 +238,7 @@ export default function LobbyPage() {
                   placeholder="พิมพ์ชื่อ..."
                   className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white text-xl font-bold placeholder-white/30 focus:outline-none focus:border-primary"
                   autoFocus
+                  maxLength={20}
                 />
               </div>
 
