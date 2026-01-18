@@ -1,10 +1,10 @@
 /**
  * useSoundEffects - Sound Effects & Haptic Feedback
- * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ใช้ settings จาก store)
+ * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ใช้ per-user settings)
  */
 
 import { useCallback, useRef, useEffect } from "react";
-import { useGameStore } from "@/store/gameStore";
+import { useUserSettings } from "./useUserSettings";
 
 interface UseSoundEffectsOptions {
   enabled?: boolean;
@@ -38,15 +38,13 @@ export function useSoundEffects({
   volume,
   hapticEnabled,
 }: UseSoundEffectsOptions = {}): UseSoundEffectsReturn {
-  // Get settings from store
-  const storeSoundEnabled = useGameStore((state) => state.soundEnabled);
-  const storeVibrationEnabled = useGameStore((state) => state.vibrationEnabled);
-  const storeHapticLevel = useGameStore((state) => state.hapticLevel);
+  // Get per-user settings
+  const { settings } = useUserSettings();
 
-  // Use props if provided, otherwise fall back to store values
-  const soundEnabled = enabled ?? storeSoundEnabled;
-  const vibrationEnabled = hapticEnabled ?? storeVibrationEnabled;
-  const hapticLevel = storeHapticLevel;
+  // Use props if provided, otherwise fall back to per-user settings
+  const soundEnabled = enabled ?? settings.soundEnabled;
+  const vibrationEnabled = hapticEnabled ?? settings.vibrationEnabled;
+  const hapticLevel = settings.hapticLevel;
   const effectiveVolume = volume ?? 0.6;
 
   const audioContextRef = useRef<AudioContext | null>(null);

@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { useGameStore } from "@/store/gameStore";
+import { useUserSettings } from "@/hooks/useUserSettings";
 import { getThemeCSSVariables, type ThemeId } from "@/config/themes";
 
 /**
  * ThemeProvider applies the selected theme's CSS variables to the document root
- * This component should be included in the root layout
+ * Uses per-user settings stored in localStorage
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const theme = useGameStore((state) => state.theme);
+  const { settings, isLoaded } = useUserSettings();
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    if (isLoaded) {
+      applyTheme(settings.theme);
+    }
+  }, [settings.theme, isLoaded]);
 
   return <>{children}</>;
 }

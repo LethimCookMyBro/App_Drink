@@ -1,45 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui";
-import { useGameStore } from "@/store/gameStore";
+import { useUserSettings } from "@/hooks/useUserSettings";
 import { THEMES, AVATAR_EMOJIS, type ThemeId } from "@/config/themes";
+import { applyTheme } from "@/components/ThemeProvider";
 
 export default function SettingsPage() {
   const {
-    soundEnabled,
-    vibrationEnabled,
-    vibeLevel,
-    theme,
-    hapticLevel,
-    avatar,
-    setVibeLevel,
+    userId,
+    settings,
+    isLoaded,
     setTheme,
     setHapticLevel,
     setSoundEnabled,
     setVibrationEnabled,
     setAvatar,
-  } = useGameStore();
+    setIs18Plus,
+  } = useUserSettings();
 
-  const [is18Plus, setIs18Plus] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
-  // Load 18+ state from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem("wongtaek-18plus");
-    if (stored === "true") {
-      setIs18Plus(true);
-    }
-  }, []);
-
-  const handle18PlusChange = (checked: boolean) => {
-    setIs18Plus(checked);
-    localStorage.setItem("wongtaek-18plus", checked.toString());
-    if (!checked && vibeLevel === "chaos") {
-      setVibeLevel("tipsy");
-    }
+  // Handler that also applies theme immediately
+  const handleThemeChange = (themeId: ThemeId) => {
+    setTheme(themeId);
+    applyTheme(themeId);
   };
 
   const hapticOptions = [
@@ -48,10 +35,18 @@ export default function SettingsPage() {
     { value: "strong", label: "แรง", icon: "edgesensor_high" },
   ] as const;
 
+  if (!isLoaded) {
+    return (
+      <main className="container-mobile min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-white/40">กำลังโหลด...</div>
+      </main>
+    );
+  }
+
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
       {/* Header */}
-      <header className="flex items-center p-4 pb-2 justify-between">
+      <header className="flex items-center p-4 pt-8 justify-between">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-3xl">
@@ -65,8 +60,17 @@ export default function SettingsPage() {
         <div className="flex size-12 shrink-0 items-center justify-center" />
       </header>
 
+      {/* User indicator */}
+      <div className="px-5 mb-4">
+        <div className="text-white/40 text-xs flex items-center gap-2">
+          <span className="material-symbols-outlined text-sm">person</span>
+          Settings สำหรับ:{" "}
+          <span className="text-primary font-bold">{userId}</span>
+        </div>
+      </div>
+
       {/* Settings List */}
-      <div className="px-5 space-y-4 mt-4">
+      <div className="px-5 space-y-4">
         {/* Avatar */}
         <GlassPanel className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -74,7 +78,7 @@ export default function SettingsPage() {
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
               className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center text-3xl border-2 border-primary/50 hover:scale-105 transition-transform"
             >
-              {avatar}
+              {settings.avatar}
             </button>
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight">
@@ -103,7 +107,9 @@ export default function SettingsPage() {
                   setShowAvatarPicker(false);
                 }}
                 className={`text-2xl p-2 rounded-lg hover:bg-white/10 transition-colors ${
-                  avatar === emoji ? "bg-primary/20 ring-2 ring-primary" : ""
+                  settings.avatar === emoji
+                    ? "bg-primary/20 ring-2 ring-primary"
+                    : ""
                 }`}
               >
                 {emoji}
@@ -120,11 +126,11 @@ export default function SettingsPage() {
           <div className="grid grid-cols-3 gap-3">
             {(Object.keys(THEMES) as ThemeId[]).map((themeId) => {
               const t = THEMES[themeId];
-              const isActive = theme === themeId;
+              const isActive = settings.theme === themeId;
               return (
                 <button
                   key={themeId}
-                  onClick={() => setTheme(themeId)}
+                  onClick={() => handleThemeChange(themeId)}
                   className={`relative p-4 rounded-xl border-2 transition-all ${
                     isActive
                       ? "border-primary bg-primary/10"
@@ -163,7 +169,7 @@ export default function SettingsPage() {
           </h3>
           <div className="grid grid-cols-3 gap-3">
             {hapticOptions.map((opt) => {
-              const isActive = hapticLevel === opt.value;
+              const isActive = settings.hapticLevel === opt.value;
               return (
                 <button
                   key={opt.value}
@@ -211,7 +217,7 @@ export default function SettingsPage() {
           <label className="relative flex items-center cursor-pointer">
             <input
               type="checkbox"
-              checked={soundEnabled}
+              checked={settings.soundEnabled}
               onChange={(e) => setSoundEnabled(e.target.checked)}
               className="sr-only peer"
             />
@@ -237,7 +243,7 @@ export default function SettingsPage() {
           <label className="relative flex items-center cursor-pointer">
             <input
               type="checkbox"
-              checked={vibrationEnabled}
+              checked={settings.vibrationEnabled}
               onChange={(e) => setVibrationEnabled(e.target.checked)}
               className="sr-only peer"
             />
@@ -259,7 +265,7 @@ export default function SettingsPage() {
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight flex items-center gap-2">
                 โหมด 18+
-                {is18Plus && (
+                {settings.is18Plus && (
                   <span className="text-[10px] bg-neon-red px-2 py-0.5 rounded-full uppercase">
                     เปิด
                   </span>
@@ -271,8 +277,8 @@ export default function SettingsPage() {
           <label className="relative flex items-center cursor-pointer">
             <input
               type="checkbox"
-              checked={is18Plus}
-              onChange={(e) => handle18PlusChange(e.target.checked)}
+              checked={settings.is18Plus}
+              onChange={(e) => setIs18Plus(e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-neon-red peer-checked:shadow-neon-red" />
