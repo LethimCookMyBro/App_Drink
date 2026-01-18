@@ -17,6 +17,16 @@ interface AdminUser {
   role: string;
 }
 
+interface FeedbackItem {
+  id: string;
+  type: string;
+  title: string;
+  details: string | null;
+  contact: string | null;
+  status: string;
+  createdAt: string;
+}
+
 const quickActions = [
   {
     label: "จัดการคำถาม",
@@ -42,6 +52,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
 
   // Check authentication on mount
   useEffect(() => {
@@ -210,6 +221,20 @@ export default function AdminDashboard() {
     }
 
     fetchStats();
+
+    // Fetch feedback
+    async function fetchFeedback() {
+      try {
+        const res = await fetch("/api/feedback");
+        if (res.ok) {
+          const data = await res.json();
+          setFeedbacks(data.feedbacks || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch feedback:", e);
+      }
+    }
+    fetchFeedback();
   }, []);
 
   const statCards = [
@@ -474,6 +499,76 @@ export default function AdminDashboard() {
               </div>
             </div>
           </GlassPanel>
+        </section>
+
+        {/* User Feedback Section */}
+        <section className="mt-8">
+          <h2 className="text-white/40 text-xs font-bold tracking-[0.1em] uppercase mb-4">
+            Feedback จากผู้ใช้ ({feedbacks.length})
+          </h2>
+          {feedbacks.length === 0 ? (
+            <GlassPanel className="p-6 text-center">
+              <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
+                inbox
+              </span>
+              <p className="text-white/40">ยังไม่มี Feedback</p>
+            </GlassPanel>
+          ) : (
+            <div className="space-y-3">
+              {feedbacks.slice(0, 10).map((fb) => (
+                <GlassPanel key={fb.id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                        fb.type === "BUG"
+                          ? "bg-neon-red/20"
+                          : "bg-neon-yellow/20"
+                      }`}
+                    >
+                      <span
+                        className={`material-symbols-outlined text-xl ${
+                          fb.type === "BUG"
+                            ? "text-neon-red"
+                            : "text-neon-yellow"
+                        }`}
+                      >
+                        {fb.type === "BUG" ? "bug_report" : "lightbulb"}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            fb.type === "BUG"
+                              ? "bg-neon-red/20 text-neon-red"
+                              : "bg-neon-yellow/20 text-neon-yellow"
+                          }`}
+                        >
+                          {fb.type === "BUG" ? "🐛 บัค" : "💡 ฟีเจอร์"}
+                        </span>
+                        <span className="text-white/30 text-xs">
+                          {new Date(fb.createdAt).toLocaleDateString("th-TH")}
+                        </span>
+                      </div>
+                      <h4 className="text-white font-medium truncate">
+                        {fb.title}
+                      </h4>
+                      {fb.details && (
+                        <p className="text-white/50 text-sm mt-1 line-clamp-2">
+                          {fb.details}
+                        </p>
+                      )}
+                      {fb.contact && (
+                        <p className="text-primary text-xs mt-2">
+                          📧 {fb.contact}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </GlassPanel>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Footer */}

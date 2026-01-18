@@ -157,3 +157,17 @@ model AppSettings {
   defaultTimerSeconds Int      @default(30)
   updatedAt           DateTime @updatedAt
 }
+
+// ==========================================
+// Feedback (แจ้งบัค / ขอฟีเจอร์)
+// ==========================================
+model Feedback {
+  id          String   @id @default(cuid())
+  type        String   // BUG, FEATURE
+  title       String
+  details     String?
+  contact     String?  // email or phone (optional)
+  status      String   @default("PENDING") // PENDING, READ, RESOLVED
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+}

@@ -19,6 +19,17 @@ export default function GameModesPage() {
     hapticEnabled: true,
   });
 
+  // Check if game was started properly from lobby
+  useEffect(() => {
+    const gameStarted = localStorage.getItem("wongtaek-game-started");
+    const hasPlayers = localStorage.getItem("wongtaek-players");
+
+    if (!gameStarted || !hasPlayers) {
+      // Not started from lobby, redirect to home
+      router.push("/");
+    }
+  }, [router]);
+
   // Detect current card based on scroll position
   const handleScrollEnd = useCallback(() => {
     if (!scrollRef.current) return;

@@ -115,6 +115,9 @@ export default function LobbyPage() {
       localStorage.removeItem("wongtaek-custom-questions");
     }
 
+    // Set game started flag
+    localStorage.setItem("wongtaek-game-started", "true");
+
     router.push("/game/modes");
   };
 

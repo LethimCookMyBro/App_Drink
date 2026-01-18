@@ -59,31 +59,13 @@ export default function WelcomePage() {
       {/* Header */}
       <header className="flex items-center justify-end gap-2 px-6 pt-6 pb-2">
         {/* Feedback Button */}
-        <button
-          onClick={() => {
-            const feedback = prompt(
-              "💬 แจ้งบัค / ขอฟีเจอร์:\n\nพิมพ์ข้อความของคุณที่นี่:",
-            );
-            if (feedback) {
-              // Save to localStorage for now (could be sent to API later)
-              const feedbacks = JSON.parse(
-                localStorage.getItem("wongtaek-feedback") || "[]",
-              );
-              feedbacks.push({
-                message: feedback,
-                timestamp: new Date().toISOString(),
-              });
-              localStorage.setItem(
-                "wongtaek-feedback",
-                JSON.stringify(feedbacks),
-              );
-              alert("✅ ขอบคุณสำหรับ Feedback!");
-            }
-          }}
-          className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10"
-        >
-          <span className="material-symbols-outlined text-xl">feedback</span>
-        </button>
+        <Link href="/feedback">
+          <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30">
+            <span className="material-symbols-outlined text-xl">
+              bug_report
+            </span>
+          </button>
+        </Link>
         <Link href="/settings">
           <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10">
             <span className="material-symbols-outlined">settings</span>
