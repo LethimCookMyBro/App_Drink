@@ -2,16 +2,29 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
+import { THEMES, AVATAR_EMOJIS, type ThemeId } from "@/config/themes";
 
 export default function SettingsPage() {
-  const { soundEnabled, vibrationEnabled, vibeLevel, setVibeLevel } =
-    useGameStore();
+  const {
+    soundEnabled,
+    vibrationEnabled,
+    vibeLevel,
+    theme,
+    hapticLevel,
+    avatar,
+    setVibeLevel,
+    setTheme,
+    setHapticLevel,
+    setSoundEnabled,
+    setVibrationEnabled,
+    setAvatar,
+  } = useGameStore();
 
-  const [sound, setSound] = useState(soundEnabled);
-  const [vibration, setVibration] = useState(vibrationEnabled);
   const [is18Plus, setIs18Plus] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   // Load 18+ state from localStorage
   useEffect(() => {
@@ -21,15 +34,19 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Save 18+ state to localStorage
   const handle18PlusChange = (checked: boolean) => {
     setIs18Plus(checked);
     localStorage.setItem("wongtaek-18plus", checked.toString());
-    // Also update vibe level if turning off
     if (!checked && vibeLevel === "chaos") {
       setVibeLevel("tipsy");
     }
   };
+
+  const hapticOptions = [
+    { value: "off", label: "ปิด", icon: "do_not_disturb_on" },
+    { value: "light", label: "เบา", icon: "vibration" },
+    { value: "strong", label: "แรง", icon: "edgesensor_high" },
+  ] as const;
 
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
@@ -37,12 +54,12 @@ export default function SettingsPage() {
       <header className="flex items-center p-4 pb-2 justify-between">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-[28px]">
+            <span className="material-symbols-outlined text-3xl">
               arrow_back
             </span>
           </button>
         </Link>
-        <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
+        <h2 className="text-white text-xl font-bold leading-tight tracking-tight">
           ตั้งค่า
         </h2>
         <div className="flex size-12 shrink-0 items-center justify-center" />
@@ -50,11 +67,139 @@ export default function SettingsPage() {
 
       {/* Settings List */}
       <div className="px-5 space-y-4 mt-4">
+        {/* Avatar */}
+        <GlassPanel className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+              className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center text-3xl border-2 border-primary/50 hover:scale-105 transition-transform"
+            >
+              {avatar}
+            </button>
+            <div className="flex flex-col">
+              <span className="text-white font-bold text-lg leading-tight">
+                อวาตาร์
+              </span>
+              <span className="text-white/40 text-sm">กดเพื่อเปลี่ยน</span>
+            </div>
+          </div>
+          <span className="material-symbols-outlined text-white/40">
+            chevron_right
+          </span>
+        </GlassPanel>
+
+        {/* Avatar Picker */}
+        {showAvatarPicker && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="grid grid-cols-8 gap-2 p-3 bg-white/5 rounded-xl border border-white/10"
+          >
+            {AVATAR_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => {
+                  setAvatar(emoji);
+                  setShowAvatarPicker(false);
+                }}
+                className={`text-2xl p-2 rounded-lg hover:bg-white/10 transition-colors ${
+                  avatar === emoji ? "bg-primary/20 ring-2 ring-primary" : ""
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Theme Selector */}
+        <div className="space-y-3">
+          <h3 className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase px-1">
+            ธีม
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {(Object.keys(THEMES) as ThemeId[]).map((themeId) => {
+              const t = THEMES[themeId];
+              const isActive = theme === themeId;
+              return (
+                <button
+                  key={themeId}
+                  onClick={() => setTheme(themeId)}
+                  className={`relative p-4 rounded-xl border-2 transition-all ${
+                    isActive
+                      ? "border-primary bg-primary/10"
+                      : "border-white/10 bg-white/5 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className="w-10 h-10 rounded-full"
+                      style={{ background: t.colors.primary }}
+                    />
+                    <span className="material-symbols-outlined text-white/60">
+                      {t.icon}
+                    </span>
+                    <span className="text-white text-sm font-medium">
+                      {t.name.split(" ")[0]}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <div className="absolute top-2 right-2">
+                      <span className="material-symbols-outlined text-primary text-lg">
+                        check_circle
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Haptic Level */}
+        <div className="space-y-3">
+          <h3 className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase px-1">
+            ความแรงสั่น
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {hapticOptions.map((opt) => {
+              const isActive = hapticLevel === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setHapticLevel(opt.value)}
+                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    isActive
+                      ? "border-neon-blue bg-neon-blue/10"
+                      : "border-white/10 bg-white/5 hover:border-white/20"
+                  }`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-2xl ${isActive ? "text-neon-blue" : "text-white/60"}`}
+                  >
+                    {opt.icon}
+                  </span>
+                  <span
+                    className={`text-sm font-medium ${isActive ? "text-neon-blue" : "text-white"}`}
+                  >
+                    {opt.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px w-full bg-white/10 my-2" />
+
         {/* Sound */}
         <GlassPanel className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined">volume_up</span>
+              <span className="material-symbols-outlined text-2xl">
+                volume_up
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight">
@@ -66,8 +211,8 @@ export default function SettingsPage() {
           <label className="relative flex items-center cursor-pointer">
             <input
               type="checkbox"
-              checked={sound}
-              onChange={(e) => setSound(e.target.checked)}
+              checked={soundEnabled}
+              onChange={(e) => setSoundEnabled(e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-neon-purple" />
@@ -78,7 +223,9 @@ export default function SettingsPage() {
         <GlassPanel className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-neon-blue/10 flex items-center justify-center text-neon-blue">
-              <span className="material-symbols-outlined">vibration</span>
+              <span className="material-symbols-outlined text-2xl">
+                vibration
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight">
@@ -90,32 +237,35 @@ export default function SettingsPage() {
           <label className="relative flex items-center cursor-pointer">
             <input
               type="checkbox"
-              checked={vibration}
-              onChange={(e) => setVibration(e.target.checked)}
+              checked={vibrationEnabled}
+              onChange={(e) => setVibrationEnabled(e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-neon-blue peer-checked:shadow-neon-blue" />
           </label>
         </GlassPanel>
 
-        {/* 18+ Mode - Main control for adult content */}
+        {/* Divider */}
+        <div className="h-px w-full bg-white/10 my-2" />
+
+        {/* 18+ Mode */}
         <GlassPanel className="flex items-center justify-between" variant="red">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-neon-red/10 flex items-center justify-center text-neon-red">
-              <span className="material-symbols-outlined">warning</span>
+              <span className="material-symbols-outlined text-2xl">
+                warning
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight flex items-center gap-2">
                 โหมด 18+
                 {is18Plus && (
                   <span className="text-[10px] bg-neon-red px-2 py-0.5 rounded-full uppercase">
-                    เปิดใช้งาน
+                    เปิด
                   </span>
                 )}
               </span>
-              <span className="text-white/40 text-sm">
-                เปิดเพื่อใช้คำถามสำหรับผู้ใหญ่
-              </span>
+              <span className="text-white/40 text-sm">คำถามสำหรับผู้ใหญ่</span>
             </div>
           </div>
           <label className="relative flex items-center cursor-pointer">
@@ -129,23 +279,8 @@ export default function SettingsPage() {
           </label>
         </GlassPanel>
 
-        {/* 18+ Warning */}
-        {is18Plus && (
-          <div className="p-4 rounded-xl bg-neon-red/10 border border-neon-red/20">
-            <div className="flex items-start gap-3">
-              <span className="material-symbols-outlined text-neon-red">
-                info
-              </span>
-              <p className="text-white/60 text-sm">
-                โหมด 18+ จะเปิดใช้งานคำถามที่มีเนื้อหาสำหรับผู้ใหญ่
-                ซึ่งอาจรวมถึงเนื้อหารุนแรง คำถามส่วนตัว และภารกิจที่ท้าทาย
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Divider */}
-        <div className="h-px w-full bg-white/10 my-6" />
+        <div className="h-px w-full bg-white/10 my-2" />
 
         {/* About Section */}
         <GlassPanel className="flex flex-col gap-4">
@@ -155,7 +290,7 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between py-2 border-b border-white/5">
             <span className="text-white/80">เวอร์ชัน</span>
-            <span className="text-primary font-mono">v2.4.0</span>
+            <span className="text-primary font-mono">v3.0.0</span>
           </div>
 
           <div className="flex items-center justify-between py-2 border-b border-white/5">

@@ -53,15 +53,23 @@ interface GameState {
   vibeLevel: VibeLevel;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  theme: "neon" | "minimal" | "pastel";
+  hapticLevel: "off" | "light" | "strong";
+  avatar: string;
 
   // Actions
   setVibeLevel: (level: VibeLevel) => void;
+  setTheme: (theme: "neon" | "minimal" | "pastel") => void;
+  setHapticLevel: (level: "off" | "light" | "strong") => void;
+  setSoundEnabled: (enabled: boolean) => void;
+  setVibrationEnabled: (enabled: boolean) => void;
+  setAvatar: (avatar: string) => void;
   createRoom: (
     name: string,
     hostName: string,
     difficulty: number,
     is18Plus: boolean,
-    maxPlayers: number
+    maxPlayers: number,
   ) => void;
   joinRoom: (code: string, playerName: string) => boolean;
   leaveRoom: () => void;
@@ -99,9 +107,17 @@ export const useGameStore = create<GameState>()(
       vibeLevel: "tipsy",
       soundEnabled: true,
       vibrationEnabled: true,
+      theme: "neon",
+      hapticLevel: "strong",
+      avatar: "😎",
 
       // Actions
       setVibeLevel: (level) => set({ vibeLevel: level }),
+      setTheme: (theme) => set({ theme }),
+      setHapticLevel: (level) => set({ hapticLevel: level }),
+      setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
+      setVibrationEnabled: (enabled) => set({ vibrationEnabled: enabled }),
+      setAvatar: (avatar) => set({ avatar }),
 
       createRoom: (name, hostName, difficulty, is18Plus, maxPlayers) => {
         const hostId = uuidv4();
@@ -162,7 +178,7 @@ export const useGameStore = create<GameState>()(
         if (!room || !currentPlayer) return;
 
         const updatedPlayers = room.players.filter(
-          (p) => p.id !== currentPlayer.id
+          (p) => p.id !== currentPlayer.id,
         );
 
         // If host leaves, assign new host or close room
@@ -193,7 +209,7 @@ export const useGameStore = create<GameState>()(
           room: {
             ...room,
             players: room.players.map((p) =>
-              p.id === playerId ? { ...p, isReady } : p
+              p.id === playerId ? { ...p, isReady } : p,
             ),
           },
         });
@@ -218,7 +234,7 @@ export const useGameStore = create<GameState>()(
         if (!room) return;
 
         const currentIndex = room.players.findIndex(
-          (p) => p.id === currentTurnPlayerId
+          (p) => p.id === currentTurnPlayerId,
         );
         const nextIndex = (currentIndex + 1) % room.players.length;
         const newRound = nextIndex === 0 ? roundNumber + 1 : roundNumber;
@@ -239,7 +255,7 @@ export const useGameStore = create<GameState>()(
           room: {
             ...room,
             players: room.players.map((p) =>
-              p.id === playerId ? { ...p, drinkCount: p.drinkCount + 1 } : p
+              p.id === playerId ? { ...p, drinkCount: p.drinkCount + 1 } : p,
             ),
           },
         });
@@ -266,8 +282,8 @@ export const useGameStore = create<GameState>()(
         soundEnabled: state.soundEnabled,
         vibrationEnabled: state.vibrationEnabled,
       }),
-    }
-  )
+    },
+  ),
 );
 
 export default useGameStore;

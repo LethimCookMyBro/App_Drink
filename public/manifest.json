@@ -1,0 +1,35 @@
+{
+  "name": "Wong Taek - Drinking Game",
+  "short_name": "WongTaek",
+  "description": "เกมดื่มสุดมันส์สำหรับเพื่อนซี้! มาวัดกันว่าใครจะกล้า",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#C73DF5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["games", "entertainment", "social"],
+  "lang": "th",
+  "dir": "ltr"
+}
