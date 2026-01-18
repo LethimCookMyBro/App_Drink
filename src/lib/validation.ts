@@ -1,39 +1,50 @@
 /**
  * Input Validation & Sanitization
- * Zod schemas + Simple profanity filter
+ * Zod schemas for input validation (NO profanity filter - this is a party game!)
  */
 
 import { z } from "zod";
 
-// Simple profanity filter (Thai words)
-const badWords = [
-  "เหี้ย",
-  "สัตว์",
-  "ควย",
-  "หี",
-  "เย็ด",
-  "แม่ง",
-  "ไอ้สัตว์",
-  "อีดอก",
-  "อีสัตว์",
-  "กระหรี่",
-  "อีควาย",
-  "ไอ้เวร",
-  "สันดาน",
-  "ชาติหมา",
+// ============ SQL INJECTION PROTECTION ============
+
+/**
+ * Dangerous SQL patterns to block
+ */
+const sqlInjectionPatterns = [
+  /(\b(OR|AND)\s+['"]?\d+['"]?\s*=\s*['"]?\d+['"]?)/i, // OR 1=1, AND 1=1
+  /(\b(OR|AND)\s+['"]?[a-z]+['"]?\s*=\s*['"]?[a-z]+['"]?)/i, // OR 'a'='a'
+  /(--|#|\/\*)/i, // SQL comments
+  /(\bUNION\b.*\bSELECT\b)/i, // UNION SELECT
+  /(\bDROP\b.*\bTABLE\b)/i, // DROP TABLE
+  /(\bDELETE\b.*\bFROM\b)/i, // DELETE FROM
+  /(\bINSERT\b.*\bINTO\b)/i, // INSERT INTO
+  /(\bUPDATE\b.*\bSET\b)/i, // UPDATE SET
+  /(\bEXEC\b|\bEXECUTE\b)/i, // EXEC
+  /(\bTRUNCATE\b)/i, // TRUNCATE
+  /(\bALTER\b.*\bTABLE\b)/i, // ALTER TABLE
+  /(\bCREATE\b.*\bTABLE\b)/i, // CREATE TABLE
+  /(;.*--)/i, // Statement termination with comment
+  /(\bSLEEP\b\s*\()/i, // Time-based injection
+  /(\bBENCHMARK\b\s*\()/i, // MySQL benchmark
+  /(\bWAITFOR\b.*\bDELAY\b)/i, // SQL Server delay
 ];
 
-function hasProfanitySimple(text: string): boolean {
-  const lowerText = text.toLowerCase();
-  return badWords.some((word) => lowerText.includes(word));
+/**
+ * Check if input contains SQL injection patterns
+ */
+export function hasSqlInjection(input: string): boolean {
+  return sqlInjectionPatterns.some((pattern) => pattern.test(input));
 }
 
-function cleanProfanitySimple(text: string): string {
-  let result = text;
-  badWords.forEach((word) => {
-    result = result.replace(new RegExp(word, "gi"), "***");
-  });
-  return result;
+/**
+ * Sanitize input to remove potential SQL injection
+ */
+export function sanitizeSqlInput(input: string): string {
+  // Remove null bytes
+  let sanitized = input.replace(/\0/g, "");
+  // Escape single quotes (double them)
+  sanitized = sanitized.replace(/'/g, "''");
+  return sanitized;
 }
 
 // ============ SCHEMAS ============
@@ -43,18 +54,15 @@ export const playerNameSchema = z
   .min(1, "ชื่อต้องมีอย่างน้อย 1 ตัวอักษร")
   .max(20, "ชื่อยาวได้ไม่เกิน 20 ตัวอักษร")
   .transform((val) => val.trim())
-  .refine((val) => !hasProfanitySimple(val), {
-    message: "ชื่อมีคำไม่เหมาะสม",
+  .refine((val) => !hasSqlInjection(val), {
+    message: "ชื่อมีรูปแบบไม่ถูกต้อง",
   });
 
 export const customQuestionSchema = z
   .string()
   .min(5, "คำถามต้องมีอย่างน้อย 5 ตัวอักษร")
   .max(200, "คำถามยาวได้ไม่เกิน 200 ตัวอักษร")
-  .transform((val) => val.trim())
-  .refine((val) => !hasProfanitySimple(val), {
-    message: "คำถามมีคำไม่เหมาะสม",
-  });
+  .transform((val) => val.trim());
 
 export const roomCodeSchema = z
   .string()
@@ -76,6 +84,48 @@ export const createRoomSchema = z.object({
   difficulty: z.number().int().min(1).max(5).default(3),
 });
 
+// Admin login schema with SQL injection protection
+export const adminLoginSchema = z.object({
+  username: z
+    .string()
+    .min(1, "กรุณากรอกชื่อผู้ใช้")
+    .max(50)
+    .refine((val) => !hasSqlInjection(val), {
+      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+    }),
+  password: z
+    .string()
+    .min(1, "กรุณากรอกรหัสผ่าน")
+    .max(100)
+    .refine((val) => !hasSqlInjection(val), {
+      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+    }),
+});
+
+// User registration schema with SQL injection protection
+export const userRegisterSchema = z.object({
+  email: z
+    .string()
+    .email("รูปแบบอีเมลไม่ถูกต้อง")
+    .refine((val) => !hasSqlInjection(val), {
+      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+    }),
+  password: z
+    .string()
+    .min(6, "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
+    .max(100)
+    .refine((val) => !hasSqlInjection(val), {
+      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+    }),
+  name: z
+    .string()
+    .min(1, "กรุณากรอกชื่อ")
+    .max(50)
+    .refine((val) => !hasSqlInjection(val), {
+      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+    }),
+});
+
 // ============ HELPERS ============
 
 /**
@@ -88,20 +138,6 @@ export function sanitizeHtml(input: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-/**
- * Check if text contains profanity
- */
-export function hasProfanity(text: string): boolean {
-  return hasProfanitySimple(text);
-}
-
-/**
- * Clean profanity from text
- */
-export function cleanProfanity(text: string): string {
-  return cleanProfanitySimple(text);
 }
 
 /**

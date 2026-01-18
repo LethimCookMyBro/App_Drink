@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui";
 import { useState, useEffect } from "react";
@@ -9,6 +10,11 @@ interface QuestionStats {
   total: number;
   byLevel: { level: number; count: number }[];
   byType: { type: string; count: number }[];
+}
+
+interface AdminUser {
+  username: string;
+  role: string;
 }
 
 const quickActions = [
@@ -31,8 +37,40 @@ const quickActions = [
 ];
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<QuestionStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/admin/verify");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.push("/admin/login");
+          return;
+        }
+        setAdminUser(data.admin);
+      } catch {
+        router.push("/admin/login");
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+      router.push("/admin/login");
+    } catch {
+      console.error("Logout failed");
+    }
+  };
 
   // Mock data fallback (same as questions page)
   const mockQuestions = [
@@ -236,6 +274,15 @@ export default function AdminDashboard() {
     },
   ];
 
+  // Show loading state while checking auth
+  if (isCheckingAuth) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#0d0a10]">
+        <div className="animate-pulse text-white/40">กำลังตรวจสอบสิทธิ์...</div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen overflow-y-auto no-scrollbar pb-8 bg-[#0d0a10]">
       {/* Header */}
@@ -252,17 +299,28 @@ export default function AdminDashboard() {
                 Admin Panel
               </h1>
               <p className="text-white/40 text-sm hidden md:block">
-                Wong Taek Dashboard
+                {adminUser
+                  ? `ยินดีต้อนรับ ${adminUser.username}`
+                  : "Wong Taek Dashboard"}
               </p>
             </div>
           </div>
-          <Link
-            href="/"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all"
-          >
-            <span className="material-symbols-outlined">home</span>
-            <span className="hidden md:inline">หน้าหลัก</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all"
+            >
+              <span className="material-symbols-outlined">home</span>
+              <span className="hidden md:inline">หน้าหลัก</span>
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neon-red/20 hover:bg-neon-red/30 text-neon-red transition-all"
+            >
+              <span className="material-symbols-outlined">logout</span>
+              <span className="hidden md:inline">ออกจากระบบ</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -377,10 +435,10 @@ export default function AdminDashboard() {
                           item.type === "Q"
                             ? "text-primary"
                             : item.type === "D"
-                            ? "text-neon-green"
-                            : item.type === "C"
-                            ? "text-neon-red"
-                            : "text-neon-yellow"
+                              ? "text-neon-green"
+                              : item.type === "C"
+                                ? "text-neon-red"
+                                : "text-neon-yellow"
                         }`}
                       >
                         {loading ? "..." : `${count} ข้อ`}
