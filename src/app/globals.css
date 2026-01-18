@@ -2,29 +2,29 @@
 
 /* ========================================
    วงแตก (Wong Taek) Design System
-   Dark Mode Neon Theme
+   Dark Mode Neon Theme with Theme Switching
    ======================================== */
 
-/* Color Variables */
+/* Color Variables - These are overridden by ThemeProvider */
 :root {
-  /* Primary */
-  --primary: #c73df5;
-  --primary-glow: rgba(199, 61, 245, 0.5);
+  /* Primary - Changed by theme */
+  --primary: var(--color-primary, #c73df5);
+  --primary-glow: var(--color-primary-glow, rgba(199, 61, 245, 0.5));
 
-  /* Neon Accents */
-  --neon-blue: #00ffff;
-  --neon-red: #ff0040;
-  --neon-green: #80ff00;
-  --neon-yellow: #fbff00;
+  /* Neon Accents - Changed by theme */
+  --neon-blue: var(--color-neon-blue, #00ffff);
+  --neon-red: var(--color-neon-red, #ff0040);
+  --neon-green: var(--color-neon-green, #80ff00);
+  --neon-yellow: var(--color-neon-yellow, #fbff00);
 
-  /* Backgrounds */
-  --background-dark: #1e1022;
-  --surface-dark: #161118;
-  --card-bg: #1f1f1f;
+  /* Backgrounds - Changed by theme */
+  --background-dark: var(--color-background, #1e1022);
+  --surface-dark: var(--color-surface, #161118);
+  --card-bg: var(--color-card, #1f1f1f);
 
-  /* Text */
-  --foreground: #ffffff;
-  --foreground-muted: rgba(255, 255, 255, 0.6);
+  /* Text - Changed by theme */
+  --foreground: var(--color-text, #ffffff);
+  --foreground-muted: var(--color-text-muted, rgba(255, 255, 255, 0.6));
   --foreground-subtle: rgba(255, 255, 255, 0.4);
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Kanit, Space_Grotesk } from "next/font/google";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 const kanit = Kanit({
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
     "truth or dare",
   ],
   authors: [{ name: "Wong Taek Team" }],
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
@@ -54,15 +56,17 @@ export default function RootLayout({
       <body
         className={`${kanit.variable} ${spaceGrotesk.variable} font-[family-name:var(--font-kanit)] antialiased`}
       >
-        {/* Background Effects */}
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="smoke-bg absolute top-[-10%] left-0 right-0 h-[70vh] w-full" />
-          <div className="absolute bottom-[-20%] left-[-20%] h-[50vh] w-[80%] rounded-full bg-primary/5 blur-[80px]" />
-          <div className="noise-overlay absolute inset-0" />
-        </div>
+        <ThemeProvider>
+          {/* Background Effects */}
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+            <div className="smoke-bg absolute top-[-10%] left-0 right-0 h-[70vh] w-full" />
+            <div className="absolute bottom-[-20%] left-[-20%] h-[50vh] w-[80%] rounded-full bg-primary/5 blur-[80px]" />
+            <div className="noise-overlay absolute inset-0" />
+          </div>
 
-        {/* Main Content */}
-        <div className="relative z-10">{children}</div>
+          {/* Main Content */}
+          <div className="relative z-10">{children}</div>
+        </ThemeProvider>
       </body>
     </html>
   );

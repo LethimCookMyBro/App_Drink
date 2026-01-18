@@ -1,9 +1,10 @@
 /**
  * useSoundEffects - Sound Effects & Haptic Feedback
- * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ปรับปรุงให้ดีขึ้น)
+ * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ใช้ settings จาก store)
  */
 
 import { useCallback, useRef, useEffect } from "react";
+import { useGameStore } from "@/store/gameStore";
 
 interface UseSoundEffectsOptions {
   enabled?: boolean;
@@ -25,11 +26,29 @@ interface UseSoundEffectsReturn {
   vibratePattern: (pattern: number[]) => void;
 }
 
+// Haptic intensity multipliers
+const HAPTIC_MULTIPLIERS = {
+  off: 0,
+  light: 0.5,
+  strong: 1.5,
+};
+
 export function useSoundEffects({
-  enabled = true,
-  volume = 0.6,
-  hapticEnabled = true,
+  enabled,
+  volume,
+  hapticEnabled,
 }: UseSoundEffectsOptions = {}): UseSoundEffectsReturn {
+  // Get settings from store
+  const storeSoundEnabled = useGameStore((state) => state.soundEnabled);
+  const storeVibrationEnabled = useGameStore((state) => state.vibrationEnabled);
+  const storeHapticLevel = useGameStore((state) => state.hapticLevel);
+
+  // Use props if provided, otherwise fall back to store values
+  const soundEnabled = enabled ?? storeSoundEnabled;
+  const vibrationEnabled = hapticEnabled ?? storeVibrationEnabled;
+  const hapticLevel = storeHapticLevel;
+  const effectiveVolume = volume ?? 0.6;
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
@@ -47,7 +66,7 @@ export function useSoundEffects({
             ).webkitAudioContext
           )();
           gainNodeRef.current = audioContextRef.current.createGain();
-          gainNodeRef.current.gain.value = volume;
+          gainNodeRef.current.gain.value = effectiveVolume;
           gainNodeRef.current.connect(audioContextRef.current.destination);
         } catch {
           console.warn("Web Audio API not supported");
@@ -69,13 +88,27 @@ export function useSoundEffects({
       window.removeEventListener("click", handleInteraction);
       window.removeEventListener("touchstart", handleInteraction);
     };
-  }, [volume]);
+  }, [effectiveVolume]);
 
   useEffect(() => {
     if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = volume;
+      gainNodeRef.current.gain.value = effectiveVolume;
     }
-  }, [volume]);
+  }, [effectiveVolume]);
+
+  // Scale vibration pattern by haptic level
+  const scaleVibration = useCallback(
+    (pattern: number | number[]): number | number[] => {
+      const multiplier = HAPTIC_MULTIPLIERS[hapticLevel];
+      if (multiplier === 0) return 0;
+
+      if (typeof pattern === "number") {
+        return Math.round(pattern * multiplier);
+      }
+      return pattern.map((ms) => Math.round(ms * multiplier));
+    },
+    [hapticLevel],
+  );
 
   // Play a nice bell/chime sound
   const playNote = useCallback(
@@ -85,7 +118,7 @@ export function useSoundEffects({
       type: OscillatorType = "sine",
       delay: number = 0,
     ) => {
-      if (!enabled || !audioContextRef.current) return;
+      if (!soundEnabled || !audioContextRef.current) return;
 
       try {
         const ctx = audioContextRef.current;
@@ -99,7 +132,10 @@ export function useSoundEffects({
 
         // Smooth attack and decay
         gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(volume * 0.3, now + 0.02);
+        gainNode.gain.linearRampToValueAtTime(
+          effectiveVolume * 0.3,
+          now + 0.02,
+        );
         gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
         oscillator.connect(gainNode);
@@ -111,96 +147,27 @@ export function useSoundEffects({
         // Ignore errors
       }
     },
-    [enabled, volume],
+    [soundEnabled, effectiveVolume],
   );
 
-  // Nice tick sound
-  const playTick = useCallback(() => {
-    playNote(1200, 0.05, "sine");
-    if (hapticEnabled) {
-      vibrateShort();
-    }
-  }, [playNote, hapticEnabled]);
-
-  // Warning countdown - descending notes
-  const playCountdown = useCallback(() => {
-    playNote(880, 0.15, "sine");
-    if (hapticEnabled) {
-      vibratePattern([30, 20, 30]);
-    }
-  }, [playNote, hapticEnabled]);
-
-  // Time's up - dramatic descending
-  const playTimeUp = useCallback(() => {
-    playNote(440, 0.2, "sine", 0);
-    playNote(330, 0.2, "sine", 0.15);
-    playNote(220, 0.4, "sine", 0.3);
-    if (hapticEnabled) {
-      vibratePattern([100, 50, 200]);
-    }
-  }, [playNote, hapticEnabled]);
-
-  // New question - ascending whoosh
-  const playNewQuestion = useCallback(() => {
-    playNote(400, 0.08, "sine", 0);
-    playNote(600, 0.08, "sine", 0.05);
-    playNote(800, 0.12, "sine", 0.1);
-    if (hapticEnabled) {
-      vibrateShort();
-    }
-  }, [playNote, hapticEnabled]);
-
-  // Drink sound - bubble pop
-  const playDrink = useCallback(() => {
-    playNote(300, 0.1, "sine", 0);
-    playNote(400, 0.15, "sine", 0.08);
-    if (hapticEnabled) {
-      vibratePattern([50, 30, 80]);
-    }
-  }, [playNote, hapticEnabled]);
-
-  // Celebration - happy ascending scale
-  const playCelebration = useCallback(() => {
-    const notes = [523, 659, 784, 1047]; // C, E, G, C octave
-    notes.forEach((freq, i) => {
-      playNote(freq, 0.2, "sine", i * 0.1);
-    });
-    if (hapticEnabled) {
-      vibratePattern([50, 30, 50, 30, 100, 50, 150]);
-    }
-  }, [playNote, hapticEnabled]);
-
-  // Play custom audio file
-  const playCustom = useCallback(
-    (url: string) => {
-      if (!enabled) return;
-      try {
-        const audio = new Audio(url);
-        audio.volume = volume;
-        audio.play().catch(() => {});
-      } catch {
-        // Ignore errors
-      }
-    },
-    [enabled, volume],
-  );
-
-  // Vibration helpers
+  // Vibration helper with haptic level
   const vibrate = useCallback(
     (pattern: number | number[] = 50) => {
       if (
-        !hapticEnabled ||
+        !vibrationEnabled ||
+        hapticLevel === "off" ||
         typeof navigator === "undefined" ||
         !navigator.vibrate
       )
         return;
       try {
-        navigator.vibrate(pattern);
+        const scaled = scaleVibration(pattern);
+        navigator.vibrate(scaled);
       } catch {
         // Vibration not supported
       }
     },
-    [hapticEnabled],
+    [vibrationEnabled, hapticLevel, scaleVibration],
   );
 
   const vibrateShort = useCallback(() => vibrate(25), [vibrate]);
@@ -208,6 +175,65 @@ export function useSoundEffects({
   const vibratePattern = useCallback(
     (pattern: number[]) => vibrate(pattern),
     [vibrate],
+  );
+
+  // Nice tick sound
+  const playTick = useCallback(() => {
+    playNote(1200, 0.05, "sine");
+    vibrateShort();
+  }, [playNote, vibrateShort]);
+
+  // Warning countdown - descending notes
+  const playCountdown = useCallback(() => {
+    playNote(880, 0.15, "sine");
+    vibratePattern([30, 20, 30]);
+  }, [playNote, vibratePattern]);
+
+  // Time's up - dramatic descending
+  const playTimeUp = useCallback(() => {
+    playNote(440, 0.2, "sine", 0);
+    playNote(330, 0.2, "sine", 0.15);
+    playNote(220, 0.4, "sine", 0.3);
+    vibratePattern([100, 50, 200]);
+  }, [playNote, vibratePattern]);
+
+  // New question - ascending whoosh
+  const playNewQuestion = useCallback(() => {
+    playNote(400, 0.08, "sine", 0);
+    playNote(600, 0.08, "sine", 0.05);
+    playNote(800, 0.12, "sine", 0.1);
+    vibrateShort();
+  }, [playNote, vibrateShort]);
+
+  // Drink sound - bubble pop
+  const playDrink = useCallback(() => {
+    playNote(300, 0.1, "sine", 0);
+    playNote(400, 0.15, "sine", 0.08);
+    vibratePattern([50, 30, 80]);
+  }, [playNote, vibratePattern]);
+
+  // Celebration - happy ascending scale
+  const playCelebration = useCallback(() => {
+    const notes = [523, 659, 784, 1047]; // C, E, G, C octave
+    notes.forEach((freq, i) => {
+      playNote(freq, 0.2, "sine", i * 0.1);
+    });
+    vibratePattern([50, 30, 50, 30, 100, 50, 150]);
+  }, [playNote, vibratePattern]);
+
+  // Play custom audio file
+  const playCustom = useCallback(
+    (url: string) => {
+      if (!soundEnabled) return;
+      try {
+        const audio = new Audio(url);
+        audio.volume = effectiveVolume;
+        audio.play().catch(() => {});
+      } catch {
+        // Ignore errors
+      }
+    },
+    [soundEnabled, effectiveVolume],
   );
 
   return {
