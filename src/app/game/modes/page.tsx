@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { GAME_MODES, getRandomMode } from "@/config/gameConstants";
@@ -12,50 +12,20 @@ export default function GameModesPage() {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isScrollLocked, setIsScrollLocked] = useState(false);
-  const lastScrollTime = useRef<number>(0);
-  const touchStartX = useRef<number>(0);
-  const touchStartTime = useRef<number>(0);
+  const isAtLastCard = currentIndex === GAME_MODES.length - 1;
 
   const { vibrateShort } = useSoundEffects({
     enabled: true,
     hapticEnabled: true,
   });
 
-  // Calculate card width
-  const getCardWidth = useCallback(() => {
-    if (typeof window === "undefined") return 340;
-    return Math.min(window.innerWidth * 0.85, 384) + 24; // card width + gap
-  }, []);
+  // Detect current card based on scroll position
+  const handleScrollEnd = useCallback(() => {
+    if (!scrollRef.current) return;
 
-  // Scroll to specific index
-  const scrollToIndex = useCallback(
-    (index: number, smooth = true) => {
-      if (!scrollRef.current) return;
-      const cardWidth = getCardWidth();
-      const targetScroll = index * cardWidth;
-
-      scrollRef.current.scrollTo({
-        left: targetScroll,
-        behavior: smooth ? "smooth" : "auto",
-      });
-      setCurrentIndex(index);
-      vibrateShort();
-    },
-    [getCardWidth, vibrateShort],
-  );
-
-  // Handle scroll end to detect current card
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current || isScrollLocked) return;
-
-    const now = Date.now();
-    if (now - lastScrollTime.current < 50) return;
-    lastScrollTime.current = now;
-
-    const cardWidth = getCardWidth();
-    const scrollLeft = scrollRef.current.scrollLeft;
-    const newIndex = Math.round(scrollLeft / cardWidth);
+    const container = scrollRef.current;
+    const cardWidth = container.scrollWidth / GAME_MODES.length;
+    const newIndex = Math.round(container.scrollLeft / cardWidth);
 
     if (
       newIndex !== currentIndex &&
@@ -64,57 +34,44 @@ export default function GameModesPage() {
     ) {
       setCurrentIndex(newIndex);
     }
-  }, [currentIndex, getCardWidth, isScrollLocked]);
+  }, [currentIndex]);
 
-  // Touch handlers for swipe detection
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartTime.current = Date.now();
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndTime = Date.now();
-    const deltaX = touchEndX - touchStartX.current;
-    const deltaTime = touchEndTime - touchStartTime.current;
-
-    // Fast swipe detection
-    const velocity = Math.abs(deltaX) / deltaTime;
-
-    // If swiping RIGHT (going back) and it's a fast swipe from last card
-    if (
-      deltaX > 50 &&
-      velocity > 0.5 &&
-      currentIndex === GAME_MODES.length - 1
-    ) {
-      // Fast scroll back to first card
-      setIsScrollLocked(true);
-      scrollToIndex(0, true);
-      setTimeout(() => setIsScrollLocked(false), 500);
-      return;
-    }
-
-    // Normal scroll behavior - one card at a time
-    if (Math.abs(deltaX) > 50) {
-      if (deltaX < 0 && currentIndex < GAME_MODES.length - 1) {
-        // Swipe left - go forward one
-        scrollToIndex(currentIndex + 1);
-      } else if (deltaX > 0 && currentIndex > 0) {
-        // Swipe right - go back one (or to start if fast from end)
-        scrollToIndex(currentIndex - 1);
-      }
-    } else {
-      // Snap to current
-      scrollToIndex(currentIndex);
-    }
-  };
-
-  // Initial scroll
+  // Debounced scroll handler
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ left: 0, behavior: "auto" });
-    }
-  }, []);
+    const container = scrollRef.current;
+    if (!container) return;
+
+    let scrollTimeout: NodeJS.Timeout;
+
+    const onScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(handleScrollEnd, 100);
+    };
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, [handleScrollEnd]);
+
+  // Jump to first card (for the loop back button)
+  const jumpToFirst = () => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({ left: 0, behavior: "smooth" });
+    setCurrentIndex(0);
+    vibrateShort();
+  };
+
+  // Jump to specific index
+  const scrollToIndex = (index: number) => {
+    if (!scrollRef.current) return;
+    const container = scrollRef.current;
+    const cardWidth = container.scrollWidth / GAME_MODES.length;
+    container.scrollTo({ left: cardWidth * index, behavior: "smooth" });
+    setCurrentIndex(index);
+    vibrateShort();
+  };
 
   const handleSelectMode = (route: string) => {
     if (route === "random") {
@@ -146,17 +103,15 @@ export default function GameModesPage() {
         </Link>
       </header>
 
-      {/* Horizontal Scroll Cards */}
+      {/* Horizontal Scroll Cards - Native snap scroll */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-x-auto no-scrollbar flex items-center py-6 px-4 sm:px-6 gap-6 w-full"
+        className="flex-1 overflow-x-auto no-scrollbar flex items-center py-6 px-4 sm:px-6 gap-6 w-full snap-x snap-mandatory"
         style={{
           scrollSnapType: "x mandatory",
           WebkitOverflowScrolling: "touch",
+          scrollBehavior: "smooth",
         }}
-        onScroll={handleScroll}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         <div className="w-1 shrink-0" />
 
@@ -255,25 +210,45 @@ export default function GameModesPage() {
         <div className="w-1 shrink-0" />
       </div>
 
-      {/* Bottom Navigation with dots */}
-      <div className="flex flex-col items-center py-4 gap-3">
+      {/* Bottom Navigation */}
+      <div className="flex flex-col items-center py-4 gap-3 px-4">
+        {/* Dot indicators */}
         <div className="flex gap-2">
           {GAME_MODES.map((_, index) => (
             <button
               key={index}
               onClick={() => scrollToIndex(index)}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={`h-2 rounded-full transition-all ${
                 index === currentIndex
                   ? "bg-primary w-6"
-                  : "bg-white/20 hover:bg-white/40"
+                  : "bg-white/20 hover:bg-white/40 w-2"
               }`}
             />
           ))}
         </div>
-        <div className="text-white/40 text-sm flex items-center gap-1">
-          <span className="material-symbols-outlined text-lg">swipe</span>
-          เลื่อนเพื่อดูโหมดอื่น
-        </div>
+
+        {/* Loop back button - only show when at last card */}
+        <AnimatePresence>
+          {isAtLastCard && (
+            <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              onClick={jumpToFirst}
+              className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-full text-primary text-sm font-bold transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">replay</span>
+              กลับไปโหมดแรก
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {!isAtLastCard && (
+          <div className="text-white/40 text-sm flex items-center gap-1">
+            <span className="material-symbols-outlined text-lg">swipe</span>
+            เลื่อนทีละอัน →
+          </div>
+        )}
       </div>
     </main>
   );
