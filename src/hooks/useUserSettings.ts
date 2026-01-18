@@ -1,6 +1,7 @@
 /**
  * useUserSettings - Per-User Settings Storage
  * เก็บ settings แยกตาม user (ใช้ชื่อผู้เล่นเป็น key)
+ * รองรับทั้ง localStorage และ Zustand store
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -25,20 +26,43 @@ const DEFAULT_SETTINGS: UserSettings = {
 };
 
 const STORAGE_KEY_PREFIX = "wongtaek-user-settings-";
+const CURRENT_USER_KEY = "wongtaek-current-user";
 
 /**
- * Get the current user identifier (name or device default)
+ * Get the current user identifier from multiple sources
  */
 function getCurrentUserId(): string {
   if (typeof window === "undefined") return "default";
 
-  // Try to get current player name from localStorage
+  // 1. Try to get from dedicated current user key
+  const currentUser = localStorage.getItem(CURRENT_USER_KEY);
+  if (currentUser) return currentUser;
+
+  // 2. Try to get from Zustand persisted store
+  const storeData = localStorage.getItem("wong-taek-store");
+  if (storeData) {
+    try {
+      const parsed = JSON.parse(storeData);
+      // Zustand persist stores data in "state" key
+      const state = parsed.state || parsed;
+      if (state.currentPlayer?.name) {
+        return state.currentPlayer.name;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Try to get from players list (first player is usually the host)
   const players = localStorage.getItem("wongtaek-players");
   if (players) {
     try {
       const parsed = JSON.parse(players);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Return first player as current user (host)
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        typeof parsed[0] === "string"
+      ) {
         return parsed[0];
       }
     } catch {
@@ -46,8 +70,16 @@ function getCurrentUserId(): string {
     }
   }
 
-  // Fallback to device-based ID
+  // 4. Fallback to device-based ID
   return "default";
+}
+
+/**
+ * Set current user for settings
+ */
+export function setCurrentUser(userId: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CURRENT_USER_KEY, userId);
 }
 
 /**
@@ -100,6 +132,11 @@ export function useUserSettings(customUserId?: string) {
     setUserId(id);
     setSettings(loadUserSettings(id));
     setIsLoaded(true);
+
+    // Also save this as current user for future reference
+    if (id !== "default") {
+      setCurrentUser(id);
+    }
   }, [customUserId]);
 
   // Update a single setting
@@ -130,6 +167,7 @@ export function useUserSettings(customUserId?: string) {
   const switchUser = useCallback((newUserId: string) => {
     setUserId(newUserId);
     setSettings(loadUserSettings(newUserId));
+    setCurrentUser(newUserId);
   }, []);
 
   return {
