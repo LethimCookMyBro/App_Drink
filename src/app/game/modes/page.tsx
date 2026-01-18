@@ -86,7 +86,15 @@ export default function GameModesPage() {
     <main className="h-screen flex flex-col overflow-hidden bg-[#141414]">
       {/* Header */}
       <header className="glass-panel sticky top-0 z-50 w-full px-4 py-4 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Back Button */}
+          <Link href="/">
+            <button className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95">
+              <span className="material-symbols-outlined text-white text-3xl">
+                arrow_back
+              </span>
+            </button>
+          </Link>
           <span className="material-symbols-outlined text-primary text-3xl sm:text-4xl">
             local_bar
           </span>
@@ -119,7 +127,7 @@ export default function GameModesPage() {
           <motion.div
             key={mode.id}
             className={`
-              snap-center relative shrink-0 w-[85vw] max-w-sm h-[65vh] rounded-2xl border-2 
+              snap-center relative shrink-0 w-[90vw] max-w-md h-[75vh] rounded-3xl border-2 
               ${mode.borderColor} bg-card/90 ${mode.shadowClass} 
               flex flex-col overflow-hidden group
             `}

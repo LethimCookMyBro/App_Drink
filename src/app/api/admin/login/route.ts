@@ -3,12 +3,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { adminLoginSchema, hasSqlInjection } from "@/lib/validation";
 
-// Admin credentials (hashed password stored in code for simplicity)
-// Username: SuperAdmin_3175!
-// Password: KaiManJA!HeckGuWa_2102_$%2
-const ADMIN_USERNAME = "SuperAdmin_3175!";
-// bcrypt hash of the password
+// Admin credentials from environment variables (more secure)
+// Fallback to default for backward compatibility
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "SuperAdmin_3175!";
 const ADMIN_PASSWORD_HASH =
+  process.env.ADMIN_PASSWORD_HASH ||
   "$2b$12$s/mrk8BkgAQDSx/CQ33Z7OqxXfxecgCsqHYATz0Xt7vz.cNhR2bUG";
 
 const JWT_SECRET = process.env.JWT_SECRET || "wong-taek-admin-secret-key";
