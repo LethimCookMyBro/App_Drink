@@ -29,6 +29,15 @@ export default function SettingsPage() {
     applyTheme(themeId);
   };
 
+  // Handler for 18+ mode - syncs to BOTH per-user and global key
+  const handle18PlusChange = (enabled: boolean) => {
+    setIs18Plus(enabled);
+    // Also save to global key for game pages to read
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wongtaek-18plus", enabled.toString());
+    }
+  };
+
   const hapticOptions = [
     { value: "off", label: "ปิด", icon: "do_not_disturb_on" },
     { value: "light", label: "เบา", icon: "vibration" },
@@ -278,7 +287,7 @@ export default function SettingsPage() {
             <input
               type="checkbox"
               checked={settings.is18Plus}
-              onChange={(e) => setIs18Plus(e.target.checked)}
+              onChange={(e) => handle18PlusChange(e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-neon-red peer-checked:shadow-neon-red" />

@@ -131,7 +131,16 @@ export default function TruthOrDarePage() {
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between p-4 pt-8 pb-2">
-        <div className="flex flex-col">
+        {/* Back Button */}
+        <button
+          onClick={() => router.push("/game/modes")}
+          className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors mr-2"
+        >
+          <span className="material-symbols-outlined text-white text-2xl">
+            arrow_back
+          </span>
+        </button>
+        <div className="flex flex-col flex-1">
           <span className="text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">
             ตาของ
           </span>

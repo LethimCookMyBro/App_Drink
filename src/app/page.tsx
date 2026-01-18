@@ -57,7 +57,33 @@ export default function WelcomePage() {
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
       {/* Header */}
-      <header className="flex items-center justify-end px-6 pt-6 pb-2">
+      <header className="flex items-center justify-end gap-2 px-6 pt-6 pb-2">
+        {/* Feedback Button */}
+        <button
+          onClick={() => {
+            const feedback = prompt(
+              "💬 แจ้งบัค / ขอฟีเจอร์:\n\nพิมพ์ข้อความของคุณที่นี่:",
+            );
+            if (feedback) {
+              // Save to localStorage for now (could be sent to API later)
+              const feedbacks = JSON.parse(
+                localStorage.getItem("wongtaek-feedback") || "[]",
+              );
+              feedbacks.push({
+                message: feedback,
+                timestamp: new Date().toISOString(),
+              });
+              localStorage.setItem(
+                "wongtaek-feedback",
+                JSON.stringify(feedbacks),
+              );
+              alert("✅ ขอบคุณสำหรับ Feedback!");
+            }
+          }}
+          className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10"
+        >
+          <span className="material-symbols-outlined text-xl">feedback</span>
+        </button>
         <Link href="/settings">
           <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10">
             <span className="material-symbols-outlined">settings</span>
@@ -122,8 +148,8 @@ export default function WelcomePage() {
                     option.value === "chilling"
                       ? "bg-white/10 shadow-inner"
                       : option.value === "tipsy"
-                      ? "bg-gradient-to-br from-primary/80 to-purple-900 shadow-[0_0_15px_rgba(199,61,245,0.3)]"
-                      : "bg-gradient-to-br from-neon-red/80 to-red-900 shadow-[0_0_15px_rgba(255,0,64,0.3)]"
+                        ? "bg-gradient-to-br from-primary/80 to-purple-900 shadow-[0_0_15px_rgba(199,61,245,0.3)]"
+                        : "bg-gradient-to-br from-neon-red/80 to-red-900 shadow-[0_0_15px_rgba(255,0,64,0.3)]"
                   }`}
                 />
                 <span className="z-10 text-2xl mb-1 group-hover:scale-110 transition-transform">
