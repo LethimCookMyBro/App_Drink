@@ -12,6 +12,7 @@ export default function GameModesPage() {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isGameStarted, setIsGameStarted] = useState<boolean | null>(null);
   const isAtLastCard = currentIndex === GAME_MODES.length - 1;
 
   const { vibrateShort } = useSoundEffects({
@@ -23,12 +24,8 @@ export default function GameModesPage() {
   useEffect(() => {
     const gameStarted = localStorage.getItem("wongtaek-game-started");
     const hasPlayers = localStorage.getItem("wongtaek-players");
-
-    if (!gameStarted || !hasPlayers) {
-      // Not started from lobby, redirect to home
-      router.push("/");
-    }
-  }, [router]);
+    setIsGameStarted(!!gameStarted && !!hasPlayers);
+  }, []);
 
   // Detect current card based on scroll position
   const handleScrollEnd = useCallback(() => {
@@ -92,6 +89,45 @@ export default function GameModesPage() {
     }
     router.push(route);
   };
+
+  // Show loading state
+  if (isGameStarted === null) {
+    return (
+      <main className="h-screen flex flex-col items-center justify-center bg-[#141414]">
+        <div className="animate-pulse text-white/40">กำลังโหลด...</div>
+      </main>
+    );
+  }
+
+  // Show access denied message if game not started
+  if (!isGameStarted) {
+    return (
+      <main className="h-screen flex flex-col items-center justify-center bg-[#141414] px-6">
+        <div className="flex flex-col items-center gap-6 text-center">
+          <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-5xl text-primary">
+              sports_esports
+            </span>
+          </div>
+          <div>
+            <h1 className="text-white text-2xl font-bold mb-2">
+              ยังไม่ได้เริ่มเกม
+            </h1>
+            <p className="text-white/60 text-sm">
+              กรุณากด &quot;เริ่มเกมเลย&quot; จากหน้าหลักก่อน
+              <br />
+              เพื่อตั้งค่าผู้เล่นและเริ่มเกม
+            </p>
+          </div>
+          <Link href="/">
+            <Button variant="primary" size="lg" icon="home" iconPosition="left">
+              กลับหน้าหลัก
+            </Button>
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="h-screen flex flex-col overflow-hidden bg-[#141414]">

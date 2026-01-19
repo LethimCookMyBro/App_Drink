@@ -10,7 +10,6 @@ import { applyTheme } from "@/components/ThemeProvider";
 
 export default function SettingsPage() {
   const {
-    userId,
     settings,
     isLoaded,
     setTheme,
@@ -68,15 +67,6 @@ export default function SettingsPage() {
         </h2>
         <div className="flex size-12 shrink-0 items-center justify-center" />
       </header>
-
-      {/* User indicator */}
-      <div className="px-5 mb-4">
-        <div className="text-white/40 text-xs flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm">person</span>
-          Settings สำหรับ:{" "}
-          <span className="text-primary font-bold">{userId}</span>
-        </div>
-      </div>
 
       {/* Settings List */}
       <div className="px-5 space-y-4">
@@ -312,16 +302,6 @@ export default function SettingsPage() {
             <span className="text-white/80">ผู้พัฒนา</span>
             <span className="text-white/60">Wong Taek Team</span>
           </div>
-
-          <Link
-            href="/admin"
-            className="flex items-center justify-between py-2 hover:bg-white/5 -mx-4 px-4 rounded-lg transition-colors"
-          >
-            <span className="text-white/80">Admin Panel</span>
-            <span className="material-symbols-outlined text-white/40">
-              chevron_right
-            </span>
-          </Link>
         </GlassPanel>
 
         {/* Warning */}

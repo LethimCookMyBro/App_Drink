@@ -49,17 +49,13 @@ function GamePlayContent() {
             Object.fromEntries(parsed.map((p: string) => [p, 0])),
           );
           setIsReady(true);
-        } else {
-          // No players, redirect to lobby
-          router.push("/lobby/new");
         }
+        // If no valid players, isReady stays false -> shows access denied message
       } catch {
-        router.push("/lobby/new");
+        // Parse error, isReady stays false -> shows access denied message
       }
-    } else {
-      // No players saved, redirect to lobby
-      router.push("/lobby/new");
     }
+    // If no saved players, isReady stays false -> shows access denied message
 
     // Load custom questions
     const savedCustom = localStorage.getItem("wongtaek-custom-questions");
@@ -70,7 +66,7 @@ function GamePlayContent() {
         // Ignore
       }
     }
-  }, [router]);
+  }, []);
 
   // Hooks - only initialize when players are ready
   const { currentPlayerIndex, currentPlayer, getNextPlayer, playerTurnCount } =
@@ -168,13 +164,31 @@ function GamePlayContent() {
     router.push("/game/summary");
   };
 
-  // Don't render until players are loaded
+  // Don't render until players are loaded - show access denied message
   if (!isReady || players.length === 0) {
     return (
-      <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-24 h-24 bg-white/10 rounded-full"></div>
-          <div className="h-6 w-40 bg-white/10 rounded"></div>
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-6 text-center">
+          <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-5xl text-primary">
+              sports_esports
+            </span>
+          </div>
+          <div>
+            <h1 className="text-white text-2xl font-bold mb-2">
+              ยังไม่ได้เริ่มเกม
+            </h1>
+            <p className="text-white/60 text-sm">
+              กรุณากด &quot;เริ่มเกมเลย&quot; จากหน้าหลักก่อน
+              <br />
+              เพื่อตั้งค่าผู้เล่นและเริ่มเกม
+            </p>
+          </div>
+          <Link href="/">
+            <Button variant="primary" size="lg" icon="home" iconPosition="left">
+              กลับหน้าหลัก
+            </Button>
+          </Link>
         </div>
       </main>
     );
