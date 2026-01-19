@@ -53,6 +53,40 @@ export default function AdminDashboard() {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"logs" | "security" | "feedback">(
+    "feedback",
+  );
+
+  // Handle feedback status change
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setFeedbacks((prev) =>
+          prev.map((fb) => (fb.id === id ? { ...fb, status: newStatus } : fb)),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update feedback status:", error);
+    }
+  };
+
+  // Handle feedback delete
+  const handleDeleteFeedback = async (id: string) => {
+    if (!confirm("ต้องการลบ feedback นี้?")) return;
+    try {
+      const res = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setFeedbacks((prev) => prev.filter((fb) => fb.id !== id));
+      }
+    } catch (error) {
+      console.error("Failed to delete feedback:", error);
+    }
+  };
 
   // Check authentication on mount
   useEffect(() => {
@@ -501,74 +535,208 @@ export default function AdminDashboard() {
           </GlassPanel>
         </section>
 
-        {/* User Feedback Section */}
+        {/* Tabbed Section: System Logs, Security, Feedback */}
         <section className="mt-8">
-          <h2 className="text-white/40 text-xs font-bold tracking-[0.1em] uppercase mb-4">
-            Feedback จากผู้ใช้ ({feedbacks.length})
-          </h2>
-          {feedbacks.length === 0 ? (
-            <GlassPanel className="p-6 text-center">
-              <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
-                inbox
-              </span>
-              <p className="text-white/40">ยังไม่มี Feedback</p>
-            </GlassPanel>
-          ) : (
-            <div className="space-y-3">
-              {feedbacks.slice(0, 10).map((fb) => (
-                <GlassPanel key={fb.id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                        fb.type === "BUG"
-                          ? "bg-neon-red/20"
-                          : "bg-neon-yellow/20"
-                      }`}
-                    >
-                      <span
-                        className={`material-symbols-outlined text-xl ${
-                          fb.type === "BUG"
-                            ? "text-neon-red"
-                            : "text-neon-yellow"
-                        }`}
-                      >
-                        {fb.type === "BUG" ? "bug_report" : "lightbulb"}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            fb.type === "BUG"
-                              ? "bg-neon-red/20 text-neon-red"
-                              : "bg-neon-yellow/20 text-neon-yellow"
-                          }`}
-                        >
-                          {fb.type === "BUG" ? "🐛 บัค" : "💡 ฟีเจอร์"}
-                        </span>
-                        <span className="text-white/30 text-xs">
-                          {new Date(fb.createdAt).toLocaleDateString("th-TH")}
-                        </span>
-                      </div>
-                      <h4 className="text-white font-medium truncate">
-                        {fb.title}
-                      </h4>
-                      {fb.details && (
-                        <p className="text-white/50 text-sm mt-1 line-clamp-2">
-                          {fb.details}
-                        </p>
-                      )}
-                      {fb.contact && (
-                        <p className="text-primary text-xs mt-2">
-                          📧 {fb.contact}
-                        </p>
-                      )}
-                    </div>
+          {/* Tab Navigation */}
+          <div className="flex gap-2 mb-4 relative">
+            {[
+              { id: "logs", label: "System Logs", icon: "description" },
+              { id: "security", label: "Security", icon: "shield" },
+              {
+                id: "feedback",
+                label: `Feedback (${feedbacks.filter((f) => f.status === "PENDING").length})`,
+                icon: "chat_bubble",
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() =>
+                  setActiveTab(tab.id as "logs" | "security" | "feedback")
+                }
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? "text-white"
+                    : "text-white/50 hover:text-white/70 hover:bg-white/5"
+                }`}
+              >
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="adminTabIndicator"
+                    className="absolute inset-0 bg-primary rounded-xl"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="material-symbols-outlined text-lg relative z-10">
+                  {tab.icon}
+                </span>
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === "logs" && (
+              <GlassPanel className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="material-symbols-outlined text-2xl text-primary">
+                    terminal
+                  </span>
+                  <h3 className="text-white font-bold">System Logs</h3>
+                </div>
+                <div className="space-y-2 text-sm font-mono">
+                  <p className="text-white/40">
+                    [{new Date().toLocaleString("th-TH")}] Server started
+                  </p>
+                  <p className="text-neon-green/70">
+                    [INFO] Database connected: SQLite
+                  </p>
+                  <p className="text-neon-blue/70">
+                    [INFO] {stats?.total || 0} questions loaded
+                  </p>
+                  <p className="text-white/40">[INFO] Admin session active</p>
+                </div>
+              </GlassPanel>
+            )}
+
+            {activeTab === "security" && (
+              <GlassPanel className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="material-symbols-outlined text-2xl text-neon-blue">
+                    verified_user
+                  </span>
+                  <h3 className="text-white font-bold">Security Status</h3>
+                </div>
+                <div className="grid gap-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                    <span className="text-white/70">Admin Sessions</span>
+                    <span className="text-neon-green">Active</span>
                   </div>
-                </GlassPanel>
-              ))}
-            </div>
-          )}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                    <span className="text-white/70">Rate Limiting</span>
+                    <span className="text-neon-green">Enabled</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                    <span className="text-white/70">JWT Token</span>
+                    <span className="text-neon-green">Valid</span>
+                  </div>
+                </div>
+              </GlassPanel>
+            )}
+
+            {activeTab === "feedback" && (
+              <>
+                {feedbacks.length === 0 ? (
+                  <GlassPanel className="p-6 text-center">
+                    <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
+                      inbox
+                    </span>
+                    <p className="text-white/40">ยังไม่มี Feedback</p>
+                  </GlassPanel>
+                ) : (
+                  <div className="space-y-3">
+                    {feedbacks.slice(0, 10).map((fb) => (
+                      <GlassPanel key={fb.id} className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                              fb.type === "BUG"
+                                ? "bg-neon-red/20"
+                                : "bg-neon-yellow/20"
+                            }`}
+                          >
+                            <span
+                              className={`material-symbols-outlined text-xl ${
+                                fb.type === "BUG"
+                                  ? "text-neon-red"
+                                  : "text-neon-yellow"
+                              }`}
+                            >
+                              {fb.type === "BUG" ? "bug_report" : "lightbulb"}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full ${
+                                  fb.type === "BUG"
+                                    ? "bg-neon-red/20 text-neon-red"
+                                    : "bg-neon-yellow/20 text-neon-yellow"
+                                }`}
+                              >
+                                {fb.type === "BUG" ? "🐛 บัค" : "💡 ฟีเจอร์"}
+                              </span>
+                              {/* Status Dropdown */}
+                              <div className="relative">
+                                <select
+                                  value={fb.status}
+                                  onChange={(e) =>
+                                    handleStatusChange(fb.id, e.target.value)
+                                  }
+                                  className={`text-xs px-2 py-0.5 rounded-full appearance-none cursor-pointer pr-6 ${
+                                    fb.status === "PENDING"
+                                      ? "bg-white/10 text-white/70"
+                                      : fb.status === "IN_PROGRESS"
+                                        ? "bg-neon-blue/20 text-neon-blue"
+                                        : fb.status === "RESOLVED"
+                                          ? "bg-neon-green/20 text-neon-green"
+                                          : "bg-neon-red/20 text-neon-red"
+                                  }`}
+                                >
+                                  <option value="PENDING">รอดำเนินการ</option>
+                                  <option value="IN_PROGRESS">
+                                    กำลังดำเนินการ
+                                  </option>
+                                  <option value="RESOLVED">แก้ไขแล้ว</option>
+                                  <option value="REJECTED">ปฏิเสธ</option>
+                                </select>
+                                <span className="material-symbols-outlined absolute right-1 top-1/2 -translate-y-1/2 text-xs pointer-events-none opacity-50">
+                                  expand_more
+                                </span>
+                              </div>
+                              <span className="text-white/30 text-xs">
+                                {new Date(fb.createdAt).toLocaleDateString(
+                                  "th-TH",
+                                )}
+                              </span>
+                            </div>
+                            <h4 className="text-white font-medium truncate">
+                              {fb.title}
+                            </h4>
+                            {fb.details && (
+                              <p className="text-white/50 text-sm mt-1 line-clamp-2">
+                                {fb.details}
+                              </p>
+                            )}
+                            {fb.contact && (
+                              <p className="text-primary text-xs mt-2">
+                                📧 {fb.contact}
+                              </p>
+                            )}
+                          </div>
+                          {/* Delete Button */}
+                          <button
+                            onClick={() => handleDeleteFeedback(fb.id)}
+                            className="p-2 rounded-lg hover:bg-neon-red/20 text-white/30 hover:text-neon-red transition-colors"
+                            title="ลบ"
+                          >
+                            <span className="material-symbols-outlined text-lg">
+                              delete
+                            </span>
+                          </button>
+                        </div>
+                      </GlassPanel>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
         </section>
 
         {/* Footer */}

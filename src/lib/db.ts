@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Initialize LibSQL adapter with database URL
-const dbUrl = process.env.DATABASE_URL || "file:prisma/dev.db";
+const dbUrl = process.env.DATABASE_URL || "file:/data/wongtaek.db";
 const adapter = new PrismaLibSql({ url: dbUrl });
 
 // Create Prisma client for SQLite

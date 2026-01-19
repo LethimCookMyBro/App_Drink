@@ -81,14 +81,14 @@ export default function SettingsPage() {
       {/* Settings List */}
       <div className="px-5 space-y-4">
         {/* Avatar */}
-        <GlassPanel className="flex items-center justify-between">
+        <GlassPanel
+          className="flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors active:scale-[0.99]"
+          onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+        >
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center text-3xl border-2 border-primary/50 hover:scale-105 transition-transform"
-            >
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center text-3xl border-2 border-primary/50">
               {settings.avatar}
-            </button>
+            </div>
             <div className="flex flex-col">
               <span className="text-white font-bold text-lg leading-tight">
                 อวาตาร์

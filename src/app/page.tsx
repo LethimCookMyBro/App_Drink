@@ -109,11 +109,11 @@ export default function WelcomePage() {
           เลือกระดับความเดือด
         </label>
         <GlassPanel className="p-1.5">
-          <div className="flex w-full rounded-xl">
-            {vibeOptions.map((option) => (
+          <div className="flex w-full rounded-xl relative">
+            {vibeOptions.map((option, index) => (
               <motion.label
                 key={option.value}
-                className="group relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl py-4 transition-all duration-300"
+                className="group relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl py-4 transition-all duration-300 z-10"
                 whileTap={{ scale: 0.95 }}
               >
                 <input
@@ -124,20 +124,45 @@ export default function WelcomePage() {
                   onChange={() => handleVibeChange(option.value)}
                   className="peer sr-only"
                 />
-                {/* Background */}
-                <div
-                  className={`absolute inset-0 hidden rounded-xl peer-checked:block ${
-                    option.value === "chilling"
-                      ? "bg-white/10 shadow-inner"
-                      : option.value === "tipsy"
-                        ? "bg-gradient-to-br from-primary/80 to-purple-900 shadow-[0_0_15px_rgba(199,61,245,0.3)]"
-                        : "bg-gradient-to-br from-neon-red/80 to-red-900 shadow-[0_0_15px_rgba(255,0,64,0.3)]"
-                  }`}
-                />
-                <span className="z-10 text-2xl mb-1 group-hover:scale-110 transition-transform">
+                {/* Animated Background Indicator - Liquid Glass Effect */}
+                {selectedVibe === option.value && (
+                  <motion.div
+                    layoutId="vibeIndicator"
+                    className={`absolute inset-0 rounded-xl ${
+                      option.value === "chilling"
+                        ? "bg-gradient-to-br from-white/15 to-white/5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        : option.value === "tipsy"
+                          ? "bg-gradient-to-br from-primary/90 to-purple-900/90 shadow-[0_0_30px_rgba(199,61,245,0.4)]"
+                          : "bg-gradient-to-br from-neon-red/90 to-red-900/90 shadow-[0_0_30px_rgba(255,0,64,0.4)]"
+                    }`}
+                    initial={false}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 30,
+                      mass: 1,
+                    }}
+                    style={{
+                      backdropFilter: "blur(12px)",
+                    }}
+                  />
+                )}
+                <motion.span
+                  className="z-10 text-2xl mb-1"
+                  animate={{
+                    scale: selectedVibe === option.value ? 1.15 : 1,
+                  }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                >
                   {option.emoji}
-                </span>
-                <span className="z-10 text-xs sm:text-sm font-bold text-white/50 peer-checked:text-white transition-colors text-center leading-tight">
+                </motion.span>
+                <span
+                  className={`z-10 text-xs sm:text-sm font-bold transition-colors text-center leading-tight ${
+                    selectedVibe === option.value
+                      ? "text-white"
+                      : "text-white/50"
+                  }`}
+                >
                   {option.label}
                 </span>
               </motion.label>
