@@ -52,13 +52,27 @@ export default function LobbyPage() {
         },
       ]);
     } else if (players.length === 0) {
-      setPlayers([{ id: "1", name: "ฉัน", isHost: true, isReady: true }]);
+      const storedJoinName = localStorage.getItem("wongtaek-join-name");
+      const fallbackName = storedJoinName?.trim() || "?????????";
+      if (storedJoinName) localStorage.removeItem("wongtaek-join-name");
+      setPlayers([{ id: "1", name: fallbackName, isHost: true, isReady: true }]);
     }
   }, [currentPlayer, players.length]);
+
+  const [duplicateError, setDuplicateError] = useState("");
 
   const handleAddPlayer = () => {
     if (!newPlayerName.trim()) return;
     if (!canAddMore) return;
+
+    // Check for duplicate names (case-insensitive)
+    const nameLower = newPlayerName.trim().toLowerCase();
+    const isDuplicate = players.some((p) => p.name.toLowerCase() === nameLower);
+
+    if (isDuplicate) {
+      setDuplicateError("ชื่อนี้มีคนใช้แล้ว! กรุณาใช้ชื่ออื่น");
+      return;
+    }
 
     const newPlayer: LocalPlayer = {
       id: Date.now().toString(),
@@ -69,6 +83,7 @@ export default function LobbyPage() {
 
     setPlayers([...players, newPlayer]);
     setNewPlayerName("");
+    setDuplicateError("");
     setShowAddModal(false);
   };
 
@@ -323,13 +338,28 @@ export default function LobbyPage() {
                 <input
                   type="text"
                   value={newPlayerName}
-                  onChange={(e) => setNewPlayerName(e.target.value)}
+                  onChange={(e) => {
+                    setNewPlayerName(e.target.value);
+                    setDuplicateError("");
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && handleAddPlayer()}
                   placeholder="พิมพ์ชื่อ..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white text-xl font-bold placeholder-white/30 focus:outline-none focus:border-primary"
+                  className={`w-full bg-white/5 border rounded-xl p-4 text-white text-xl font-bold placeholder-white/30 focus:outline-none ${
+                    duplicateError
+                      ? "border-neon-red"
+                      : "border-white/10 focus:border-primary"
+                  }`}
                   autoFocus
                   maxLength={20}
                 />
+                {duplicateError && (
+                  <p className="text-neon-red text-sm mt-2 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">
+                      error
+                    </span>
+                    {duplicateError}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3">

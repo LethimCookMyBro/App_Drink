@@ -1,4 +1,8 @@
- import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/adminAuth";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { questionSchema, sanitizeHtml } from "@/lib/validation";
 
 // Fallback questions when database is offline - organized by type and level
 const fallbackQuestions = [
@@ -237,6 +241,22 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  // 18+ samples
+  {
+    id: "fb-18p-t1",
+    text: "18+ Sample (Truth): Share your spiciest secret.",
+    type: "TRUTH",
+    level: 3,
+    is18Plus: true,
+  },
+  {
+    id: "fb-18p-d1",
+    text: "18+ Sample (Dare): Do a bold challenge for the group.",
+    type: "DARE",
+    level: 3,
+    is18Plus: true,
+  },
+
 ];
 
 // Helper to filter fallback questions
@@ -275,23 +295,45 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { isActive: true };
     if (type) where.type = type;
-    if (level) where.level = parseInt(level);
+    if (level) where.level = { lte: parseInt(level) };
     if (is18Plus !== null) where.is18Plus = is18Plus === "true";
 
+    const safeLimit = Math.min(1000, Math.max(1, limit));
     const [questions, total] = await Promise.all([
       prisma.question.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        take: Math.min(100, limit),
+        take: safeLimit,
         skip: offset,
       }),
       prisma.question.count({ where }),
     ]);
 
-    return NextResponse.json({
+    if (total === 0) {
+      const totalAll = await prisma.question.count({
+        where: { isActive: true },
+      });
+      if (totalAll === 0) {
+        const filtered = getFilteredFallback(type, level, is18Plus);
+        const paged = filtered.slice(offset, offset + safeLimit);
+        return jsonOk({
+          questions: paged,
+          total: filtered.length,
+          limit: safeLimit,
+          offset,
+          hasMore: offset + paged.length < filtered.length,
+          fallback: true,
+          emptyDb: true,
+          message:
+            "เนเธเนเธเนเธญเธกเธนเธฅเธ•เธฑเธงเธญเธขเนเธฒเธ (Database ว่างอยู่)",
+        });
+      }
+    }
+
+    return jsonOk({
       questions,
       total,
-      limit,
+      limit: safeLimit,
       offset,
       hasMore: offset + questions.length < total,
     });
@@ -302,7 +344,7 @@ export async function GET(request: NextRequest) {
     const filtered = getFilteredFallback(type, level, is18Plus);
     const paged = filtered.slice(offset, offset + limit);
 
-    return NextResponse.json({
+    return jsonOk({
       questions: paged,
       total: filtered.length,
       limit,
@@ -317,53 +359,54 @@ export async function GET(request: NextRequest) {
 // POST /api/questions - Create custom question
 export async function POST(request: NextRequest) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    if (rateLimited) return rateLimited;
+
+    const admin = await requireAdmin();
+    if (!admin) {
+      return jsonError("??????????????????", 401);
+    }
+
     const body = await request.json();
-    const {
-      text,
-      type = "QUESTION",
-      level = 2,
-      is18Plus = false,
-      isPublic = true,
-    } = body;
-
-    if (!text || text.trim().length < 5) {
-      return NextResponse.json(
-        { error: "คำถามต้องมีอย่างน้อย 5 ตัวอักษร" },
-        { status: 400 }
+    const validation = questionSchema.safeParse(body);
+    if (!validation.success) {
+      return jsonError(
+        validation.error.issues[0]?.message || "????????????????",
+        400,
       );
     }
 
-    const validTypes = ["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: "ประเภทคำถามไม่ถูกต้อง" },
-        { status: 400 }
-      );
-    }
+    const { text, type, level, is18Plus } = validation.data;
+    const isPublic =
+      typeof body.isPublic === "boolean" ? body.isPublic : true;
 
-    // Try to dynamically import and use Prisma
     const { default: prisma } = await import("@/lib/db");
 
     const question = await prisma.question.create({
       data: {
-        text: text.trim(),
+        text: sanitizeHtml(text.trim()),
         type,
         level: Math.min(3, Math.max(1, level)),
         is18Plus,
         isPublic,
+        isActive: true,
+        createdBy: admin.id,
       },
     });
 
-    return NextResponse.json({ question }, { status: 201 });
+    return jsonOk({ question }, 201);
   } catch (error) {
     console.error("Error creating question:", error);
-    return NextResponse.json(
+    return jsonError(
+      "??????????????????????",
+      500,
       {
-        error: "ไม่สามารถเพิ่มคำถามได้",
         detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
+          "?????????????? Database ???? (Start PostgreSQL ??????: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }

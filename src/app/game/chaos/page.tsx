@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useSoundEffects, usePlayerQueue } from "@/hooks";
+import { useGameStore } from "@/store/gameStore";
+import { Timer } from "@/components/ui";
+import { GAME_SETTINGS } from "@/config/gameConstants";
 
 const chaosRules = [
   { target: "ใครที่ใส่เสื้อสีดำ", action: "ดื่มให้หมดแก้ว!" },
@@ -16,19 +19,37 @@ const chaosRules = [
   { target: "คนผมยาวสุด", action: "แชร์ความลับ 1 เรื่อง" },
 ];
 
+const chaosRules18Plus = [
+  { target: "คนโสดในวง", action: "เล่าเดทที่แซ่บสุด!" },
+  { target: "คนที่เขินง่ายที่สุด", action: "ตอบคำถาม 18+ แบบไม่อ้อมค้อม" },
+  { target: "คนที่ชอบปาร์ตี้ที่สุด", action: "เลือกคนจูบแก้วเดียวกัน" },
+];
+
 export default function ChaosModePage() {
   const router = useRouter();
+  const { vibeLevel } = useGameStore();
+  const is18PlusEnabled = vibeLevel === "chaos";
   const [players, setPlayers] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [sequence, setSequence] = useState(1);
   const [currentRule, setCurrentRule] = useState(chaosRules[0]);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [timerKey, setTimerKey] = useState(0);
 
-  const { playNewQuestion, playDrink, vibrateLong, vibratePattern } =
-    useSoundEffects({
-      enabled: true,
-      hapticEnabled: true,
-    });
+  const availableRules = useMemo(
+    () =>
+      is18PlusEnabled ? [...chaosRules, ...chaosRules18Plus] : chaosRules,
+    [is18PlusEnabled],
+  );
+
+  const {
+    playNewQuestion,
+    playDrink,
+    playCountdown,
+    playTimeUp,
+    vibrateLong,
+    vibratePattern,
+  } = useSoundEffects();
 
   // Load players
   useEffect(() => {
@@ -53,6 +74,12 @@ export default function ChaosModePage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    if (availableRules.length > 0) {
+      setCurrentRule(availableRules[0]);
+    }
+  }, [availableRules]);
+
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],
     avoidRepeats: true,
@@ -69,11 +96,21 @@ export default function ChaosModePage() {
 
     setTimeout(() => {
       getNextPlayer();
-      const randomIndex = Math.floor(Math.random() * chaosRules.length);
-      setCurrentRule(chaosRules[randomIndex]);
+      const randomIndex = Math.floor(Math.random() * availableRules.length);
+      setCurrentRule(availableRules[randomIndex]);
       setSequence((prev) => prev + 1);
+      setTimerKey((prev) => prev + 1);
       playNewQuestion();
     }, 300);
+  };
+
+  const handleTimerComplete = () => {
+    playTimeUp();
+    handleNext();
+  };
+
+  const handleTimerWarning = () => {
+    playCountdown();
   };
 
   const handleEndGame = () => {
@@ -199,6 +236,13 @@ export default function ChaosModePage() {
               กฎบังคับ (Mandatory)
             </span>
           </div>
+          <Timer
+            key={timerKey}
+            duration={GAME_SETTINGS.defaultTimerDuration}
+            onComplete={handleTimerComplete}
+            onWarning={handleTimerWarning}
+            size="md"
+          />
         </motion.div>
 
         {/* Bottom Section */}

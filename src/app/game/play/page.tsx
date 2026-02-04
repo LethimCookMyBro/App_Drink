@@ -20,12 +20,16 @@ function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode") || "question";
-  const { vibeLevel, soundEnabled, vibrationEnabled } = useGameStore();
+  const normalizedMode =
+    mode === "random" || mode === "vote" || mode === "question"
+      ? mode
+      : "question";
+  const { vibeLevel } = useGameStore();
+  const is18PlusEnabled = vibeLevel === "chaos";
 
   // State
   const [players, setPlayers] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
-  const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
   const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
   const [roundNumber, setRoundNumber] = useState(1);
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
@@ -36,9 +40,6 @@ function GamePlayContent() {
 
   // Load players from localStorage on mount
   useEffect(() => {
-    const stored18Plus = localStorage.getItem("wongtaek-18plus");
-    setIs18PlusEnabled(stored18Plus === "true");
-
     const savedPlayers = localStorage.getItem("wongtaek-players");
     if (savedPlayers) {
       try {
@@ -77,7 +78,7 @@ function GamePlayContent() {
 
   const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
     useQuestionPool({
-      mode,
+      mode: normalizedMode,
       level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
       is18PlusEnabled,
       players: isReady ? players : ["Loading"],
@@ -91,15 +92,18 @@ function GamePlayContent() {
     playDrink,
     vibrateShort,
     vibrateLong,
-  } = useSoundEffects({
-    enabled: soundEnabled,
-    hapticEnabled: vibrationEnabled,
-  });
+  } = useSoundEffects();
 
   // Initialize first question when ready
+  const randomTypes = ["QUESTION", "VOTE", "TRUTH", "DARE", "CHAOS"] as const;
+  const pickRandomType = () =>
+    randomTypes[Math.floor(Math.random() * randomTypes.length)];
+
   useEffect(() => {
     if (!currentQuestion && !isLoading && isReady && players.length > 0) {
-      const q = getQuestionForPlayer(currentPlayer);
+      const preferredType =
+        normalizedMode === "random" ? pickRandomType() : undefined;
+      const q = getQuestionForPlayer(currentPlayer, preferredType);
       setCurrentQuestion(q);
       playNewQuestion();
     }
@@ -111,6 +115,7 @@ function GamePlayContent() {
     currentPlayer,
     getQuestionForPlayer,
     playNewQuestion,
+    normalizedMode,
   ]);
 
   const handleSkip = () => {
@@ -135,7 +140,9 @@ function GamePlayContent() {
     setTimeout(() => {
       const nextIdx = getNextPlayer();
       const nextPlayer = players[nextIdx];
-      const newQuestion = getQuestionForPlayer(nextPlayer);
+      const preferredType =
+        normalizedMode === "random" ? pickRandomType() : undefined;
+      const newQuestion = getQuestionForPlayer(nextPlayer, preferredType);
 
       setCurrentQuestion(newQuestion);
       setRoundNumber((prev) => prev + 1);

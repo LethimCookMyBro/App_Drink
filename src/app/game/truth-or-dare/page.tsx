@@ -3,37 +3,32 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui";
-import { useSoundEffects, usePlayerQueue } from "@/hooks";
-
-const truthQuestions = [
-  "เคยโกหกแฟนเรื่องอะไรที่หนักที่สุด?",
-  "ความลับที่ไม่เคยบอกใครคืออะไร?",
-  "เคยแอบชอบเพื่อนในกลุ่มบ้างไหม?",
-  "เรื่องที่อายที่สุดในชีวิตคืออะไร?",
-  "เคยนินทาใครในวงนี้บ้าง?",
-  "เคยทำอะไรที่เป็นความลับกับแฟนมาก่อน?",
-];
-
-const dares = [
-  "โทรหาแฟนเก่าแล้วบอกว่าคิดถึงหมาของเขา",
-  "ทักแชทหาคนที่ไม่ได้คุยมา 1 ปี ด้วยสติกเกอร์แปลกๆ",
-  "โพสต์ IG Story ร้องเพลงสักท่อน",
-  "ให้คนในวงเลือกผู้ติดตามใน IG แล้วกดไลค์รูปเก่าสุด",
-  "เต้นกลางวงให้ทุกคนดู",
-  "แกล้งโทรหาร้านอาหารถามว่ามีส้มตำปลาดิบไหม",
-];
+import { Button, Timer } from "@/components/ui";
+import {
+  useSoundEffects,
+  usePlayerQueue,
+  useQuestionPool,
+  type GameQuestion,
+} from "@/hooks";
+import { useGameStore } from "@/store/gameStore";
+import { GAME_SETTINGS } from "@/config/gameConstants";
 
 type CardType = "truth" | "dare";
 
 export default function TruthOrDarePage() {
   const router = useRouter();
+  const { vibeLevel } = useGameStore();
+  const is18PlusEnabled = vibeLevel === "chaos";
   const [players, setPlayers] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [cardType, setCardType] = useState<CardType>("dare");
-  const [currentContent, setCurrentContent] = useState(dares[0]);
+  const [currentContent, setCurrentContent] = useState("");
+  const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
+    null,
+  );
   const [roundNumber, setRoundNumber] = useState(1);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [timerKey, setTimerKey] = useState(0);
 
   // Load players
   useEffect(() => {
@@ -63,18 +58,55 @@ export default function TruthOrDarePage() {
     avoidRepeats: true,
   });
 
-  const { playNewQuestion, playDrink, vibrateLong, vibrateShort } =
-    useSoundEffects({
-      enabled: true,
-      hapticEnabled: true,
+  const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
+    useQuestionPool({
+      mode: "truth-or-dare",
+      level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
+      is18PlusEnabled,
+      players: isReady ? players : ["Loading"],
     });
 
+  const {
+    playNewQuestion,
+    playDrink,
+    playCountdown,
+    playTimeUp,
+    vibrateLong,
+    vibrateShort,
+  } = useSoundEffects();
+
+  useEffect(() => {
+    if (!currentContent && !isLoading && isReady && players.length > 0) {
+      const q = getQuestionForPlayer(currentPlayer);
+      if (q) {
+        setCardType(q.type === "TRUTH" ? "truth" : "dare");
+        setCurrentContent(q.text);
+        setCurrentQuestion(q);
+        playNewQuestion();
+      }
+    }
+  }, [
+    currentContent,
+    isLoading,
+    isReady,
+    players,
+    currentPlayer,
+    getQuestionForPlayer,
+    playNewQuestion,
+  ]);
+
   const handleComplete = () => {
+    if (currentQuestion) {
+      markQuestionAnswered(currentPlayer, currentQuestion.id);
+    }
     vibrateShort();
     nextCard();
   };
 
   const handleGiveUp = () => {
+    if (currentQuestion) {
+      markQuestionAnswered(currentPlayer, currentQuestion.id);
+    }
     // Player drinks x2
     setPlayerDrinks((prev) => ({
       ...prev,
@@ -87,16 +119,27 @@ export default function TruthOrDarePage() {
 
   const nextCard = () => {
     setTimeout(() => {
-      getNextPlayer();
-      const newType: CardType = Math.random() > 0.5 ? "truth" : "dare";
-      const list = newType === "truth" ? truthQuestions : dares;
-      const randomIndex = Math.floor(Math.random() * list.length);
-
-      setCardType(newType);
-      setCurrentContent(list[randomIndex]);
+      const nextIdx = getNextPlayer();
+      const nextPlayer = players[nextIdx] || currentPlayer;
+      const q = getQuestionForPlayer(nextPlayer);
+      if (q) {
+        setCardType(q.type === "TRUTH" ? "truth" : "dare");
+        setCurrentContent(q.text);
+        setCurrentQuestion(q);
+      }
       setRoundNumber((prev) => prev + 1);
+      setTimerKey((prev) => prev + 1);
       playNewQuestion();
     }, 300);
+  };
+
+  const handleTimerComplete = () => {
+    playTimeUp();
+    handleGiveUp();
+  };
+
+  const handleTimerWarning = () => {
+    playCountdown();
   };
 
   const handleEndGame = () => {
@@ -243,6 +286,16 @@ export default function TruthOrDarePage() {
                 <p className="relative text-xl sm:text-2xl font-bold leading-relaxed text-white drop-shadow-md tracking-tight">
                   {currentContent}
                 </p>
+                <div className="mt-6">
+                  <Timer
+                    key={timerKey}
+                    duration={GAME_SETTINGS.defaultTimerDuration}
+                    onComplete={handleTimerComplete}
+                    onWarning={handleTimerWarning}
+                    isPaused={!currentQuestion || isLoading}
+                    size="md"
+                  />
+                </div>
               </div>
 
               {/* Bottom Gradient */}
@@ -257,6 +310,12 @@ export default function TruthOrDarePage() {
           <div className="absolute -bottom-6 left-10 right-10 h-4 bg-surface border border-white/5 rounded-b-3xl -z-20 opacity-30" />
         </div>
       </div>
+
+      {isLoading && (
+        <div className="text-white/40 text-sm text-center pb-2">
+          กำลังโหลดคำถาม...
+        </div>
+      )}
 
       {/* Buttons */}
       <footer className="relative z-20 px-5 pb-8 pt-4 flex flex-col gap-3 w-full bg-gradient-to-t from-background via-background/95 to-transparent">

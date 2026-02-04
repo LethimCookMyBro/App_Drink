@@ -1,56 +1,65 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { playerNameSchema, roomCodeSchema, sanitizeHtml } from "@/lib/validation";
 
 // POST /api/rooms/[code]/join - Join a room
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<{ code: string }> },
 ) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    if (rateLimited) return rateLimited;
+
     const { code } = await params;
     const roomCode = code.toUpperCase();
-    const body = await request.json();
-    const { playerName } = body;
 
-    if (!playerName) {
-      return NextResponse.json(
-        { error: "กรุณากรอกชื่อผู้เล่น" },
-        { status: 400 }
+    const codeValidation = roomCodeSchema.safeParse(roomCode);
+    if (!codeValidation.success) {
+      return jsonError("รหัสห้องไม่ถูกต้อง", 400);
+    }
+
+    const body = await request.json();
+    const nameValidation = playerNameSchema.safeParse(body.playerName);
+    if (!nameValidation.success) {
+      return jsonError(
+        nameValidation.error.issues[0]?.message || "ชื่อผู้เล่นไม่ถูกต้อง",
+        400,
       );
     }
 
-    // Dynamic import to prevent crash when database is offline
+    const playerName = sanitizeHtml(nameValidation.data);
+
     const { default: prisma } = await import("@/lib/db");
 
-    // Find room
     const room = await prisma.room.findUnique({
       where: { code: roomCode },
       include: { players: true },
     });
 
     if (!room) {
-      return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
+      return jsonError("ไม่พบห้อง", 404);
     }
 
     if (!room.isActive) {
-      return NextResponse.json({ error: "ห้องนี้ถูกปิดแล้ว" }, { status: 410 });
+      return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
     }
 
     if (room.players.length >= room.maxPlayers) {
-      return NextResponse.json({ error: "ห้องเต็มแล้ว" }, { status: 400 });
+      return jsonError("ห้องเต็มแล้ว", 400);
     }
 
-    // Check if name is taken
     const nameTaken = room.players.some(
-      (p) => p.name.toLowerCase() === playerName.toLowerCase()
+      (p) => p.name.toLowerCase() === playerName.toLowerCase(),
     );
     if (nameTaken) {
-      return NextResponse.json(
-        { error: "ชื่อนี้ถูกใช้แล้วในห้องนี้" },
-        { status: 400 }
-      );
+      return jsonError("ชื่อนี้ถูกใช้แล้วในห้องนี้", 400);
     }
 
-    // Create player
     const player = await prisma.player.create({
       data: {
         name: playerName,
@@ -60,28 +69,27 @@ export async function POST(
       },
     });
 
-    // Get updated room
     const updatedRoom = await prisma.room.findUnique({
       where: { id: room.id },
       include: { players: { orderBy: { joinedAt: "asc" } } },
     });
 
-    return NextResponse.json(
+    return jsonOk(
       {
         room: updatedRoom,
         player,
       },
-      { status: 201 }
+      201,
     );
   } catch (error) {
     console.error("Error joining room:", error);
-    return NextResponse.json(
+    return jsonError(
+      "ไม่สามารถเข้าร่วมห้องได้",
+      500,
       {
-        error: "ไม่สามารถเข้าร่วมห้องได้",
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }

@@ -66,7 +66,7 @@ export const customQuestionSchema = z
 
 export const roomCodeSchema = z
   .string()
-  .length(6, "รหัสห้องต้องมี 6 ตัวอักษร")
+  .length(4, "รหัสห้องต้องมี 4 ตัวอักษร")
   .regex(/^[A-Z0-9]+$/, "รหัสห้องต้องเป็นตัวพิมพ์ใหญ่หรือตัวเลขเท่านั้น");
 
 export const questionSchema = z.object({
@@ -88,17 +88,18 @@ export const createRoomSchema = z.object({
 export const adminLoginSchema = z.object({
   username: z
     .string()
-    .min(1, "กรุณากรอกชื่อผู้ใช้")
-    .max(50)
+    .min(1, "Username is required")
+    .max(100)
+    .transform((val) => val.trim())
     .refine((val) => !hasSqlInjection(val), {
-      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+      message: "Invalid input format",
     }),
   password: z
     .string()
-    .min(1, "กรุณากรอกรหัสผ่าน")
+    .min(1, "Password is required")
     .max(100)
     .refine((val) => !hasSqlInjection(val), {
-      message: "รูปแบบข้อมูลไม่ถูกต้อง",
+      message: "Invalid input format",
     }),
 });
 

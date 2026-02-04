@@ -35,10 +35,7 @@ export default function PunishmentWheelPage() {
   const wheelRef = useRef<HTMLDivElement>(null);
 
   const { playDrink, playCelebration, vibratePattern, vibrateLong } =
-    useSoundEffects({
-      enabled: true,
-      hapticEnabled: true,
-    });
+    useSoundEffects();
 
   const spinWheel = () => {
     if (isSpinning) return;

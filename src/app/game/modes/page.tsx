@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
-import { GAME_MODES, getRandomMode } from "@/config/gameConstants";
+import { GAME_MODES } from "@/config/gameConstants";
 import { useSoundEffects } from "@/hooks";
 
 export default function GameModesPage() {
@@ -15,10 +15,7 @@ export default function GameModesPage() {
   const [isGameStarted, setIsGameStarted] = useState<boolean | null>(null);
   const isAtLastCard = currentIndex === GAME_MODES.length - 1;
 
-  const { vibrateShort } = useSoundEffects({
-    enabled: true,
-    hapticEnabled: true,
-  });
+  const { vibrateShort } = useSoundEffects();
 
   // Check if game was started properly from lobby
   useEffect(() => {
@@ -82,11 +79,6 @@ export default function GameModesPage() {
   };
 
   const handleSelectMode = (route: string) => {
-    if (route === "random") {
-      const randomMode = getRandomMode();
-      router.push(randomMode.route);
-      return;
-    }
     router.push(route);
   };
 

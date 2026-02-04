@@ -3,7 +3,7 @@
  * ระบบหมุนเวียนผู้เล่นแบบ Fair ไม่ให้คนเดิมโดนบ่อย
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface UsePlayerQueueOptions {
   players: string[];
@@ -31,6 +31,7 @@ export function usePlayerQueue({
   players,
   avoidRepeats = true,
 }: UsePlayerQueueOptions): UsePlayerQueueReturn {
+  const playersKey = players.join("|");
   // Shuffled queue of player indices
   const [queue, setQueue] = useState<number[]>(() =>
     shuffleArray(Array.from({ length: players.length }, (_, i) => i)),
@@ -47,6 +48,17 @@ export function usePlayerQueue({
 
   // Track last player to avoid immediate repeats
   const lastPlayerRef = useRef<number>(-1);
+
+  useEffect(() => {
+    const newQueue = shuffleArray(
+      Array.from({ length: players.length }, (_, i) => i),
+    );
+    setQueue(newQueue);
+    setQueuePosition(0);
+    setCurrentPlayerIndex(newQueue[0] ?? 0);
+    setPlayerTurnCount(Object.fromEntries(players.map((name) => [name, 0])));
+    lastPlayerRef.current = -1;
+  }, [playersKey]);
 
   const getNextPlayer = useCallback(() => {
     if (players.length <= 1) {

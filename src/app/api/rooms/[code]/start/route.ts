@@ -1,4 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { roomCodeSchema } from "@/lib/validation";
+import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
 
 // Valid game modes (inline to avoid import issues when DB is offline)
 type GameModeType = "QUESTION" | "VOTE" | "TRUTH_OR_DARE" | "CHAOS" | "MIXED";
@@ -6,15 +10,26 @@ type GameModeType = "QUESTION" | "VOTE" | "TRUTH_OR_DARE" | "CHAOS" | "MIXED";
 // POST /api/rooms/[code]/start - Start a game session
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<{ code: string }> },
 ) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    if (rateLimited) return rateLimited;
+
     const { code } = await params;
     const roomCode = code.toUpperCase();
-    const body = await request.json();
-    const { mode = "QUESTION", hostId } = body;
 
-    // Validate mode first before database operations
+    const codeValidation = roomCodeSchema.safeParse(roomCode);
+    if (!codeValidation.success) {
+      return jsonError("รหัสห้องไม่ถูกต้อง", 400);
+    }
+
+    const body = await request.json();
+    const { mode = "QUESTION" } = body;
+
     const validModes: GameModeType[] = [
       "QUESTION",
       "VOTE",
@@ -23,46 +38,39 @@ export async function POST(
       "MIXED",
     ];
     if (!validModes.includes(mode as GameModeType)) {
-      return NextResponse.json({ error: "โหมดเกมไม่ถูกต้อง" }, { status: 400 });
+      return jsonError("โหมดเกมไม่ถูกต้อง", 400);
     }
 
-    // Dynamic import to prevent crash when database is offline
+    const payload = await getRoomHostPayloadFromCookies(roomCode);
+    if (!payload || payload.code !== roomCode) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    }
+
     const { default: prisma } = await import("@/lib/db");
 
-    // Find room
     const room = await prisma.room.findUnique({
       where: { code: roomCode },
       include: {
-        players: true,
         sessions: { where: { status: "ACTIVE" } },
       },
     });
 
     if (!room) {
-      return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
+      return jsonError("ไม่พบห้อง", 404);
     }
 
     if (!room.isActive) {
-      return NextResponse.json({ error: "ห้องนี้ถูกปิดแล้ว" }, { status: 410 });
+      return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
     }
 
-    // Verify host (in real app, use proper auth)
-    if (hostId && room.hostId !== hostId) {
-      return NextResponse.json(
-        { error: "เฉพาะ Host เท่านั้นที่สามารถเริ่มเกมได้" },
-        { status: 403 }
-      );
+    if (room.id !== payload.roomId || room.hostId !== payload.hostId) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 403);
     }
 
-    // Check if there's already an active session
     if (room.sessions.length > 0) {
-      return NextResponse.json(
-        { error: "มีเกมกำลังดำเนินการอยู่แล้ว" },
-        { status: 400 }
-      );
+      return jsonError("มีเกมกำลังดำเนินการอยู่แล้ว", 400);
     }
 
-    // Create game session
     const session = await prisma.gameSession.create({
       data: {
         roomId: room.id,
@@ -71,22 +79,22 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(
+    return jsonOk(
       {
         session,
         message: "เริ่มเกมแล้ว!",
       },
-      { status: 201 }
+      201,
     );
   } catch (error) {
     console.error("Error starting game:", error);
-    return NextResponse.json(
+    return jsonError(
+      "ไม่สามารถเริ่มเกมได้",
+      500,
       {
-        error: "ไม่สามารถเริ่มเกมได้",
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }

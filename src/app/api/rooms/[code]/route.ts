@@ -1,15 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { roomCodeSchema } from "@/lib/validation";
+import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
 
 // GET /api/rooms/[code] - Get room by code
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<{ code: string }> },
 ) {
   try {
     const { code } = await params;
     const roomCode = code.toUpperCase();
 
-    // Dynamic import to prevent crash when database is offline
+    const validation = roomCodeSchema.safeParse(roomCode);
+    if (!validation.success) {
+      return jsonError("รหัสห้องไม่ถูกต้อง", 400);
+    }
+
     const { default: prisma } = await import("@/lib/db");
 
     const room = await prisma.room.findUnique({
@@ -26,23 +34,23 @@ export async function GET(
     });
 
     if (!room) {
-      return NextResponse.json({ error: "ไม่พบห้อง" }, { status: 404 });
+      return jsonError("ไม่พบห้อง", 404);
     }
 
     if (!room.isActive) {
-      return NextResponse.json({ error: "ห้องนี้ถูกปิดแล้ว" }, { status: 410 });
+      return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
     }
 
-    return NextResponse.json({ room });
+    return jsonOk({ room });
   } catch (error) {
     console.error("Error fetching room:", error);
-    return NextResponse.json(
+    return jsonError(
+      "ไม่สามารถดึงข้อมูลห้องได้",
+      500,
       {
-        error: "ไม่สามารถดึงข้อมูลห้องได้",
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }
@@ -50,31 +58,54 @@ export async function GET(
 // DELETE /api/rooms/[code] - Close room (host only)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<{ code: string }> },
 ) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    if (rateLimited) return rateLimited;
+
     const { code } = await params;
     const roomCode = code.toUpperCase();
 
-    // Dynamic import to prevent crash when database is offline
-    const { default: prisma } = await import("@/lib/db");
+    const validation = roomCodeSchema.safeParse(roomCode);
+    if (!validation.success) {
+      return jsonError("รหัสห้องไม่ถูกต้อง", 400);
+    }
 
-    // In real app, verify host authorization here
-    const room = await prisma.room.update({
+    const payload = await getRoomHostPayloadFromCookies(roomCode);
+    if (!payload || payload.code !== roomCode) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    }
+
+    const { default: prisma } = await import("@/lib/db");
+    const room = await prisma.room.findUnique({ where: { code: roomCode } });
+
+    if (!room) {
+      return jsonError("ไม่พบห้อง", 404);
+    }
+
+    if (room.id !== payload.roomId || room.hostId !== payload.hostId) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 403);
+    }
+
+    const updated = await prisma.room.update({
       where: { code: roomCode },
       data: { isActive: false },
     });
 
-    return NextResponse.json({ message: "ห้องถูกปิดแล้ว", room });
+    return jsonOk({ message: "ห้องถูกปิดแล้ว", room: updated });
   } catch (error) {
     console.error("Error closing room:", error);
-    return NextResponse.json(
+    return jsonError(
+      "ไม่สามารถปิดห้องได้",
+      500,
       {
-        error: "ไม่สามารถปิดห้องได้",
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }

@@ -1,4 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/adminAuth";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { createRoomSchema, sanitizeHtml } from "@/lib/validation";
+import { signRoomHostToken, getRoomHostCookieName } from "@/lib/roomAuth";
 
 // Generate 4-character room code
 function generateRoomCode(): string {
@@ -13,6 +18,11 @@ function generateRoomCode(): string {
 // GET /api/rooms - List active rooms (for admin)
 export async function GET() {
   try {
+    const admin = await requireAdmin();
+    if (!admin) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    }
+
     const { default: prisma } = await import("@/lib/db");
 
     const rooms = await prisma.room.findMany({
@@ -25,11 +35,10 @@ export async function GET() {
       take: 50,
     });
 
-    return NextResponse.json({ rooms });
+    return jsonOk({ rooms });
   } catch (error) {
     console.error("Error fetching rooms:", error);
-    // Return empty rooms list when database is offline
-    return NextResponse.json({
+    return jsonOk({
       rooms: [],
       fallback: true,
       message: "ไม่สามารถเชื่อมต่อ Database กรุณาเริ่ม PostgreSQL",
@@ -40,23 +49,36 @@ export async function GET() {
 // POST /api/rooms - Create a new room
 export async function POST(request: NextRequest) {
   try {
-    const { default: prisma } = await import("@/lib/db");
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    if (rateLimited) return rateLimited;
 
     const body = await request.json();
-    const {
-      name,
-      hostName,
-      difficulty = 3,
-      is18Plus = false,
-      maxPlayers = 8,
-    } = body;
+    const validation = createRoomSchema.safeParse({
+      hostName: body.hostName,
+      roomName: body.name ?? body.roomName,
+      maxPlayers: body.maxPlayers,
+      is18Plus: body.is18Plus,
+      difficulty: body.difficulty,
+    });
 
-    if (!name || !hostName) {
-      return NextResponse.json(
-        { error: "กรุณากรอกชื่อวงและชื่อผู้เล่น" },
-        { status: 400 }
+    if (!validation.success) {
+      return jsonError(
+        validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง",
+        400,
       );
     }
+
+    const { hostName, roomName, maxPlayers, is18Plus, difficulty } =
+      validation.data;
+
+    const name = roomName?.trim() || "Wong Taek Room";
+    const safeHostName = sanitizeHtml(hostName);
+    const safeRoomName = sanitizeHtml(name);
+
+    const { default: prisma } = await import("@/lib/db");
 
     // Generate unique room code
     let code = generateRoomCode();
@@ -68,18 +90,17 @@ export async function POST(request: NextRequest) {
       attempts++;
     }
 
-    // Create room with host player
     const room = await prisma.room.create({
       data: {
         code,
-        name,
+        name: safeRoomName,
         hostId: "", // Will be updated after player creation
         difficulty: Math.min(5, Math.max(1, difficulty)),
         is18Plus,
-        maxPlayers: Math.min(20, Math.max(2, maxPlayers)),
+        maxPlayers,
         players: {
           create: {
-            name: hostName,
+            name: safeHostName,
             isHost: true,
             isReady: true,
           },
@@ -88,14 +109,19 @@ export async function POST(request: NextRequest) {
       include: { players: true },
     });
 
-    // Update hostId with the created player's id
     const host = room.players[0];
     await prisma.room.update({
       where: { id: room.id },
       data: { hostId: host.id },
     });
 
-    return NextResponse.json(
+    const hostToken = signRoomHostToken({
+      roomId: room.id,
+      hostId: host.id,
+      code,
+    });
+
+    const response = jsonOk(
       {
         room: {
           ...room,
@@ -103,17 +129,27 @@ export async function POST(request: NextRequest) {
         },
         player: host,
       },
-      { status: 201 }
+      201,
     );
+
+    response.cookies.set(getRoomHostCookieName(code), hostToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 6, // 6 hours
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("Error creating room:", error);
-    return NextResponse.json(
+    return jsonError(
+      "ไม่สามารถสร้างห้องได้",
+      500,
       {
-        error: "ไม่สามารถสร้างห้องได้",
         detail:
           "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
       },
-      { status: 500 }
     );
   }
 }

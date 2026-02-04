@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import bcrypt from "bcryptjs";
 
 const dbUrl = process.env.DATABASE_URL || "file:prisma/dev.db";
 
@@ -232,6 +233,34 @@ async function main() {
     },
   });
   console.log("⚙️  Created app settings");
+
+  const adminUsername = (process.env.ADMIN_SEED_USERNAME || process.env.ADMIN_SEED_EMAIL || "").trim();
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD;
+  const adminName = process.env.ADMIN_SEED_NAME || "Admin";
+
+  if (adminUsername && adminPassword) {
+    const existing = await prisma.admin.findUnique({
+      where: { email: adminUsername },
+    });
+
+    if (!existing) {
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      await prisma.admin.create({
+        data: {
+          email: adminUsername,
+          password: passwordHash,
+          name: adminName,
+          role: "SUPER_ADMIN",
+          isActive: true,
+        },
+      });
+      console.log("👮 Created admin user");
+    } else {
+      console.log("👮 Admin user already exists");
+    }
+  } else {
+    console.log("👮 Skipped admin seed (missing ADMIN_SEED_USERNAME/EMAIL or PASSWORD)");
+  }
 
   console.log("🎉 Seed completed!");
 }

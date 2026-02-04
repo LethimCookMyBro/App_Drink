@@ -5,17 +5,22 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel, BottomNav } from "@/components/ui";
 import { useGameStore, VibeLevel } from "@/store/gameStore";
+import { useUserSettings } from "@/hooks/useUserSettings";
 
 export default function WelcomePage() {
   const { vibeLevel, setVibeLevel } = useGameStore();
+  const { settings, isLoaded } = useUserSettings();
   const [selectedVibe, setSelectedVibe] = useState<VibeLevel>(vibeLevel);
-  const [is18PlusEnabled, setIs18PlusEnabled] = useState(false);
+  const is18PlusEnabled = isLoaded ? settings.is18Plus : false;
 
   // Check if 18+ mode is enabled in settings
   useEffect(() => {
-    const stored = localStorage.getItem("wongtaek-18plus");
-    setIs18PlusEnabled(stored === "true");
-  }, []);
+    if (!isLoaded) return;
+    if (!is18PlusEnabled && (selectedVibe === "chaos" || vibeLevel === "chaos")) {
+      setSelectedVibe("tipsy");
+      setVibeLevel("tipsy");
+    }
+  }, [is18PlusEnabled, isLoaded, selectedVibe, setVibeLevel, vibeLevel]);
 
   // Build vibe options based on 18+ setting
   const vibeOptions: {

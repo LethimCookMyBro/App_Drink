@@ -31,6 +31,9 @@ export default function JoinCirclePage() {
       setError("กรุณาใส่ชื่อของคุณ");
       return;
     }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wongtaek-join-name", playerName.trim());
+    }
     // TODO: Validate room code with backend
     router.push(`/lobby/${roomCode}`);
   };

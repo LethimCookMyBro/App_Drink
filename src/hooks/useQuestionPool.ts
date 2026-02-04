@@ -28,7 +28,10 @@ interface UseQuestionPoolOptions {
 interface UseQuestionPoolReturn {
   questions: GameQuestion[];
   isLoading: boolean;
-  getQuestionForPlayer: (playerName: string) => GameQuestion | null;
+  getQuestionForPlayer: (
+    playerName: string,
+    preferredType?: string,
+  ) => GameQuestion | null;
   markQuestionAnswered: (playerName: string, questionId: string) => void;
   resetPlayerQuestions: (playerName: string) => void;
   resetAllQuestions: () => void;
@@ -117,6 +120,7 @@ export function useQuestionPool({
   customQuestions = [],
   customQuestionChance = 0.25, // 25% chance to show custom question
 }: UseQuestionPoolOptions): UseQuestionPoolReturn {
+  const playersKey = players.join("|");
   const [questions, setQuestions] = useState<GameQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -127,6 +131,17 @@ export function useQuestionPool({
 
   // Track used custom questions (globally)
   const usedCustomQuestionsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    setPlayerAnswered(
+      Object.fromEntries(players.map((name) => [name, new Set<string>()])),
+    );
+    usedCustomQuestionsRef.current.clear();
+  }, [playersKey]);
+
+  useEffect(() => {
+    usedCustomQuestionsRef.current.clear();
+  }, [customQuestions.length]);
 
   // Fetch questions from API
   useEffect(() => {
@@ -139,15 +154,17 @@ export function useQuestionPool({
           vote: "VOTE",
           "truth-or-dare": "TRUTH",
           chaos: "CHAOS",
+          random: "",
         };
 
-        const questionType = modeToType[mode] || "QUESTION";
-        const params = new URLSearchParams({
-          count: "50",
-          is18Plus: is18PlusEnabled.toString(),
-          level: level.toString(),
-          type: questionType,
-        });
+        const questionType = modeToType[mode] ?? "QUESTION";
+        const params = new URLSearchParams();
+        params.set("count", "50");
+        params.set("is18Plus", is18PlusEnabled.toString());
+        params.set("level", level.toString());
+        if (questionType) {
+          params.set("type", questionType);
+        }
 
         if (mode === "truth-or-dare") {
           const [truthRes, dareRes] = await Promise.all([
@@ -194,13 +211,14 @@ export function useQuestionPool({
 
   // Get available questions for a specific player (without custom)
   const getAvailableForPlayer = useCallback(
-    (playerName: string): GameQuestion[] => {
+    (playerName: string, preferredType?: string): GameQuestion[] => {
       const answered = playerAnswered[playerName] || new Set<string>();
 
       return questions.filter((q) => {
         if (answered.has(q.id)) return false;
         if (q.is18Plus && !is18PlusEnabled) return false;
         if (q.level > level) return false;
+        if (preferredType && q.type !== preferredType) return false;
         return true;
       });
     },
@@ -216,18 +234,33 @@ export function useQuestionPool({
 
   // Get a random question for a player
   const getQuestionForPlayer = useCallback(
-    (playerName: string): GameQuestion | null => {
+    (playerName: string, preferredType?: string): GameQuestion | null => {
       const availableCustom = getAvailableCustomQuestions();
 
       // Random chance to show custom question (if available)
-      if (availableCustom.length > 0 && Math.random() < customQuestionChance) {
+      if (
+        availableCustom.length > 0 &&
+        Math.random() < customQuestionChance &&
+        (!preferredType || availableCustom.some((q) => q.type === preferredType))
+      ) {
         const customQ =
-          availableCustom[Math.floor(Math.random() * availableCustom.length)];
+          preferredType
+            ? availableCustom.filter((q) => q.type === preferredType)[
+                Math.floor(
+                  Math.random() *
+                    availableCustom.filter((q) => q.type === preferredType)
+                      .length,
+                )
+              ]
+            : availableCustom[Math.floor(Math.random() * availableCustom.length)];
         usedCustomQuestionsRef.current.add(customQ.id);
         return { ...customQ, isCustom: true };
       }
 
-      const available = getAvailableForPlayer(playerName);
+      const available = getAvailableForPlayer(playerName, preferredType);
+      const fallbackAvailable = preferredType
+        ? getAvailableForPlayer(playerName)
+        : available;
 
       if (available.length === 0) {
         // Reset this player's history if they've seen all questions
@@ -235,11 +268,21 @@ export function useQuestionPool({
           ...prev,
           [playerName]: new Set<string>(),
         }));
-        const allAvailable = questions.filter(
-          (q) => (!q.is18Plus || is18PlusEnabled) && q.level <= level,
-        );
+        const allAvailable = questions.filter((q) => {
+          if (q.is18Plus && !is18PlusEnabled) return false;
+          if (q.level > level) return false;
+          if (preferredType && q.type !== preferredType) return false;
+          return true;
+        });
+        const fallbackAll = preferredType
+          ? questions.filter(
+              (q) => (!q.is18Plus || is18PlusEnabled) && q.level <= level,
+            )
+          : allAvailable;
         return (
-          allAvailable[Math.floor(Math.random() * allAvailable.length)] || null
+          allAvailable[Math.floor(Math.random() * allAvailable.length)] ||
+          fallbackAll[Math.floor(Math.random() * fallbackAll.length)] ||
+          null
         );
       }
 
@@ -253,7 +296,11 @@ export function useQuestionPool({
         }
       }
 
-      return available[Math.floor(Math.random() * available.length)];
+      return (
+        available[Math.floor(Math.random() * available.length)] ||
+        fallbackAvailable[Math.floor(Math.random() * fallbackAvailable.length)] ||
+        null
+      );
     },
     [
       getAvailableForPlayer,

@@ -32,7 +32,7 @@ export const GAME_MODES: GameModeConfig[] = [
     shadowClass: "shadow-neon-yellow",
     bgGradient: "from-yellow-500/20 to-transparent",
     difficulty: 3,
-    route: "random",
+    route: "/game/play?mode=random",
     questionType: "RANDOM",
   },
   {
@@ -170,7 +170,7 @@ export const VIBE_LEVELS: Record<
 // ========================
 
 export function getRandomMode(): GameModeConfig {
-  const playableModes = GAME_MODES.filter((m) => m.route !== "random");
+  const playableModes = GAME_MODES.filter((m) => m.id !== "random");
   return playableModes[Math.floor(Math.random() * playableModes.length)];
 }
 

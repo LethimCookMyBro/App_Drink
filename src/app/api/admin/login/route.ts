@@ -1,79 +1,104 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { adminLoginSchema, hasSqlInjection } from "@/lib/validation";
-
-// Admin credentials from environment variables (more secure)
-// Fallback to default for backward compatibility
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "SuperAdmin_3175!";
-const ADMIN_PASSWORD_HASH =
-  process.env.ADMIN_PASSWORD_HASH ||
-  "$2b$12$s/mrk8BkgAQDSx/CQ33Z7OqxXfxecgCsqHYATz0Xt7vz.cNhR2bUG";
-
-const JWT_SECRET = process.env.JWT_SECRET || "wong-taek-admin-secret-key";
+import { adminLoginSchema } from "@/lib/validation";
+import { signAdminToken } from "@/lib/adminAuth";
+import { enforceRateLimit, enforceSameOrigin, jsonError } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
-
-    // Validate input with SQL injection protection
-    const validation = adminLoginSchema.safeParse(body);
+    const usernameInput =
+      typeof body?.username === "string"
+        ? body.username
+        : typeof body?.email === "string"
+          ? body.email
+          : "";
+    const validation = adminLoginSchema.safeParse({
+      username: usernameInput,
+      password: body?.password,
+    });
     if (!validation.success) {
-      return NextResponse.json(
-        { error: validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง" },
-        { status: 400 },
+      return jsonError(
+        validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง",
+        400,
       );
     }
 
-    const { username, password } = validation.data;
+    const username = validation.data.username;
+    const { password } = validation.data;
 
-    // Additional SQL injection check
-    if (hasSqlInjection(username) || hasSqlInjection(password)) {
-      console.warn("SQL injection attempt detected:", { username });
-      return NextResponse.json(
-        { error: "รูปแบบข้อมูลไม่ถูกต้อง" },
-        { status: 400 },
-      );
+    const { default: prisma } = await import("@/lib/db");
+    let admin = await prisma.admin.findUnique({ where: { email: username } });
+
+    const envAdminUsername = (
+      process.env.ADMIN_SEED_USERNAME ||
+      process.env.ADMIN_SEED_EMAIL ||
+      ""
+    ).trim();
+    const envAdminPassword = process.env.ADMIN_SEED_PASSWORD || "";
+    const envAdminName = process.env.ADMIN_SEED_NAME || "Admin";
+    const envCredentialsMatch =
+      !!envAdminUsername &&
+      !!envAdminPassword &&
+      username === envAdminUsername &&
+      password === envAdminPassword;
+
+    let envAuthenticated = false;
+    if (envCredentialsMatch) {
+      const passwordHash = await bcrypt.hash(envAdminPassword, 12);
+      if (!admin) {
+        admin = await prisma.admin.create({
+          data: {
+            email: envAdminUsername,
+            password: passwordHash,
+            name: envAdminName,
+            role: "SUPER_ADMIN",
+            isActive: true,
+          },
+        });
+      } else {
+        // Keep env credentials as the source of truth when explicitly used
+        admin = await prisma.admin.update({
+          where: { id: admin.id },
+          data: { password: passwordHash, isActive: true },
+        });
+      }
+      envAuthenticated = true;
     }
 
-    // Check username (case-sensitive)
-    if (username !== ADMIN_USERNAME) {
-      // Use same error message to prevent username enumeration
-      return NextResponse.json(
-        { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" },
-        { status: 401 },
-      );
+    if (!admin || !admin.isActive) {
+      return jsonError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-
+    const isPasswordValid = envAuthenticated
+      ? true
+      : await bcrypt.compare(password, admin.password);
     if (!isPasswordValid) {
-      return NextResponse.json(
-        { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" },
-        { status: 401 },
-      );
+      return jsonError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        role: "admin",
-        username: ADMIN_USERNAME,
-        iat: Math.floor(Date.now() / 1000),
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" },
-    );
+    await prisma.admin.update({
+      where: { id: admin.id },
+      data: { lastLoginAt: new Date() },
+    });
 
-    // Set cookie and return response
+    const token = signAdminToken(admin);
+
     const response = NextResponse.json(
       {
         success: true,
         message: "เข้าสู่ระบบสำเร็จ",
         admin: {
-          username: ADMIN_USERNAME,
-          role: "SUPER_ADMIN",
+          username: admin.email,
+          name: admin.name,
+          role: admin.role,
         },
       },
       { status: 200 },
@@ -82,7 +107,7 @@ export async function POST(request: Request) {
     response.cookies.set("admin-token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       maxAge: 60 * 60 * 24, // 24 hours
       path: "/",
     });
@@ -90,9 +115,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Admin login error:", error);
-    return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ" },
-      { status: 500 },
-    );
+    return jsonError("เกิดข้อผิดพลาดในการเข้าสู่ระบบ", 500);
   }
 }

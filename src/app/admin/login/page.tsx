@@ -87,16 +87,16 @@ export default function AdminLoginPage() {
             {/* Username */}
             <div>
               <label className="block text-white/60 text-sm mb-2">
-                ชื่อผู้ใช้
+                อีเมล
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
-                placeholder="Enter username"
+                placeholder="Username"
                 required
-                autoComplete="off"
+                autoComplete="username"
               />
             </div>
 
@@ -112,7 +112,7 @@ export default function AdminLoginPage() {
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
                 placeholder="Enter password"
                 required
-                autoComplete="off"
+                autoComplete="current-password"
               />
             </div>
 

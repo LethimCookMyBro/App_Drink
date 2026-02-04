@@ -140,6 +140,22 @@ const fallbackQuestions = [
     level: 3,
     is18Plus: false,
   },
+  // 18+ samples
+  {
+    id: "fb-18p-t1",
+    text: "18+ Sample (Truth): Share your spiciest secret.",
+    type: "TRUTH",
+    level: 3,
+    is18Plus: true,
+  },
+  {
+    id: "fb-18p-d1",
+    text: "18+ Sample (Dare): Do a bold challenge for the group.",
+    type: "DARE",
+    level: 3,
+    is18Plus: true,
+  },
+
 ];
 
 // Shuffle array helper
@@ -168,7 +184,7 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { isActive: true };
     if (type) where.type = type;
-    if (level) where.level = parseInt(level);
+    if (level) where.level = { lte: parseInt(level) };
     if (!is18Plus) where.is18Plus = false;
     if (excludeIds.length > 0) where.id = { notIn: excludeIds };
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, GlassPanel } from "@/components/ui";
+import { useRouter } from "next/navigation";
 
 // Local question type for admin
 interface AdminQuestion {
@@ -121,6 +122,7 @@ const mockQuestions: AdminQuestion[] = [
 ];
 
 export default function AdminQuestionsPage() {
+  const router = useRouter();
   const [questions, setQuestions] = useState<AdminQuestion[]>(mockQuestions);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({ type: "", level: "", is18Plus: "" });
@@ -137,6 +139,7 @@ export default function AdminQuestionsPage() {
   });
   const [dbConnected, setDbConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Custom dropdown state
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -150,10 +153,20 @@ export default function AdminQuestionsPage() {
       if (filter.is18Plus) params.set("is18Plus", filter.is18Plus);
 
       const res = await fetch(`/api/questions?${params}`);
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        if (data.questions && data.questions.length > 0) {
+        if (Array.isArray(data)) {
+          setQuestions(data);
+          setDbConnected(true);
+        } else if (data.questions && Array.isArray(data.questions)) {
           setQuestions(data.questions);
+          setDbConnected(true);
+        } else {
+          setQuestions([]);
           setDbConnected(true);
         }
       }
@@ -163,11 +176,26 @@ export default function AdminQuestionsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filter]);
+  }, [filter, router]);
 
   useEffect(() => {
-    fetchQuestions();
-  }, [fetchQuestions]);
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/admin/verify");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.push("/admin/login");
+          return;
+        }
+        fetchQuestions();
+      } catch {
+        router.push("/admin/login");
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, [fetchQuestions, router]);
 
   // Pull to refresh
   const handleRefresh = () => {
@@ -194,6 +222,10 @@ export default function AdminQuestionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newQuestion),
       });
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setQuestions([data.question, ...questions]);
@@ -227,6 +259,10 @@ export default function AdminQuestionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editingQuestion),
       });
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setQuestions(
@@ -249,7 +285,11 @@ export default function AdminQuestionsPage() {
 
   const handleDeleteQuestion = async (id: string) => {
     try {
-      await fetch(`/api/questions/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
     } catch {
       // Continue anyway
     }
@@ -325,6 +365,14 @@ export default function AdminQuestionsPage() {
       </div>
     );
   };
+
+  if (isCheckingAuth) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#0d0a10]">
+        <div className="animate-pulse text-white/40">กำลังตรวจสอบสิทธิ์...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-y-auto no-scrollbar pb-24 bg-[#0d0a10]">

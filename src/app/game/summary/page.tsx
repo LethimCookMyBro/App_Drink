@@ -16,7 +16,7 @@ interface PlayerStats {
 
 export default function GameSummaryPage() {
   const router = useRouter();
-  const { playCelebration } = useSoundEffects({ enabled: true });
+  const { playCelebration } = useSoundEffects();
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [totalRounds, setTotalRounds] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);

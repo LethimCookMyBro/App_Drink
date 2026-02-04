@@ -1,18 +1,12 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/adminAuth";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
 
 // Status update schema
 const statusSchema = z.object({
   status: z.enum(["PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"]),
 });
-
-// Helper to verify admin auth
-async function verifyAdmin(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin-session");
-  return !!token?.value;
-}
 
 // PATCH - Update feedback status
 export async function PATCH(
@@ -20,22 +14,23 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Verify admin authentication
-    const isAdmin = await verifyAdmin();
-    if (!isAdmin) {
-      return NextResponse.json(
-        { error: "ไม่มีสิทธิ์เข้าถึง" },
-        { status: 401 },
-      );
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    if (rateLimited) return rateLimited;
+
+    const admin = await requireAdmin();
+    if (!admin) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
     }
 
     const { id } = await params;
     const body = await request.json();
 
-    // Validate input
     const validation = statusSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json({ error: "สถานะไม่ถูกต้อง" }, { status: 400 });
+      return jsonError("สถานะไม่ถูกต้อง", 400);
     }
 
     const { status } = validation.data;
@@ -49,16 +44,10 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      feedback: updatedFeedback,
-    });
+    return jsonOk({ success: true, feedback: updatedFeedback });
   } catch (error) {
     console.error("Error updating feedback:", error);
-    return NextResponse.json(
-      { error: "ไม่สามารถอัพเดทสถานะได้" },
-      { status: 500 },
-    );
+    return jsonError("ไม่สามารถอัปเดตสถานะได้", 500);
   }
 }
 
@@ -68,13 +57,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Verify admin authentication
-    const isAdmin = await verifyAdmin();
-    if (!isAdmin) {
-      return NextResponse.json(
-        { error: "ไม่มีสิทธิ์เข้าถึง" },
-        { status: 401 },
-      );
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    if (rateLimited) return rateLimited;
+
+    const admin = await requireAdmin();
+    if (!admin) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
     }
 
     const { id } = await params;
@@ -84,15 +75,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "ลบ feedback สำเร็จ",
-    });
+    return jsonOk({ success: true, message: "ลบ feedback สำเร็จ" });
   } catch (error) {
     console.error("Error deleting feedback:", error);
-    return NextResponse.json(
-      { error: "ไม่สามารถลบ feedback ได้" },
-      { status: 500 },
-    );
+    return jsonError("ไม่สามารถลบ feedback ได้", 500);
   }
 }

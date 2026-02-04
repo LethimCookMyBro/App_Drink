@@ -31,10 +31,6 @@ export default function SettingsPage() {
   // Handler for 18+ mode - syncs to BOTH per-user and global key
   const handle18PlusChange = (enabled: boolean) => {
     setIs18Plus(enabled);
-    // Also save to global key for game pages to read
-    if (typeof window !== "undefined") {
-      localStorage.setItem("wongtaek-18plus", enabled.toString());
-    }
   };
 
   const hapticOptions = [
