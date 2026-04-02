@@ -3,6 +3,9 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const PRISMA_GENERATE_PLACEHOLDER_URL =
+  "postgresql://prisma:prisma@127.0.0.1:5432/prisma";
+
 function hasRailwayRuntime(): boolean {
   return Boolean(
     process.env.RAILWAY_PROJECT_ID ||
@@ -20,6 +23,10 @@ function isPostgresUrl(value: string | undefined): value is string {
 function normalizeUrl(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function isPrismaGenerateCommand(): boolean {
+  return process.argv.includes("generate");
 }
 
 function resolveDatabaseUrl(): string {
@@ -42,6 +49,13 @@ function resolveDatabaseUrl(): string {
     console.warn(
       "Ignoring invalid Railway DATABASE_URL because it is not a PostgreSQL URL.",
     );
+  }
+
+  if (isPrismaGenerateCommand()) {
+    console.warn(
+      "Using a placeholder PostgreSQL URL for prisma generate because no valid database URL is available yet.",
+    );
+    return PRISMA_GENERATE_PLACEHOLDER_URL;
   }
 
   if (publicUrl || internalUrl) {
