@@ -3,6 +3,7 @@ import {
   hashPassword,
   generateToken,
   createSession,
+  normalizeEmail,
   sanitizeInput,
 } from "@/lib/auth";
 import {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = validation.data.email.trim().toLowerCase();
+    const email = normalizeEmail(validation.data.email);
     const password = validation.data.password;
     const name = sanitizeInput(validation.data.name);
 
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
           id: user.id,
           email: user.email,
           name: user.name,
+          avatarUrl: user.avatarUrl ?? user.image,
         },
       },
       { status: 201 }

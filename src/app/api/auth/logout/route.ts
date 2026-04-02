@@ -5,6 +5,10 @@ import {
   jsonError,
   jsonOk,
 } from "@/lib/apiUtils";
+import {
+  clearNextAuthSessionCookies,
+  deleteNextAuthSessionFromRequest,
+} from "@/lib/nextAuth";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -24,6 +28,8 @@ export async function POST(request: Request) {
       await deleteSession(token);
     }
 
+    await deleteNextAuthSessionFromRequest(request);
+
     const response = jsonOk({ success: true, message: "ออกจากระบบสำเร็จ" });
     response.cookies.set("auth-token", "", {
       httpOnly: true,
@@ -32,6 +38,7 @@ export async function POST(request: Request) {
       maxAge: 0,
       path: "/",
     });
+    clearNextAuthSessionCookies(response);
 
     return response;
   } catch (error) {

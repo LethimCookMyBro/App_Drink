@@ -1,4 +1,4 @@
-import { validateSession, getTokenFromRequest } from "@/lib/auth";
+import { getAuthenticatedAppUser, clearLegacyAuthCookie } from "@/lib/appAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
 
 export const runtime = "nodejs";
@@ -6,36 +6,24 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const token = getTokenFromRequest(request);
-
-    if (!token) {
-      return jsonOk({ authenticated: false, user: null });
-    }
-
-    const session = await validateSession(token);
-
-    if (!session) {
-      const response = jsonOk({ authenticated: false, user: null });
-      response.cookies.set("auth-token", "", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 0,
-        path: "/",
-      });
-
-      return response;
-    }
-
-    return jsonOk({
-      authenticated: true,
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        avatarUrl: session.user.avatarUrl,
-      },
+    const { user, clearLegacyCookie } = await getAuthenticatedAppUser(request);
+    const response = jsonOk({
+      authenticated: Boolean(user),
+      user: user
+        ? {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+          }
+        : null,
     });
+
+    if (clearLegacyCookie) {
+      clearLegacyAuthCookie(response);
+    }
+
+    return response;
   } catch (error) {
     console.error("Me error:", error);
     return jsonError("เกิดข้อผิดพลาด", 500, {

@@ -4,10 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
+import {
+  Button,
+  GlassPanel,
+  GoogleAuthButton,
+  TurnstileWidget,
+} from "@/components/ui";
 import { useAuthStore } from "@/store/authStore";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+const googleLoginEnabled =
+  process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -93,6 +100,19 @@ export default function RegisterPage() {
           <h2 className="mb-6 text-center text-xl font-bold text-white sm:text-2xl">
             สมัครสมาชิก
           </h2>
+
+          {googleLoginEnabled && (
+            <div className="mb-5 space-y-4">
+              <GoogleAuthButton label="สมัครด้วย Google" callbackUrl="/profile" />
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">
+                  หรือ
+                </span>
+                <div className="h-px flex-1 bg-white/10" />
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

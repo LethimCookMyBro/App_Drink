@@ -1,5 +1,8 @@
+import {
+  clearLegacyAuthCookie,
+  getAuthenticatedAppUser,
+} from "@/lib/appAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
-import { validateSession, getTokenFromRequest } from "@/lib/auth";
 import {
   EMPTY_USER_GAME_STATS,
   getUserStatsAndRecentSessions,
@@ -10,36 +13,30 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const token = getTokenFromRequest(request);
+    const { user, clearLegacyCookie } = await getAuthenticatedAppUser(request);
 
-    if (!token) {
-      return jsonOk({
-        authenticated: false,
-        stats: EMPTY_USER_GAME_STATS,
-        history: [],
-        message: "กรุณาเข้าสู่ระบบเพื่อดูประวัติการเล่น",
-      });
-    }
+    const unauthenticatedResponse = jsonOk({
+      authenticated: false,
+      stats: EMPTY_USER_GAME_STATS,
+      history: [],
+      message: "กรุณาเข้าสู่ระบบเพื่อดูประวัติการเล่น",
+    });
 
-    const session = await validateSession(token);
+    if (!user) {
+      if (clearLegacyCookie) {
+        clearLegacyAuthCookie(unauthenticatedResponse);
+      }
 
-    if (!session) {
-      return jsonOk({
-        authenticated: false,
-        stats: EMPTY_USER_GAME_STATS,
-        history: [],
-        message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
-      });
+      return unauthenticatedResponse;
     }
 
     const { default: prisma } = await import("@/lib/db");
     const { stats, sessions } = await getUserStatsAndRecentSessions(
       prisma,
-      session.user.id,
+      user.id,
       50,
     );
 
-    // Format history items
     const history = sessions.map((gs) => {
       const duration = gs.endedAt
         ? Math.round(
@@ -63,11 +60,17 @@ export async function GET(request: Request) {
       };
     });
 
-    return jsonOk({
+    const response = jsonOk({
       authenticated: true,
       stats,
       history,
     });
+
+    if (clearLegacyCookie) {
+      clearLegacyAuthCookie(response);
+    }
+
+    return response;
   } catch (error) {
     console.error("History error:", error);
     return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการเล่น", 500, {

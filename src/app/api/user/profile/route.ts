@@ -4,7 +4,11 @@ import {
   jsonError,
   jsonOk,
 } from "@/lib/apiUtils";
-import { getTokenFromRequest, sanitizeInput, validateSession } from "@/lib/auth";
+import { sanitizeInput } from "@/lib/auth";
+import {
+  clearLegacyAuthCookie,
+  getAuthenticatedAppUser,
+} from "@/lib/appAuth";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import {
   EMPTY_USER_GAME_STATS,
@@ -16,42 +20,41 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const token = getTokenFromRequest(request);
-
-    if (!token) {
-      return jsonOk({
+    const { user, clearLegacyCookie } = await getAuthenticatedAppUser(request);
+    if (!user) {
+      const response = jsonOk({
         user: null,
         stats: EMPTY_USER_GAME_STATS,
         authenticated: false,
         message: "กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโปรไฟล์",
       });
-    }
+      if (clearLegacyCookie) {
+        clearLegacyAuthCookie(response);
+      }
 
-    const session = await validateSession(token);
-
-    if (!session) {
-      return jsonOk({
-        user: null,
-        stats: EMPTY_USER_GAME_STATS,
-        authenticated: false,
-        message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
-      });
+      return response;
     }
 
     const { default: prisma } = await import("@/lib/db");
-    const { stats } = await getUserStatsAndRecentSessions(prisma, session.user.id, 1);
+    const { stats } = await getUserStatsAndRecentSessions(prisma, user.id, 1);
 
-    return jsonOk({
+    const authenticatedResponse = jsonOk({
       authenticated: true,
       user: {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        avatarUrl: session.user.avatarUrl,
-        createdAt: session.user.createdAt,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
       },
       stats,
     });
+
+    if (clearLegacyCookie) {
+      clearLegacyAuthCookie(authenticatedResponse);
+    }
+
+    return authenticatedResponse;
   } catch (error) {
     console.error("Profile error:", error);
     return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์", 500, {
@@ -63,7 +66,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Update user profile
 export async function PATCH(request: Request) {
   try {
     const originBlocked = enforceSameOrigin(request);
@@ -72,25 +74,16 @@ export async function PATCH(request: Request) {
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.profile);
     if (rateLimited) return rateLimited;
 
-    const token = getTokenFromRequest(request);
-
-    if (!token) {
-      return jsonError("กรุณาเข้าสู่ระบบ", 401);
-    }
-
-    const session = await validateSession(token);
-
-    if (!session) {
+    const { user } = await getAuthenticatedAppUser(request);
+    if (!user) {
       return jsonError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่", 401);
     }
 
-    // Get Prisma client dynamically
     const { default: prisma } = await import("@/lib/db");
 
     const body = await request.json();
     const { name, avatarUrl } = body;
 
-    // Validate name
     if (name !== undefined) {
       if (
         typeof name !== "string" ||
@@ -101,24 +94,27 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Update user
     const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: user.id },
       data: {
         ...(name !== undefined && { name: sanitizeInput(name) }),
-        ...(avatarUrl !== undefined && { avatarUrl }),
+        ...(avatarUrl !== undefined && { avatarUrl, image: avatarUrl }),
       },
       select: {
         id: true,
         email: true,
         name: true,
         avatarUrl: true,
+        image: true,
       },
     });
 
     return jsonOk({
       success: true,
-      user: updatedUser,
+      user: {
+        ...updatedUser,
+        avatarUrl: updatedUser.avatarUrl ?? updatedUser.image,
+      },
     });
   } catch (error) {
     console.error("Update profile error:", error);

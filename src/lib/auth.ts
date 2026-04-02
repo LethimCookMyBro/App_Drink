@@ -39,6 +39,10 @@ export async function verifyPassword(
   return bcrypt.compare(password, hashedPassword);
 }
 
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 // Generate JWT token
 export function generateToken(
   payload: Omit<JWTPayload, "iat" | "exp">,
@@ -136,7 +140,7 @@ export function getTokenFromRequest(request: Request): string | null {
       .split(";")
       .find((c) => c.trim().startsWith("auth-token="));
     if (tokenCookie) {
-      return tokenCookie.split("=")[1];
+      return decodeURIComponent(tokenCookie.split("=")[1] || "");
     }
   }
 

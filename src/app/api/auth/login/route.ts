@@ -4,6 +4,7 @@ import {
   generateToken,
   createSession,
   isValidEmail,
+  normalizeEmail,
 } from "@/lib/auth";
 import {
   enforceRateLimit,
@@ -25,8 +26,7 @@ export async function POST(request: Request) {
     if (rateLimited) return rateLimited;
 
     const body = await request.json();
-    const email =
-      typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email = typeof body?.email === "string" ? normalizeEmail(body.email) : "";
     const password = typeof body?.password === "string" ? body.password : "";
 
     // Validate input
@@ -63,6 +63,10 @@ export async function POST(request: Request) {
       return jsonError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
+    if (!user.password) {
+      return jsonError("บัญชีนี้ยังไม่รองรับการเข้าสู่ระบบด้วยรหัสผ่าน", 401);
+    }
+
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
 
@@ -93,7 +97,7 @@ export async function POST(request: Request) {
           id: user.id,
           email: user.email,
           name: user.name,
-          avatarUrl: user.avatarUrl,
+          avatarUrl: user.avatarUrl ?? user.image,
         },
       },
       { status: 200 }
