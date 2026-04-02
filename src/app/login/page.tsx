@@ -45,29 +45,29 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="container-mobile min-h-screen flex flex-col items-center justify-center p-6">
+    <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-10 lg:py-14">
       {/* Logo */}
       <motion.div
-        className="mb-8 text-center"
+        className="mb-8 text-center lg:mb-10"
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(199,61,245,0.6)]">
+        <h1 className="text-[clamp(3.5rem,12vw,5.5rem)] font-black text-white drop-shadow-[0_0_15px_rgba(199,61,245,0.6)]">
           วงแตก
         </h1>
-        <p className="text-white/40 mt-2">เกมวงเหล้าเพื่อนสนิท</p>
+        <p className="mt-2 text-white/40 sm:text-lg">เกมวงเหล้าเพื่อนสนิท</p>
       </motion.div>
 
       {/* Login Form */}
       <motion.div
-        className="w-full max-w-sm"
+        className="w-full max-w-md sm:max-w-lg lg:max-w-xl"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <GlassPanel className="p-6">
-          <h2 className="text-xl font-bold text-white mb-6 text-center">
+        <GlassPanel className="p-5 sm:p-6 lg:p-8">
+          <h2 className="mb-6 text-center text-xl font-bold text-white sm:text-2xl">
             เข้าสู่ระบบ
           </h2>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:bg-white/10 transition-all"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 transition-all focus:border-primary/50 focus:bg-white/10 focus:outline-none"
                 placeholder="example@email.com"
                 required
                 disabled={isLoading}
@@ -93,7 +93,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:bg-white/10 transition-all"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 transition-all focus:border-primary/50 focus:bg-white/10 focus:outline-none"
                 placeholder="••••••••"
                 required
                 disabled={isLoading}

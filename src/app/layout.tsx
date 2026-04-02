@@ -71,7 +71,7 @@ export default function RootLayout({
           </div>
 
           {/* Main Content */}
-          <div className="relative z-10">{children}</div>
+          <div className="app-shell">{children}</div>
         </ThemeProvider>
       </body>
     </html>

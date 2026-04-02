@@ -5,6 +5,9 @@ import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/ap
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { sanitizeHtml } from "@/lib/validation";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const updateSchema = z.object({
   text: z.string().min(5).max(500).optional(),
   type: z.enum(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]).optional(),

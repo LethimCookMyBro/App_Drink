@@ -1,18 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
 import { setCurrentUser } from "@/hooks/useUserSettings";
+import {
+  getActiveGameSessionSnapshot,
+  resetGameSessionForRestart,
+  type ActiveGameSessionSnapshot,
+} from "@/lib/gameSession";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function CreateCirclePage() {
   const router = useRouter();
   const { vibeLevel } = useGameStore();
+  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
+    isActive: false,
+    roomCode: "",
+    players: [],
+    playerCount: 0,
+    resumePath: "/create",
+  });
 
   const [circleName, setCircleName] = useState("สายแข็ง 2024");
   const [playerName, setPlayerName] = useState("");
@@ -21,6 +33,10 @@ export default function CreateCirclePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+
+  useEffect(() => {
+    setActiveGame(getActiveGameSessionSnapshot());
+  }, []);
 
   const handleCreate = async () => {
     const name = playerName.trim() || "ผู้เล่น 1";
@@ -60,9 +76,9 @@ export default function CreateCirclePage() {
         return;
       }
 
+      resetGameSessionForRestart();
       localStorage.setItem("wongtaek-player-name", name);
       localStorage.setItem("wongtaek-room-code", data.room.code);
-      localStorage.removeItem("wongtaek-game-started");
       setCurrentUser(name);
       router.push(`/lobby/${data.room.code}`);
     } catch {
@@ -76,9 +92,9 @@ export default function CreateCirclePage() {
   };
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-32">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-32 lg:pb-10">
       {/* Header */}
-      <header className="flex items-center p-4 pb-2 justify-between">
+      <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-[28px]">
@@ -101,7 +117,7 @@ export default function CreateCirclePage() {
       </header>
 
       {/* Crown Icon */}
-      <div className="flex flex-col items-center justify-center pt-6 pb-8">
+      <div className="flex flex-col items-center justify-center pt-6 pb-8 lg:pt-8 lg:pb-10">
         <motion.div
           className="relative group cursor-pointer"
           initial={{ scale: 0 }}
@@ -121,7 +137,26 @@ export default function CreateCirclePage() {
       </div>
 
       {/* Form */}
-      <div className="flex-1 px-5 space-y-6">
+      <div className="mx-auto flex-1 w-full max-w-2xl space-y-6 px-4 sm:px-6 lg:px-0">
+        {activeGame.isActive && (
+          <div className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4 text-sm text-white/75">
+            <p className="font-bold text-primary">มีเกมที่เล่นค้างอยู่</p>
+            <p className="mt-1 leading-relaxed text-white/60">
+              ถ้าคุณสร้างวงใหม่ รายชื่อเดิม {activeGame.playerCount} คนจะถูกแทนที่
+              ทันทีหลังสร้างห้องใหม่
+            </p>
+            <Link
+              href={activeGame.resumePath}
+              className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-white"
+            >
+              <span className="material-symbols-outlined text-base">
+                sports_esports
+              </span>
+              เล่นต่อเกมเดิม
+            </Link>
+          </div>
+        )}
+
         {/* Player Name */}
         <div className="flex flex-col gap-3">
           <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase ml-1">
@@ -133,7 +168,7 @@ export default function CreateCirclePage() {
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               placeholder="ใส่ชื่อของคุณ..."
-              className="input-neon text-xl font-bold"
+              className="input-neon text-lg font-bold sm:text-xl"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
               person
@@ -152,7 +187,7 @@ export default function CreateCirclePage() {
               value={circleName}
               onChange={(e) => setCircleName(e.target.value)}
               placeholder="ตั้งชื่อวง..."
-              className="input-neon text-xl font-bold"
+              className="input-neon text-lg font-bold sm:text-xl"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
               edit
@@ -174,7 +209,7 @@ export default function CreateCirclePage() {
               <span className="material-symbols-outlined">remove</span>
             </motion.button>
             <div className="flex-1 text-center">
-              <span className="text-3xl font-bold text-white tracking-widest font-mono">
+              <span className="text-2xl font-bold tracking-widest font-mono text-white sm:text-3xl">
                 {String(playerCount).padStart(2, "0")}
               </span>
             </div>
@@ -214,7 +249,7 @@ export default function CreateCirclePage() {
       </div>
 
       {/* Submit Button */}
-      <div className="fixed bottom-0 left-0 w-full p-6 pt-12 bg-gradient-to-t from-[#161118] via-[#161118] to-transparent z-20 max-w-md mx-auto left-1/2 -translate-x-1/2">
+      <div className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-md bg-gradient-to-t from-[#161118] via-[#161118] to-transparent p-6 pt-12 sm:px-6 lg:static lg:inset-x-auto lg:mx-auto lg:max-w-2xl lg:bg-transparent lg:p-0 lg:pt-8">
         <Button
           onClick={handleCreate}
           variant="primary"

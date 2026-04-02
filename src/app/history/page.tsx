@@ -65,9 +65,9 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
-      <header className="flex items-center p-4 pb-2 justify-between">
+      <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-[28px]">
@@ -82,8 +82,8 @@ export default function HistoryPage() {
       </header>
 
       {/* Stats Summary */}
-      <div className="px-5 mt-4">
-        <GlassPanel className="flex justify-around text-center">
+      <div className="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
+        <GlassPanel className="flex flex-col gap-4 text-center sm:flex-row sm:items-stretch sm:justify-around sm:gap-0">
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-primary drop-shadow-[0_0_10px_rgba(199,61,245,0.6)]">
               {stats.totalGames}
@@ -92,7 +92,7 @@ export default function HistoryPage() {
               เกมทั้งหมด
             </span>
           </div>
-          <div className="h-12 w-px bg-white/10" />
+          <div className="hidden h-12 w-px bg-white/10 sm:block" />
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-neon-blue">
               {stats.totalDrinks}
@@ -101,7 +101,7 @@ export default function HistoryPage() {
               แก้วที่ดื่ม
             </span>
           </div>
-          <div className="h-12 w-px bg-white/10" />
+          <div className="hidden h-12 w-px bg-white/10 sm:block" />
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-neon-green">
               {stats.totalPlayTime}h
@@ -115,7 +115,7 @@ export default function HistoryPage() {
 
       {/* Login prompt for non-authenticated users */}
       {!isAuthenticated && !isLoading && (
-        <div className="px-5 mt-6">
+        <div className="mx-auto mt-6 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
           <GlassPanel className="p-6 text-center">
             <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
               person_off
@@ -134,7 +134,7 @@ export default function HistoryPage() {
       )}
 
       {/* History List */}
-      <div className="px-5 mt-6 space-y-3">
+      <div className="mx-auto mt-6 w-full max-w-5xl space-y-3 px-4 sm:px-6 lg:px-0">
         <h3 className="text-white/40 text-xs font-bold tracking-[0.1em] uppercase ml-1">
           ประวัติล่าสุด
         </h3>
@@ -147,7 +147,7 @@ export default function HistoryPage() {
           historyItems.map((item, index) => (
             <motion.div
               key={item.id || index}
-              className="glass-panel flex items-center gap-4 p-4 rounded-xl border border-white/5"
+              className="glass-panel flex items-center gap-4 rounded-xl border border-white/5 p-4"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}

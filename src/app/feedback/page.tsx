@@ -83,7 +83,7 @@ export default function FeedbackPage() {
 
   if (success) {
     return (
-      <main className="container-mobile min-h-screen flex flex-col items-center justify-center p-6">
+      <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-10 lg:py-14">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -100,9 +100,9 @@ export default function FeedbackPage() {
   }
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
-      <header className="flex items-center p-4 pt-8 gap-4">
+      <header className="flex items-center gap-4 p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-3xl">
@@ -111,7 +111,7 @@ export default function FeedbackPage() {
           </button>
         </Link>
         <div>
-          <h1 className="text-white text-xl font-bold">
+          <h1 className="text-white text-xl font-bold sm:text-2xl">
             แจ้งปัญหา / ขอฟีเจอร์
           </h1>
           <p className="text-white/40 text-sm">ส่งความคิดเห็นถึงผู้ดูแลระบบ</p>
@@ -119,17 +119,20 @@ export default function FeedbackPage() {
       </header>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="px-5 mt-4 space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto mt-4 w-full max-w-2xl space-y-6 px-4 sm:px-6 lg:px-0"
+      >
         {/* Type Selection */}
         <div>
           <label className="block text-white/60 text-sm mb-3 font-medium">
             ประเภท <span className="text-neon-red">*</span>
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setType("BUG")}
-              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 type === "BUG"
                   ? "border-neon-red bg-neon-red/10"
                   : "border-white/10 bg-white/5 hover:border-white/20"
@@ -144,7 +147,7 @@ export default function FeedbackPage() {
             <button
               type="button"
               onClick={() => setType("FEATURE")}
-              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 type === "FEATURE"
                   ? "border-neon-yellow bg-neon-yellow/10"
                   : "border-white/10 bg-white/5 hover:border-white/20"
@@ -170,13 +173,16 @@ export default function FeedbackPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="เช่น อยากได้แผนที่แบบออฟไลน์"
             className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-white/30 focus:outline-none transition-colors ${
-              titleError ? "border-neon-red/60" : "border-white/10 focus:border-primary"
+              titleError
+                ? "border-neon-red/60"
+                : "border-white/10 focus:border-primary"
             }`}
             maxLength={100}
           />
           <div className="mt-2 flex items-center justify-between text-xs">
             <span className={titleError ? "text-neon-red" : "text-white/30"}>
-              {titleError || "หัวข้อสั้น กระชับ และชัดเจนจะช่วยให้ทีมตรวจสอบได้เร็วขึ้น"}
+              {titleError ||
+                "หัวข้อสั้น กระชับ และชัดเจนจะช่วยให้ทีมตรวจสอบได้เร็วขึ้น"}
             </span>
             <span className="text-white/30">{title.trim().length}/100</span>
           </div>
@@ -245,7 +251,9 @@ export default function FeedbackPage() {
           size="xl"
           fullWidth
           disabled={
-            isSubmitting || !!titleError || (turnstileEnabled && !turnstileToken)
+            isSubmitting ||
+            !!titleError ||
+            (turnstileEnabled && !turnstileToken)
           }
           icon={isSubmitting ? undefined : "send"}
           iconPosition="left"

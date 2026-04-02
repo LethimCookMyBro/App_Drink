@@ -28,7 +28,7 @@ export default function ProfilePage() {
     fetchStats();
   }, [checkAuth]);
 
-  const fetchStats = async () => {
+  async function fetchStats() {
     try {
       const res = await fetch("/api/user/profile");
       if (res.ok) {
@@ -40,7 +40,7 @@ export default function ProfilePage() {
     } catch {
       // Use default stats
     }
-  };
+  }
 
   const handleLogout = async () => {
     await logout();
@@ -49,7 +49,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="container-mobile min-h-screen flex items-center justify-center">
+      <main className="container-mobile flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
         <div className="text-white/60">กำลังโหลด...</div>
       </main>
     );
@@ -57,8 +57,8 @@ export default function ProfilePage() {
 
   if (!isAuthenticated || !user) {
     return (
-      <main className="container-mobile min-h-screen flex flex-col items-center justify-center p-6">
-        <GlassPanel className="p-8 text-center max-w-sm">
+      <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 py-8 sm:px-6">
+        <GlassPanel className="mx-auto max-w-sm p-8 text-center sm:max-w-md">
           <span className="material-symbols-outlined text-6xl text-white/20 mb-4">
             person_off
           </span>
@@ -87,9 +87,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
-      <header className="flex items-center p-4 pb-2 justify-between">
+      <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-[28px]">
@@ -104,8 +104,8 @@ export default function ProfilePage() {
       </header>
 
       {/* Profile Card */}
-      <div className="px-5 mt-4">
-        <GlassPanel className="p-6">
+      <div className="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
+        <GlassPanel className="p-6 sm:p-8">
           <motion.div
             className="flex flex-col items-center"
             initial={{ opacity: 0, y: 20 }}
@@ -124,8 +124,8 @@ export default function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="px-5 mt-4">
-        <GlassPanel className="flex justify-around text-center py-6">
+      <div className="mx-auto mt-4 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
+        <GlassPanel className="flex flex-col gap-4 text-center py-6 sm:flex-row sm:items-stretch sm:justify-around sm:gap-0">
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-primary drop-shadow-[0_0_10px_rgba(199,61,245,0.6)]">
               {stats.totalGames}
@@ -134,7 +134,7 @@ export default function ProfilePage() {
               เกมทั้งหมด
             </span>
           </div>
-          <div className="h-12 w-px bg-white/10" />
+          <div className="hidden h-12 w-px bg-white/10 sm:block" />
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-neon-blue">
               {stats.totalDrinks}
@@ -143,7 +143,7 @@ export default function ProfilePage() {
               แก้วที่ดื่ม
             </span>
           </div>
-          <div className="h-12 w-px bg-white/10" />
+          <div className="hidden h-12 w-px bg-white/10 sm:block" />
           <div className="flex flex-col">
             <span className="text-3xl font-bold text-neon-green">
               {stats.totalPlayTime}h
@@ -156,14 +156,14 @@ export default function ProfilePage() {
       </div>
 
       {/* Menu Options */}
-      <div className="px-5 mt-6 space-y-3">
+      <div className="mx-auto mt-6 w-full max-w-5xl space-y-3 px-4 sm:px-6 lg:px-0">
         <h3 className="text-white/40 text-xs font-bold tracking-[0.1em] uppercase ml-1">
           ตั้งค่า
         </h3>
 
         <Link href="/history">
           <motion.div
-            className="glass-panel flex items-center gap-4 p-4 rounded-xl border border-white/5"
+            className="glass-panel flex items-center gap-4 rounded-xl border border-white/5 p-4"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -182,7 +182,7 @@ export default function ProfilePage() {
 
         <Link href="/settings">
           <motion.div
-            className="glass-panel flex items-center gap-4 p-4 rounded-xl border border-white/5 mt-3"
+            className="glass-panel mt-3 flex items-center gap-4 rounded-xl border border-white/5 p-4"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -201,7 +201,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Logout Button */}
-      <div className="px-5 mt-8">
+      <div className="mx-auto mt-8 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
         <Button
           variant="outline"
           fullWidth

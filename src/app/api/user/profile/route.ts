@@ -11,6 +11,9 @@ import {
   getUserStatsAndRecentSessions,
 } from "@/lib/userGameStats";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const token = getTokenFromRequest(request);

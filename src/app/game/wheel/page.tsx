@@ -6,7 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useSoundEffects } from "@/hooks";
-import { clearActiveGameSession, hasActiveGameSession } from "@/lib/gameSession";
+import {
+  clearActiveGameSession,
+  hasActiveGameSession,
+  setGameResumePath,
+} from "@/lib/gameSession";
 
 // Punishments list
 const punishments = [
@@ -40,7 +44,11 @@ export default function PunishmentWheelPage() {
     useSoundEffects();
 
   useEffect(() => {
-    setHasStartedGame(hasActiveGameSession());
+    const activeSession = hasActiveGameSession();
+    setHasStartedGame(activeSession);
+    if (activeSession) {
+      setGameResumePath("/game/wheel");
+    }
   }, []);
 
   const handleEndGame = () => {
@@ -127,42 +135,69 @@ export default function PunishmentWheelPage() {
   }
 
   return (
-    <main className="container-mobile min-h-screen flex flex-col overflow-hidden bg-[#0a050d]">
+    <main className="container-mobile min-h-[100dvh] flex flex-col overflow-hidden bg-[#0a050d]">
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px]" />
       </div>
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between p-4 pt-8">
-        <Link href="/game/modes">
-          <button className="flex items-center justify-center w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
-            <span className="material-symbols-outlined text-white/80 text-2xl">
-              arrow_back
+      <header className="relative z-10 w-full">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8">
+          <Link href="/game/modes">
+            <button className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10">
+              <span className="material-symbols-outlined text-[28px] text-white/80">
+                arrow_back
+              </span>
+            </button>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
+              วงล้อ
+            </div>
+            <button
+              onClick={handleEndGame}
+              className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
+            >
+              <span className="material-symbols-outlined text-lg">stop</span>
+              จบ
+            </button>
+          </div>
+          <Link
+            href="/settings"
+            className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10"
+          >
+            <span className="material-symbols-outlined text-[28px] text-white/80">
+              settings
             </span>
-          </button>
-        </Link>
-        <h1 className="text-white text-xl font-bold">วงล้อลงโทษ</h1>
-        <button
-          onClick={handleEndGame}
-          className="px-3 py-1.5 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-sm font-bold transition-colors flex items-center gap-1"
-        >
-          <span className="material-symbols-outlined text-lg">stop</span>
-          จบ
-        </button>
+          </Link>
+        </div>
       </header>
 
       {/* Wheel */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-8">
+        <div className="mb-6 w-full max-w-sm text-center lg:mb-0 lg:text-left">
+          <p className="text-white/50 text-xs font-bold tracking-[0.24em] uppercase mb-2">
+            วงล้อลงโทษ
+          </p>
+          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+            หมุนแล้วรับภารกิจ
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-white/60 leading-relaxed">
+            จัดเลย์เอาต์ใหม่ให้จอแนวนอนและจอใหญ่เห็นวงล้อ ผลลัพธ์ และปุ่มควบคุมชัดขึ้น โดยคงจังหวะหมุนเดิมไว้
+          </p>
+        </div>
+
+        <div className="relative flex w-full max-w-md flex-col items-center">
         {/* Pointer */}
-        <div className="absolute top-[calc(50%-140px)] z-20">
+        <div className="absolute top-[calc(50%-140px)] sm:top-[calc(50%-156px)] z-20">
           <div className="w-0 h-0 border-l-[15px] border-r-[15px] border-t-[30px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_10px_rgba(199,61,245,0.8)]" />
         </div>
 
         {/* Wheel Container */}
         <motion.div
           ref={wheelRef}
-          className="relative w-72 h-72 sm:w-80 sm:h-80 rounded-full border-4 border-white/20 shadow-[0_0_60px_rgba(199,61,245,0.3)]"
+          className="relative w-[17rem] h-[17rem] sm:w-80 sm:h-80 lg:w-[22rem] lg:h-[22rem] rounded-full border-4 border-white/20 shadow-[0_0_60px_rgba(199,61,245,0.3)]"
           animate={{ rotate: rotation }}
           transition={{ duration: 4, ease: [0.2, 0.8, 0.2, 1] }}
         >
@@ -210,7 +245,7 @@ export default function PunishmentWheelPage() {
               initial={{ opacity: 0, y: 20, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20 }}
-              className="mt-8 p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-center max-w-sm"
+              className="mt-8 w-full p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-center max-w-sm"
             >
               <span
                 className={`material-symbols-outlined text-5xl ${result.color} mb-3`}
@@ -224,10 +259,12 @@ export default function PunishmentWheelPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* Spin Button */}
-      <footer className="relative z-10 p-6 pb-10">
+      <footer className="relative z-10 w-full">
+        <div className="mx-auto w-full max-w-6xl px-4 pb-8 pt-3 sm:px-5 sm:pb-10 lg:px-8">
         <Button
           onClick={spinWheel}
           variant="primary"
@@ -239,6 +276,7 @@ export default function PunishmentWheelPage() {
         >
           {isSpinning ? "กำลังหมุน..." : "หมุนเลย!"}
         </Button>
+        </div>
       </footer>
     </main>
   );

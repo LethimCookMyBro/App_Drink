@@ -453,10 +453,35 @@ input[type="range"]::-webkit-slider-runnable-track {
    Layout Utilities
    ======================================== */
 
+.app-shell {
+  @apply relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[1600px] flex-col;
+}
+
 .container-mobile {
-  @apply relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col;
+  @apply relative mx-auto flex min-h-[100dvh] w-full flex-col;
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 1rem);
 }
 
 .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+}
+
+.pl-safe {
+  padding-left: max(env(safe-area-inset-left, 0px), 1rem);
+}
+
+.pr-safe {
+  padding-right: max(env(safe-area-inset-right, 0px), 1rem);
+}
+
+.px-safe {
+  padding-left: max(env(safe-area-inset-left, 0px), 1rem);
+  padding-right: max(env(safe-area-inset-right, 0px), 1rem);
 }

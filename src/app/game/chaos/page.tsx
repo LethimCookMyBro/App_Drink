@@ -3,11 +3,17 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { useSoundEffects, usePlayerQueue } from "@/hooks";
 import { useGameStore } from "@/store/gameStore";
 import { Timer } from "@/components/ui";
 import { GAME_SETTINGS } from "@/config/gameConstants";
-import { clearActiveGameSession, hasActiveGameSession } from "@/lib/gameSession";
+import {
+  clearActiveGameSession,
+  hasActiveGameSession,
+  saveGameSummary,
+  setGameResumePath,
+} from "@/lib/gameSession";
 
 const chaosRules = [
   { target: "ใครที่ใส่เสื้อสีดำ", action: "ดื่มให้หมดแก้ว!" },
@@ -81,16 +87,26 @@ export default function ChaosModePage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    if (hasStartedGame) {
+      setGameResumePath("/game/chaos");
+    }
+  }, [hasStartedGame]);
+
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],
     avoidRepeats: true,
   });
+  const activePlayerName = currentPlayer || players[0] || "";
+  const activePlayerDrinks = activePlayerName
+    ? playerDrinks[activePlayerName] || 0
+    : 0;
 
   const handleNext = () => {
     // Track drink for current player (chaos mode always drinks)
     setPlayerDrinks((prev) => ({
       ...prev,
-      [currentPlayer]: (prev[currentPlayer] || 0) + 1,
+      [activePlayerName]: (prev[activePlayerName] || 0) + 1,
     }));
     playDrink();
     vibratePattern([50, 30, 100]);
@@ -120,8 +136,7 @@ export default function ChaosModePage() {
       drinkCount: playerDrinks[name] || 0,
       questionsAnswered: playerTurnCount[name] || 0,
     }));
-    localStorage.setItem("wongtaek-game-stats", JSON.stringify(stats));
-    localStorage.setItem("wongtaek-rounds", sequence.toString());
+    saveGameSummary(stats, sequence);
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -165,38 +180,65 @@ export default function ChaosModePage() {
   }
 
   return (
-    <main className="container-mobile min-h-screen flex flex-col relative overflow-hidden bg-[#0a050b]">
+    <main className="container-mobile min-h-[100dvh] flex flex-col relative overflow-hidden bg-[#0a050b]">
       {/* CRT Overlay */}
       <div className="fixed inset-0 z-50 pointer-events-none crt-overlay opacity-30 mix-blend-overlay" />
 
       {/* Glow Background */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-neon-red/20 rounded-full blur-[100px] pointer-events-none z-0" />
 
-      <div className="relative z-10 flex flex-col h-screen justify-between p-4 safe-area-bottom">
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col justify-between p-4 safe-area-bottom sm:px-5 lg:px-8">
         {/* Top Section */}
-        <div className="w-full flex flex-col gap-4 pt-6">
+        <div className="w-full flex flex-col gap-4 pt-4 sm:pt-6">
           {/* Header with End Game */}
-          <div className="flex items-center justify-between px-2">
+          <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
+            <button
+              onClick={() => router.push("/game/modes")}
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+            >
+              <span className="material-symbols-outlined text-[28px]">
+                arrow_back
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
+                รอบ {sequence}
+              </div>
+              <button
+                onClick={handleEndGame}
+                className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
+              >
+                <span className="material-symbols-outlined text-lg">stop</span>
+                จบเกม
+              </button>
+            </div>
+            <Link
+              href="/settings"
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+            >
+              <span className="material-symbols-outlined text-[28px]">
+                settings
+              </span>
+            </Link>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-neon-red to-orange-600 flex items-center justify-center">
                 <span className="text-xl font-bold text-white">
-                  {currentPlayer?.charAt(0).toUpperCase() || "?"}
+                  {activePlayerName?.charAt(0).toUpperCase() || "?"}
                 </span>
               </div>
               <div>
                 <p className="text-white/50 text-xs uppercase tracking-wider">
                   ตาของ
                 </p>
-                <p className="text-white text-lg font-bold">{currentPlayer}</p>
+                <p className="text-white text-lg font-bold">{activePlayerName}</p>
+                <p className="text-white/40 text-xs">🍺 {activePlayerDrinks} แก้ว</p>
               </div>
             </div>
-            <button
-              onClick={handleEndGame}
-              className="px-4 py-2 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-sm font-bold transition-colors flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">stop</span>
-              จบเกม
-            </button>
+            <div className="rounded-full border border-[#ffb400]/30 bg-[#ffb400]/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-[#ffcc66]">
+              chaos live
+            </div>
           </div>
 
           {/* Hazard Stripe */}
@@ -227,7 +269,7 @@ export default function ChaosModePage() {
 
         {/* Main Content */}
         <motion.div
-          className="flex-1 flex flex-col items-center justify-center gap-6 w-full max-w-md mx-auto relative"
+          className="flex-1 flex flex-col items-center justify-center gap-5 w-full max-w-4xl mx-auto relative lg:gap-7"
           key={currentRule.target + currentRule.action}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -238,20 +280,20 @@ export default function ChaosModePage() {
 
           {/* Target */}
           <p
-            className="text-white/90 text-2xl md:text-3xl font-bold text-center uppercase tracking-wide leading-relaxed px-2"
+            className="max-w-3xl text-white/90 text-2xl md:text-3xl lg:text-4xl font-bold text-center uppercase tracking-wide leading-relaxed px-2"
             style={{ textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}
           >
             {currentRule.target}
           </p>
 
           {/* Action */}
-          <div className="relative w-full text-center py-6">
+          <div className="relative w-full max-w-3xl text-center py-5 sm:py-6">
             <div className="absolute top-0 left-2 w-8 h-8 border-t-4 border-l-4 border-neon-red" />
             <div className="absolute top-0 right-2 w-8 h-8 border-t-4 border-r-4 border-neon-red" />
             <div className="absolute bottom-0 left-2 w-8 h-8 border-b-4 border-l-4 border-neon-red" />
             <div className="absolute bottom-0 right-2 w-8 h-8 border-b-4 border-r-4 border-neon-red" />
 
-            <h2 className="text-[3rem] md:text-[4rem] leading-[1.1] font-black text-white uppercase tracking-tighter glitch-text transform -rotate-1 whitespace-pre-wrap break-words">
+            <h2 className="px-6 text-[2.5rem] sm:text-[3rem] md:text-[4rem] lg:text-[4.5rem] leading-[1.05] font-black text-white uppercase tracking-tighter glitch-text transform -rotate-1 whitespace-pre-wrap break-words">
               {currentRule.action}
             </h2>
           </div>
@@ -275,20 +317,20 @@ export default function ChaosModePage() {
         </motion.div>
 
         {/* Bottom Section */}
-        <div className="w-full pb-6 pt-4 flex flex-col items-center gap-4">
+        <div className="w-full pb-4 pt-4 flex flex-col items-center gap-4 sm:pb-6">
           <motion.button
             onClick={handleNext}
-            className="relative w-full group overflow-hidden rounded-xl shadow-[0_0_40px_rgba(255,0,64,0.3)] active:scale-[0.98] transition-transform duration-100"
+            className="relative w-full max-w-3xl group overflow-hidden rounded-xl shadow-[0_0_40px_rgba(255,0,64,0.3)] active:scale-[0.98] transition-transform duration-100"
             whileTap={{ scale: 0.98 }}
           >
             <div className="absolute inset-0 bg-neon-red" />
             <div className="absolute inset-0 hazard-stripe opacity-10" />
-            <div className="relative flex items-center justify-between h-20 px-8">
+            <div className="relative flex items-center justify-between h-20 px-6 sm:px-8">
               <div className="flex flex-col items-start">
                 <span className="text-[10px] font-mono text-black font-bold uppercase tracking-widest opacity-60">
                   Sequence {String(sequence).padStart(2, "0")}
                 </span>
-                <span className="text-black text-3xl font-black uppercase tracking-tight italic">
+                <span className="text-black text-2xl sm:text-3xl font-black uppercase tracking-tight italic">
                   ไปต่อ
                 </span>
               </div>

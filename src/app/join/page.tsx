@@ -1,22 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, TurnstileWidget } from "@/components/ui";
 import { setCurrentUser } from "@/hooks/useUserSettings";
+import {
+  getActiveGameSessionSnapshot,
+  resetGameSessionForRestart,
+  type ActiveGameSessionSnapshot,
+} from "@/lib/gameSession";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function JoinCirclePage() {
   const router = useRouter();
+  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
+    isActive: false,
+    roomCode: "",
+    players: [],
+    playerCount: 0,
+    resumePath: "/create",
+  });
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+
+  useEffect(() => {
+    setActiveGame(getActiveGameSessionSnapshot());
+  }, []);
 
   const handleCodeChange = (value: string) => {
     // Only allow alphanumeric and uppercase
@@ -66,9 +82,9 @@ export default function JoinCirclePage() {
         return;
       }
 
+      resetGameSessionForRestart();
       localStorage.setItem("wongtaek-player-name", playerName.trim());
       localStorage.setItem("wongtaek-room-code", roomCode);
-      localStorage.removeItem("wongtaek-game-started");
       setCurrentUser(playerName.trim());
       router.push(`/lobby/${roomCode}`);
     } catch {
@@ -82,9 +98,9 @@ export default function JoinCirclePage() {
   };
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-32 flex flex-col">
+    <main className="container-mobile flex min-h-screen flex-col overflow-y-auto no-scrollbar pb-32 lg:pb-10">
       {/* Header */}
-      <header className="flex items-center p-4 pb-2 justify-between">
+      <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-[28px]">
@@ -104,7 +120,7 @@ export default function JoinCirclePage() {
       </header>
 
       {/* Icon */}
-      <div className="flex flex-col items-center justify-center pt-12 pb-8">
+      <div className="flex flex-col items-center justify-center pt-12 pb-8 lg:pt-8 lg:pb-10">
         <motion.div
           className="relative"
           initial={{ scale: 0, rotate: -180 }}
@@ -121,7 +137,26 @@ export default function JoinCirclePage() {
       </div>
 
       {/* Form */}
-      <div className="flex-1 px-5 space-y-8">
+      <div className="mx-auto flex-1 w-full max-w-2xl space-y-8 px-4 sm:px-6 lg:px-0">
+        {activeGame.isActive && (
+          <div className="rounded-2xl border border-neon-blue/25 bg-neon-blue/10 px-4 py-4 text-sm text-white/75">
+            <p className="font-bold text-neon-blue">มีเกมที่เล่นค้างอยู่</p>
+            <p className="mt-1 leading-relaxed text-white/60">
+              ถ้าคุณเข้าห้องใหม่ รายชื่อเดิม {activeGame.playerCount} คนจะถูกแทนที่
+              ด้วย session ใหม่ทันที
+            </p>
+            <Link
+              href={activeGame.resumePath}
+              className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-neon-blue hover:text-white"
+            >
+              <span className="material-symbols-outlined text-base">
+                sports_esports
+              </span>
+              เล่นต่อเกมเดิม
+            </Link>
+          </div>
+        )}
+
         {/* Room Code */}
         <div className="flex flex-col gap-3">
           <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase ml-1">
@@ -132,8 +167,8 @@ export default function JoinCirclePage() {
               <motion.div
                 key={index}
                 className={`
-                  size-16 rounded-xl border-2 flex items-center justify-center
-                  text-3xl font-bold font-mono bg-white/5 transition-all
+                  size-14 rounded-xl border-2 flex items-center justify-center
+                  text-2xl font-bold font-mono bg-white/5 transition-all sm:size-16 sm:text-3xl
                   ${
                     roomCode[index]
                       ? "border-neon-blue shadow-neon-blue text-neon-blue"
@@ -160,7 +195,7 @@ export default function JoinCirclePage() {
             value={roomCode}
             onChange={(e) => handleCodeChange(e.target.value)}
             placeholder="พิมพ์รหัสห้องที่นี่..."
-            className="w-full bg-white/5 border border-white/10 text-center text-xl font-bold text-white placeholder-white/30 py-3 px-4 rounded-xl focus:border-neon-blue focus:ring-0 focus:outline-none transition-all uppercase tracking-[0.5em]"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-lg font-bold uppercase tracking-[0.3em] text-white placeholder-white/30 transition-all focus:border-neon-blue focus:ring-0 focus:outline-none sm:text-xl sm:tracking-[0.5em]"
             maxLength={4}
           />
         </div>
@@ -178,7 +213,7 @@ export default function JoinCirclePage() {
               setError("");
             }}
             placeholder="ใส่ชื่อเล่น..."
-            className="input-neon text-2xl font-bold"
+            className="input-neon text-xl font-bold sm:text-2xl"
           />
         </div>
 
@@ -206,7 +241,7 @@ export default function JoinCirclePage() {
       </div>
 
       {/* Submit Button */}
-      <div className="fixed bottom-0 left-0 w-full p-6 pt-12 bg-gradient-to-t from-[#161118] via-[#161118] to-transparent z-20 max-w-md mx-auto left-1/2 -translate-x-1/2">
+      <div className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-md bg-gradient-to-t from-[#161118] via-[#161118] to-transparent p-6 pt-12 sm:px-6 lg:static lg:inset-x-auto lg:mx-auto lg:max-w-2xl lg:bg-transparent lg:p-0 lg:pt-8">
         <Button
           onClick={handleJoin}
           variant="neon-blue"

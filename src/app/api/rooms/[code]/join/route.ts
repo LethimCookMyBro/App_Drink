@@ -5,6 +5,9 @@ import { playerNameSchema, roomCodeSchema, sanitizeHtml } from "@/lib/validation
 import { getRoomPlayerCookieName, signRoomPlayerToken } from "@/lib/roomAuth";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // POST /api/rooms/[code]/join - Join a room
 export async function POST(
   request: NextRequest,
@@ -64,14 +67,14 @@ export async function POST(
     }
 
     if (room.players.length >= room.maxPlayers) {
-      return jsonError("ห้องเต็มแล้ว", 400);
+      return jsonError("ห้องเต็มแล้ว", 409);
     }
 
     const nameTaken = room.players.some(
       (p) => p.name.toLowerCase() === playerName.toLowerCase(),
     );
     if (nameTaken) {
-      return jsonError("ชื่อนี้ถูกใช้แล้วในห้องนี้", 400);
+      return jsonError("ชื่อนี้ถูกใช้แล้วในห้องนี้", 409);
     }
 
     const player = await prisma.player.create({

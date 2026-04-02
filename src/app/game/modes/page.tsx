@@ -7,13 +7,25 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { GAME_MODES } from "@/config/gameConstants";
 import { useSoundEffects } from "@/hooks";
-import { hasActiveGameSession } from "@/lib/gameSession";
+import {
+  getActiveGameSessionSnapshot,
+  hasActiveGameSession,
+  setGameResumePath,
+  type ActiveGameSessionSnapshot,
+} from "@/lib/gameSession";
 
 export default function GameModesPage() {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isGameStarted, setIsGameStarted] = useState<boolean | null>(null);
+  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
+    isActive: false,
+    roomCode: "",
+    players: [],
+    playerCount: 0,
+    resumePath: "/create",
+  });
   const isAtLastCard = currentIndex === GAME_MODES.length - 1;
 
   const { vibrateShort } = useSoundEffects();
@@ -21,7 +33,14 @@ export default function GameModesPage() {
   // Check if game was started properly from lobby
   useEffect(() => {
     setIsGameStarted(hasActiveGameSession());
+    setActiveGame(getActiveGameSessionSnapshot());
   }, []);
+
+  useEffect(() => {
+    if (isGameStarted) {
+      setGameResumePath("/game/modes");
+    }
+  }, [isGameStarted]);
 
   // Detect current card based on scroll position
   const handleScrollEnd = useCallback(() => {
@@ -126,9 +145,10 @@ export default function GameModesPage() {
   }
 
   return (
-    <main className="h-screen flex flex-col overflow-hidden bg-[#141414]">
+    <main className="min-h-[100dvh] flex flex-col overflow-hidden bg-[#141414]">
       {/* Header */}
-      <header className="glass-panel sticky top-0 z-50 w-full px-4 py-4 flex items-center justify-between border-b border-white/5">
+      <header className="glass-panel sticky top-0 z-50 w-full border-b border-white/5">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           {/* Back Button */}
           <Link href="/">
@@ -152,12 +172,26 @@ export default function GameModesPage() {
             </span>
           </button>
         </Link>
+        </div>
       </header>
+
+      {activeGame.isActive && (
+        <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-white/70">
+            <span className="font-bold text-primary">วงนี้พร้อมเล่นแล้ว</span>
+            <span className="ml-2">
+              {activeGame.playerCount} คน
+              {activeGame.roomCode ? ` • ห้อง ${activeGame.roomCode}` : ""}
+              ถ้าจะเปลี่ยนรายชื่อ ให้กลับไปกดเริ่มเกมใหม่
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Horizontal Scroll Cards - Native snap scroll */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-x-auto no-scrollbar flex items-center py-6 px-4 sm:px-6 gap-6 w-full snap-x snap-mandatory"
+        className="flex-1 overflow-x-auto no-scrollbar flex items-center gap-4 px-4 py-5 sm:gap-6 sm:px-6 md:py-6 lg:px-8 w-full snap-x snap-mandatory"
         style={{
           scrollSnapType: "x mandatory",
           WebkitOverflowScrolling: "touch",
@@ -170,7 +204,9 @@ export default function GameModesPage() {
           <motion.div
             key={mode.id}
             className={`
-              snap-center relative shrink-0 w-[90vw] max-w-md h-[75vh] rounded-3xl border-2
+              snap-center relative shrink-0 w-[88vw] sm:w-[72vw] lg:w-[44vw] xl:w-[32rem]
+              min-h-[30rem] h-[70dvh] max-h-[44rem] landscape:w-[70vw] landscape:h-[84dvh] landscape:min-h-[25rem]
+              rounded-3xl border-2
               ${mode.borderColor} bg-card/90 ${mode.shadowClass}
               flex flex-col overflow-hidden group
             `}
@@ -185,9 +221,9 @@ export default function GameModesPage() {
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-card/50 to-card z-0" />
 
             {/* Content */}
-            <div className="relative flex-1 flex flex-col p-5 sm:p-6 z-10">
+            <div className="relative flex-1 flex flex-col p-5 sm:p-6 lg:p-7 z-10">
               {/* Top bar */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between gap-3 mb-4">
                 <span
                   className={`text-xs font-bold ${mode.color} uppercase tracking-wider`}
                 >
@@ -208,9 +244,9 @@ export default function GameModesPage() {
               </div>
 
               {/* Icon */}
-              <div className="flex-1 flex items-center justify-center mb-4">
+              <div className="flex-1 flex items-center justify-center mb-4 min-h-[9rem]">
                 <motion.span
-                  className={`material-symbols-outlined ${mode.color} text-[100px] drop-shadow-lg`}
+                  className={`material-symbols-outlined ${mode.color} text-[84px] sm:text-[96px] lg:text-[108px] drop-shadow-lg`}
                   whileHover={{ scale: 1.1 }}
                   transition={{ type: "spring", stiffness: 400 }}
                 >
@@ -219,13 +255,13 @@ export default function GameModesPage() {
               </div>
 
               {/* Title and Description */}
-              <div className="text-center mb-5">
+              <div className="text-center mb-5 sm:mb-6">
                 <h2
-                  className={`text-2xl sm:text-3xl font-black ${mode.color} drop-shadow-md mb-3 whitespace-pre-line leading-tight`}
+                  className={`text-2xl sm:text-3xl lg:text-[2rem] font-black ${mode.color} drop-shadow-md mb-3 whitespace-pre-line leading-tight`}
                 >
                   {mode.name}
                 </h2>
-                <p className="text-white/60 text-sm leading-relaxed line-clamp-3">
+                <p className="mx-auto max-w-[28rem] text-white/60 text-sm sm:text-base leading-relaxed line-clamp-4">
                   {mode.description}
                 </p>
               </div>
@@ -262,7 +298,8 @@ export default function GameModesPage() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="flex flex-col items-center py-4 gap-3 px-4">
+      <div className="border-t border-white/5 bg-black/10 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:justify-between lg:px-8">
         {/* Dot indicators */}
         <div className="flex gap-2">
           {GAME_MODES.map((_, index) => (
@@ -300,6 +337,7 @@ export default function GameModesPage() {
             เลื่อนทีละอัน →
           </div>
         )}
+        </div>
       </div>
     </main>
   );

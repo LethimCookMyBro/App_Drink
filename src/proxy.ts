@@ -76,23 +76,21 @@ function applySecurityHeaders(
   }
 }
 
-export function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith("/api/") && request.method === "OPTIONS") {
+export function proxy(request: NextRequest) {
+  if (
+    request.nextUrl.pathname.startsWith("/api/") &&
+    request.method === "OPTIONS"
+  ) {
     const preflight = new NextResponse(null, { status: 204 });
     applySecurityHeaders(preflight, request);
     return preflight;
   }
 
   const response = NextResponse.next();
-
-  // Get client IP
   const ip = getClientIPFromHeaders(request.headers);
 
-  // Apply rate limiting to API routes
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const { limited, remaining } = getRateLimitInfo(ip);
-
-    // Add rate limit headers
     response.headers.set("X-RateLimit-Limit", RATE_LIMIT_MAX.toString());
     response.headers.set("X-RateLimit-Remaining", remaining.toString());
 
@@ -113,13 +111,11 @@ export function middleware(request: NextRequest) {
   }
 
   applySecurityHeaders(response, request);
-
   return response;
 }
 
 export const config = {
   matcher: [
-    // Match all paths except static files
     "/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$).*)",
   ],
 };

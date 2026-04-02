@@ -5,6 +5,9 @@ import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/ap
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Feedback validation schema
 const feedbackSchema = z.object({
   type: z.enum(["BUG", "FEATURE"]),

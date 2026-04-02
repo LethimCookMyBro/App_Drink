@@ -6,21 +6,36 @@ import Link from "next/link";
 import { Button, GlassPanel, BottomNav } from "@/components/ui";
 import { useGameStore, VibeLevel } from "@/store/gameStore";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import {
+  getActiveGameSessionSnapshot,
+  type ActiveGameSessionSnapshot,
+} from "@/lib/gameSession";
 
 export default function WelcomePage() {
   const { vibeLevel, setVibeLevel } = useGameStore();
   const { settings, isLoaded } = useUserSettings();
-  const [selectedVibe, setSelectedVibe] = useState<VibeLevel>(vibeLevel);
   const is18PlusEnabled = isLoaded ? settings.is18Plus : false;
+  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
+    isActive: false,
+    roomCode: "",
+    players: [],
+    playerCount: 0,
+    resumePath: "/create",
+  });
+  const currentVibe =
+    !is18PlusEnabled && vibeLevel === "chaos" ? "tipsy" : vibeLevel;
 
   // Check if 18+ mode is enabled in settings
   useEffect(() => {
     if (!isLoaded) return;
-    if (!is18PlusEnabled && (selectedVibe === "chaos" || vibeLevel === "chaos")) {
-      setSelectedVibe("tipsy");
+    if (!is18PlusEnabled && vibeLevel === "chaos") {
       setVibeLevel("tipsy");
     }
-  }, [is18PlusEnabled, isLoaded, selectedVibe, setVibeLevel, vibeLevel]);
+  }, [is18PlusEnabled, isLoaded, setVibeLevel, vibeLevel]);
+
+  useEffect(() => {
+    setActiveGame(getActiveGameSessionSnapshot());
+  }, []);
 
   // Build vibe options based on 18+ setting
   const vibeOptions: {
@@ -55,14 +70,13 @@ export default function WelcomePage() {
   ];
 
   const handleVibeChange = (vibe: VibeLevel) => {
-    setSelectedVibe(vibe);
     setVibeLevel(vibe);
   };
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
-      <header className="flex items-center justify-end gap-2 px-6 pt-6 pb-2">
+      <header className="flex items-center justify-end gap-2 px-4 pt-6 pb-2 sm:px-6 lg:px-8 lg:pt-8">
         {/* Feedback Button */}
         <Link href="/feedback">
           <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30">
@@ -79,7 +93,7 @@ export default function WelcomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="flex flex-col items-center justify-center text-center px-6 pt-8 pb-12">
+      <section className="flex flex-col items-center justify-center text-center px-4 pt-8 pb-10 sm:px-6 lg:px-8 lg:pt-10 lg:pb-12">
         <motion.div
           className="mb-6 relative"
           initial={{ scale: 0.8, opacity: 0 }}
@@ -88,18 +102,18 @@ export default function WelcomePage() {
         >
           <span
             aria-hidden="true"
-            className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[180px] text-primary/5 select-none"
+            className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[clamp(130px,26vw,180px)] text-primary/5 select-none"
           >
             local_bar
           </span>
-          <h1 className="relative text-[7.5rem] font-black leading-[0.85] tracking-tight text-white drop-shadow-[0_0_15px_rgba(199,61,245,0.6)]">
+          <h1 className="relative text-[clamp(4.75rem,20vw,7.5rem)] font-black leading-[0.85] tracking-tight text-white drop-shadow-[0_0_15px_rgba(199,61,245,0.6)] sm:text-[clamp(5.5rem,18vw,8.5rem)] lg:text-[clamp(6.5rem,12vw,9rem)]">
             วง
             <br />
             แตก
           </h1>
         </motion.div>
         <motion.p
-          className="text-xl font-medium tracking-wide text-white/60"
+          className="text-lg font-medium tracking-wide text-white/60 sm:text-xl"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -109,28 +123,28 @@ export default function WelcomePage() {
       </section>
 
       {/* Vibe Selector */}
-      <section className="px-6 mb-8">
+      <section className="mx-auto mb-6 w-full px-4 sm:px-6 lg:mb-8 lg:max-w-3xl lg:px-8">
         <label className="mb-4 block text-center text-sm font-bold tracking-widest text-white/40 uppercase">
           เลือกระดับความเดือด
         </label>
-        <GlassPanel className="p-1.5">
+        <GlassPanel className="p-1.5 sm:p-2">
           <div className="flex w-full rounded-xl relative">
-            {vibeOptions.map((option, index) => (
+            {vibeOptions.map((option) => (
               <motion.label
                 key={option.value}
-                className="group relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl py-4 transition-all duration-300 z-10"
+                className="group relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl py-3 transition-all duration-300 z-10 sm:py-4 lg:py-5"
                 whileTap={{ scale: 0.95 }}
               >
                 <input
                   type="radio"
                   name="vibe"
                   value={option.value}
-                  checked={selectedVibe === option.value}
+                  checked={currentVibe === option.value}
                   onChange={() => handleVibeChange(option.value)}
                   className="peer sr-only"
                 />
                 {/* Animated Background Indicator - Liquid Glass Effect */}
-                {selectedVibe === option.value && (
+                {currentVibe === option.value && (
                   <motion.div
                     layoutId="vibeIndicator"
                     className={`absolute inset-0 rounded-xl ${
@@ -155,15 +169,15 @@ export default function WelcomePage() {
                 <motion.span
                   className="z-10 text-2xl mb-1"
                   animate={{
-                    scale: selectedVibe === option.value ? 1.15 : 1,
+                    scale: currentVibe === option.value ? 1.15 : 1,
                   }}
                   transition={{ type: "spring", stiffness: 500, damping: 25 }}
                 >
                   {option.emoji}
                 </motion.span>
                 <span
-                  className={`z-10 text-xs sm:text-sm font-bold transition-colors text-center leading-tight ${
-                    selectedVibe === option.value
+                  className={`z-10 text-[11px] sm:text-sm font-bold transition-colors text-center leading-tight ${
+                    currentVibe === option.value
                       ? "text-white"
                       : "text-white/50"
                   }`}
@@ -184,23 +198,92 @@ export default function WelcomePage() {
         )}
       </section>
 
+      {activeGame.isActive && (
+        <section className="mx-auto mb-6 w-full px-4 sm:px-6 lg:max-w-3xl lg:px-8">
+          <GlassPanel className="border border-primary/20 bg-primary/5 p-4 sm:p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary shadow-[0_0_22px_rgba(199,61,245,0.18)]">
+                <span className="material-symbols-outlined text-3xl">
+                  sports_esports
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary/80">
+                  มีเกมค้างอยู่
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-white sm:text-xl">
+                  เล่นต่อได้เลย ไม่ต้องเริ่มใหม่ทุกครั้ง
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-white/60">
+                  ตอนนี้มี {activeGame.playerCount} คนในวง
+                  {activeGame.roomCode ? ` • ห้อง ${activeGame.roomCode}` : ""}
+                  ถ้าจะเปลี่ยนรายชื่อ ให้กดเริ่มเกมใหม่แทน
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {activeGame.players.slice(0, 4).map((player) => (
+                    <span
+                      key={player}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75"
+                    >
+                      {player}
+                    </span>
+                  ))}
+                  {activeGame.playerCount > 4 && (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/45">
+                      +{activeGame.playerCount - 4} คน
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </GlassPanel>
+        </section>
+      )}
+
       {/* Action Button */}
-      <section className="px-6">
-        <Link href="/create" className="block">
-          <Button
-            variant="primary"
-            size="xl"
-            fullWidth
-            icon="play_arrow"
-            iconPosition="left"
-          >
-            เริ่มเกมเลย
-          </Button>
-        </Link>
+      <section className="mx-auto w-full px-4 sm:px-6 lg:max-w-xl lg:px-8">
+        {activeGame.isActive ? (
+          <div className="space-y-3">
+            <Link href={activeGame.resumePath} className="block">
+              <Button
+                variant="primary"
+                size="xl"
+                fullWidth
+                icon="sports_esports"
+                iconPosition="left"
+              >
+                เล่นต่อ
+              </Button>
+            </Link>
+            <Link href="/create" className="block">
+              <Button
+                variant="outline"
+                size="lg"
+                fullWidth
+                icon="refresh"
+                iconPosition="left"
+              >
+                เริ่มเกมใหม่
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <Link href="/create" className="block">
+            <Button
+              variant="primary"
+              size="xl"
+              fullWidth
+              icon="play_arrow"
+              iconPosition="left"
+            >
+              เริ่มเกมเลย
+            </Button>
+          </Link>
+        )}
       </section>
 
       {/* Footer */}
-      <footer className="mt-8 flex flex-col items-center gap-4 text-center pb-8">
+      <footer className="mt-8 flex flex-col items-center gap-4 text-center pb-8 sm:pb-10">
         <div className="h-px w-12 bg-white/10" />
         <p className="text-[11px] font-medium text-white/30 tracking-wide">
           v2.4.0 • ดื่มอย่างรับผิดชอบ

@@ -6,6 +6,9 @@ import { createRoomSchema, sanitizeHtml } from "@/lib/validation";
 import { signRoomHostToken, getRoomHostCookieName } from "@/lib/roomAuth";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Generate 4-character room code
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -99,6 +102,11 @@ export async function POST(request: NextRequest) {
       if (!existing) break;
       code = generateRoomCode();
       attempts++;
+    }
+
+    const codeExists = await prisma.room.findUnique({ where: { code } });
+    if (codeExists) {
+      return jsonError("ไม่สามารถสร้างรหัสห้องใหม่ได้ กรุณาลองอีกครั้ง", 503);
     }
 
     const room = await prisma.room.create({

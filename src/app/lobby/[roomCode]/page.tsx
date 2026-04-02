@@ -25,9 +25,8 @@ interface CustomQuestion {
 export default function LobbyPage() {
   const router = useRouter();
   const params = useParams<{ roomCode: string }>();
-  const roomCode = typeof params.roomCode === "string"
-    ? params.roomCode.toUpperCase()
-    : "";
+  const roomCode =
+    typeof params.roomCode === "string" ? params.roomCode.toUpperCase() : "";
 
   // Players state
   const [players, setPlayers] = useState<LocalPlayer[]>([]);
@@ -49,12 +48,15 @@ export default function LobbyPage() {
   const canManageLobby = isHost;
 
   useEffect(() => {
-    const savedPlayerName = localStorage.getItem("wongtaek-player-name")?.trim() || "";
+    const savedPlayerName =
+      localStorage.getItem("wongtaek-player-name")?.trim() || "";
     if (savedPlayerName) {
       setCurrentPlayerName(savedPlayerName);
     }
 
-    const savedCustomQuestions = localStorage.getItem("wongtaek-custom-questions");
+    const savedCustomQuestions = localStorage.getItem(
+      "wongtaek-custom-questions",
+    );
     if (savedCustomQuestions) {
       try {
         const parsed = JSON.parse(savedCustomQuestions);
@@ -208,14 +210,14 @@ export default function LobbyPage() {
     }
 
     // Set game started flag
-    markGameSessionStarted(roomCode);
+    markGameSessionStarted(roomCode, "/game/modes");
 
     router.push("/game/modes");
   };
 
   if (isLoading) {
     return (
-      <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
+      <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 sm:px-6">
         <div className="animate-pulse text-center text-white/50">
           <p className="text-lg font-bold">กำลังโหลดห้อง...</p>
           <p className="mt-2 text-sm">รหัส {roomCode || "----"}</p>
@@ -226,12 +228,14 @@ export default function LobbyPage() {
 
   if (loadError) {
     return (
-      <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-full max-w-sm rounded-3xl border border-neon-red/30 bg-neon-red/10 p-6">
+      <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 text-center sm:px-6">
+        <div className="w-full max-w-sm rounded-3xl border border-neon-red/30 bg-neon-red/10 p-6 sm:max-w-md">
           <span className="material-symbols-outlined text-5xl text-neon-red">
             error
           </span>
-          <h1 className="mt-4 text-2xl font-bold text-white">เข้าห้องไม่สำเร็จ</h1>
+          <h1 className="mt-4 text-2xl font-bold text-white">
+            เข้าห้องไม่สำเร็จ
+          </h1>
           <p className="mt-3 text-sm text-white/60">{loadError}</p>
           <div className="mt-6 space-y-3">
             <Link href="/join" className="block">
@@ -251,217 +255,275 @@ export default function LobbyPage() {
   }
 
   return (
-    <main className="container-mobile h-[100dvh] flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="relative z-10 pt-8 pb-4 px-6 flex flex-col items-center justify-center shrink-0">
-        <Link href="/" className="absolute top-8 left-6">
-          <button className="flex items-center justify-center size-12 text-white/40 hover:text-white hover:bg-white/5 rounded-full transition-all">
-            <span className="material-symbols-outlined text-3xl">
-              arrow_back
+    <main className="container-mobile min-h-[100dvh] overflow-hidden lg:h-[100dvh]">
+      <div className="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="relative z-10 shrink-0 flex flex-col items-center justify-center pt-8 pb-4 px-2 lg:px-0 lg:pt-6">
+          <Link href="/" className="absolute top-8 left-6">
+            <button className="flex items-center justify-center size-12 text-white/40 hover:text-white hover:bg-white/5 rounded-full transition-all">
+              <span className="material-symbols-outlined text-3xl">
+                arrow_back
+              </span>
+            </button>
+          </Link>
+
+          <div className="flex flex-col items-center gap-2 mt-4">
+            <span className="text-primary font-bold tracking-[0.1em] text-xs uppercase drop-shadow-[0_0_5px_rgba(199,61,245,0.8)]">
+              {canManageLobby ? "เพิ่มเพื่อนเข้าวง" : "รอเจ้าของวงเริ่มเกม"}
             </span>
-          </button>
-        </Link>
-
-        <div className="flex flex-col items-center gap-2 mt-4">
-          <span className="text-primary font-bold tracking-[0.1em] text-xs uppercase drop-shadow-[0_0_5px_rgba(199,61,245,0.8)]">
-            {canManageLobby ? "เพิ่มเพื่อนเข้าวง" : "รอเจ้าของวงเริ่มเกม"}
-          </span>
-          <p className="text-white/70 text-sm font-medium">
-            {roomName || `ห้อง ${roomCode}`}
-          </p>
-          <p className="text-primary/70 text-xs font-bold tracking-[0.25em]">
-            {roomCode}
-          </p>
-          <div className="flex items-center gap-3">
-            <motion.span
-              className="block size-2 rounded-full bg-neon-green shadow-[0_0_10px_#80FF00]"
-              animate={{ opacity: [1, 0.5, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
-            <p className="text-white text-2xl font-bold">
-              {players.length} คนในวง
+            <p className="text-white/70 text-sm font-medium">
+              {roomName || `ห้อง ${roomCode}`}
             </p>
-          </div>
-          <p className="text-white/40 text-sm">(สูงสุด {maxPlayers} คน)</p>
-        </div>
-      </header>
-
-      {/* Player List */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-2 space-y-3 no-scrollbar">
-        <AnimatePresence>
-          {players.map((player, index) => (
-            <motion.div
-              key={player.id}
-              className={`
-                group relative backdrop-blur-md border rounded-xl p-3 flex items-center gap-4
-                ${player.isHost ? "bg-[#2a2430]/80 border-primary/30" : "bg-[#2a2430]/60 border-white/5"}
-              `}
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 50 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <PlayerAvatar
-                name={player.name}
-                isHost={player.isHost}
-                isReady={player.isReady}
+            <p className="text-primary/70 text-xs font-bold tracking-[0.25em]">
+              {roomCode}
+            </p>
+            <div className="flex items-center gap-3">
+              <motion.span
+                className="block size-2 rounded-full bg-neon-green shadow-[0_0_10px_#80FF00]"
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
               />
+              <p className="text-white text-2xl font-bold">
+                {players.length} คนในวง
+              </p>
+            </div>
+            <p className="text-white/40 text-sm">(สูงสุด {maxPlayers} คน)</p>
+          </div>
+        </header>
 
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex items-center gap-2">
-                  <p className="text-xl font-bold truncate text-white">
-                    {player.name}
-                  </p>
-                  {player.isHost && (
-                    <span className="material-symbols-outlined text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)] text-xl material-symbols-filled">
-                      crown
+        <div className="relative z-10 mt-2 grid min-h-0 flex-1 gap-4 px-4 pb-2 no-scrollbar lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.85fr)] lg:gap-6 lg:px-0 lg:pb-0">
+          {/* Player List */}
+          <section className="flex min-h-0 flex-col gap-3 lg:overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto no-scrollbar">
+              <AnimatePresence>
+                {players.map((player, index) => (
+                  <motion.div
+                    key={player.id}
+                    className={`
+                    group relative flex items-center gap-4 rounded-xl border p-3 backdrop-blur-md
+                    ${player.isHost ? "bg-[#2a2430]/80 border-primary/30" : "bg-[#2a2430]/60 border-white/5"}
+                  `}
+                    initial={{ opacity: 0, x: -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 50 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <PlayerAvatar
+                      name={player.name}
+                      isHost={player.isHost}
+                      isReady={player.isReady}
+                    />
+
+                    <div className="flex min-w-0 flex-1 flex-col justify-center">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-lg font-bold text-white sm:text-xl lg:text-2xl">
+                          {player.name}
+                        </p>
+                        {player.isHost && (
+                          <span className="material-symbols-outlined material-symbols-filled text-xl text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]">
+                            crown
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-white/40">
+                        {player.isHost ? "เจ้าของวง" : `ผู้เล่น #${index + 1}`}
+                      </p>
+                    </div>
+
+                    {canManageLobby && !player.isHost && (
+                      <button
+                        onClick={() => handleRemovePlayer(player.id)}
+                        className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white/40 transition-all hover:bg-neon-red/20 hover:text-neon-red"
+                      >
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Add Player Button */}
+              {canManageLobby ? (
+                canAddMore ? (
+                  <motion.button
+                    onClick={() => setShowAddModal(true)}
+                    className="flex h-[76px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 p-4 text-white/40 transition-all hover:border-primary/50 hover:text-primary"
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="material-symbols-outlined text-2xl">
+                      person_add
                     </span>
-                  )}
+                    <p className="text-lg font-bold">เพิ่มเพื่อน</p>
+                  </motion.button>
+                ) : (
+                  <div className="flex h-[76px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neon-yellow/30 p-4 text-neon-yellow/70">
+                    <span className="material-symbols-outlined text-2xl">
+                      group
+                    </span>
+                    <p className="text-lg font-bold">
+                      เต็มแล้ว! ({maxPlayers} คน)
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-white/50">
+                  คุณเข้าร่วมห้องนี้แล้ว รอเจ้าของวงกดเริ่มเกมได้เลย
                 </div>
-                <p className="text-white/40 text-xs font-medium uppercase tracking-wider">
-                  {player.isHost ? "เจ้าของวง" : `ผู้เล่น #${index + 1}`}
-                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Sidebar */}
+          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.2)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
+                    ห้องนี้
+                  </p>
+                  <h3 className="mt-1 text-xl font-bold text-white">
+                    {roomName || `ห้อง ${roomCode}`}
+                  </h3>
+                </div>
+                <span className="material-symbols-outlined text-primary">
+                  favorite
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-2xl bg-black/20 p-3">
+                  <p className="text-white/40">รหัส</p>
+                  <p className="mt-1 font-mono text-lg font-bold tracking-[0.2em] text-white">
+                    {roomCode}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-black/20 p-3">
+                  <p className="text-white/40">ผู้เล่น</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    {players.length}/{maxPlayers}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-black/20 p-3">
+                  <p className="text-white/40">สถานะ</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    {canManageLobby ? "เจ้าของวง" : "ผู้ร่วมวง"}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-black/20 p-3">
+                  <p className="text-white/40">คำถามพิเศษ</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    {customQuestions.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest">
+                  🎯 คำถามพิเศษ ({customQuestions.length})
+                </h3>
+                {canManageLobby && (
+                  <button
+                    onClick={() => setShowQuestionModal(true)}
+                    className="flex items-center gap-1 text-sm font-bold text-primary hover:opacity-80"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      add
+                    </span>
+                    เพิ่ม
+                  </button>
+                )}
               </div>
 
-              {canManageLobby && !player.isHost && (
-                <button
-                  onClick={() => handleRemovePlayer(player.id)}
-                  className="size-10 rounded-full bg-white/5 hover:bg-neon-red/20 flex items-center justify-center text-white/40 hover:text-neon-red transition-all"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {/* Add Player Button */}
-        {canManageLobby ? (
-          canAddMore ? (
-            <motion.button
-              onClick={() => setShowAddModal(true)}
-              className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all h-[76px]"
-              whileTap={{ scale: 0.98 }}
-            >
-              <span className="material-symbols-outlined text-2xl">
-                person_add
-              </span>
-              <p className="font-bold text-lg">เพิ่มเพื่อน</p>
-            </motion.button>
-          ) : (
-            <div className="w-full border-2 border-dashed border-neon-yellow/30 rounded-xl p-4 flex items-center justify-center gap-2 text-neon-yellow/70 h-[76px]">
-              <span className="material-symbols-outlined text-2xl">group</span>
-              <p className="font-bold text-lg">เต็มแล้ว! ({maxPlayers} คน)</p>
+              <div className="mt-3">
+                {customQuestions.length === 0 ? (
+                  <motion.button
+                    onClick={() => canManageLobby && setShowQuestionModal(true)}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed p-4 transition-all ${
+                      canManageLobby
+                        ? "border-white/10 text-white/30 hover:border-primary/30 hover:text-primary/60"
+                        : "border-white/10 text-white/30"
+                    }`}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="material-symbols-outlined">lightbulb</span>
+                    <span className="text-sm">เพิ่มคำถามของวง (ลับๆ)</span>
+                  </motion.button>
+                ) : (
+                  <div className="space-y-2">
+                    {customQuestions.map((q, i) => (
+                      <motion.div
+                        key={q.id}
+                        className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 p-3"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <span className="text-sm font-bold text-primary">
+                          #{i + 1}
+                        </span>
+                        <p className="flex-1 line-clamp-2 text-sm text-white">
+                          {q.text}
+                        </p>
+                        {canManageLobby && (
+                          <button
+                            onClick={() => handleRemoveQuestion(q.id)}
+                            className="text-white/30 hover:text-neon-red"
+                          >
+                            <span className="material-symbols-outlined text-lg">
+                              close
+                            </span>
+                          </button>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )
-        ) : (
-          <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-white/50">
-            คุณเข้าร่วมห้องนี้แล้ว รอเจ้าของวงกดเริ่มเกมได้เลย
-          </div>
-        )}
+          </aside>
+        </div>
 
-        {/* Custom Questions Section */}
-        <div className="mt-6 pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest">
-              🎯 คำถามพิเศษ ({customQuestions.length})
-            </h3>
-            {canManageLobby && (
-              <button
-                onClick={() => setShowQuestionModal(true)}
-                className="text-primary text-sm font-bold flex items-center gap-1 hover:opacity-80"
-              >
-                <span className="material-symbols-outlined text-sm">add</span>
-                เพิ่ม
-              </button>
-            )}
-          </div>
-
-          {customQuestions.length === 0 ? (
-            <motion.button
-              onClick={() => canManageLobby && setShowQuestionModal(true)}
-              className={`w-full rounded-xl border border-dashed p-4 flex items-center justify-center gap-2 transition-all ${
-                canManageLobby
-                  ? "border-white/10 hover:border-primary/30 text-white/30 hover:text-primary/60"
-                  : "border-white/10 text-white/30"
-              }`}
-              whileTap={{ scale: 0.98 }}
-            >
-              <span className="material-symbols-outlined">lightbulb</span>
-              <span className="text-sm">เพิ่มคำถามของวง (ลับๆ)</span>
-            </motion.button>
-          ) : (
-            <div className="space-y-2">
-              {customQuestions.map((q, i) => (
-                <motion.div
-                  key={q.id}
-                  className="bg-white/5 border border-white/10 rounded-lg p-3 flex items-start gap-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <span className="text-primary font-bold text-sm">
-                    #{i + 1}
-                  </span>
-                  <p className="flex-1 text-white text-sm line-clamp-2">
-                    {q.text}
-                  </p>
-                  {canManageLobby && (
-                    <button
-                      onClick={() => handleRemoveQuestion(q.id)}
-                      className="text-white/30 hover:text-neon-red"
-                    >
-                      <span className="material-symbols-outlined text-lg">
-                        close
-                      </span>
-                    </button>
-                  )}
-                </motion.div>
-              ))}
+        {/* Footer */}
+        <footer className="relative z-20 p-4 pb-6 bg-gradient-to-t from-[#160d1a] via-[#160d1a] to-transparent lg:mx-auto lg:w-full lg:max-w-7xl lg:px-6 lg:pb-8 lg:pt-2 lg:bg-transparent">
+          {canManageLobby && players.length < 2 && (
+            <div className="mb-4 flex items-center justify-center gap-2 text-neon-yellow text-sm">
+              <span className="material-symbols-outlined text-lg">warning</span>
+              <span>ต้องมีอย่างน้อย 2 คน</span>
             </div>
           )}
-        </div>
+
+          {canManageLobby ? (
+            <Button
+              onClick={handleStartGame}
+              variant="primary"
+              size="xl"
+              fullWidth
+              disabled={players.length < 2}
+              icon="play_arrow"
+              iconPosition="right"
+            >
+              เริ่มเกมเลย
+            </Button>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-center text-sm text-white/50">
+              ห้องนี้พร้อมแล้วเมื่อเจ้าของวงกดเริ่มเกม
+            </div>
+          )}
+        </footer>
       </div>
-
-      {/* Footer */}
-      <footer className="relative z-20 p-4 pb-6 bg-gradient-to-t from-[#160d1a] via-[#160d1a] to-transparent">
-        {canManageLobby && players.length < 2 && (
-          <div className="mb-4 flex items-center justify-center gap-2 text-neon-yellow text-sm">
-            <span className="material-symbols-outlined text-lg">warning</span>
-            <span>ต้องมีอย่างน้อย 2 คน</span>
-          </div>
-        )}
-
-        {canManageLobby ? (
-          <Button
-            onClick={handleStartGame}
-            variant="primary"
-            size="xl"
-            fullWidth
-            disabled={players.length < 2}
-            icon="play_arrow"
-            iconPosition="right"
-          >
-            เริ่มเกมเลย
-          </Button>
-        ) : (
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-center text-sm text-white/50">
-            ห้องนี้พร้อมแล้วเมื่อเจ้าของวงกดเริ่มเกม
-          </div>
-        )}
-      </footer>
 
       {/* Add Player Modal */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/80"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
-              className="w-full max-w-md bg-surface rounded-t-3xl p-6"
+              className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-t-3xl bg-surface p-6 sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -530,14 +592,14 @@ export default function LobbyPage() {
       <AnimatePresence>
         {showQuestionModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/80"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowQuestionModal(false)}
           >
             <motion.div
-              className="w-full max-w-md bg-surface rounded-t-3xl p-6"
+              className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-t-3xl bg-surface p-6 sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}

@@ -3,6 +3,9 @@ import { requireAdmin } from "@/lib/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Status update schema
 const statusSchema = z.object({
   status: z.enum(["PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"]),

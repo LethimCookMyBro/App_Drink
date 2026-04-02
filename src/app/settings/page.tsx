@@ -48,9 +48,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
+    <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
-      <header className="flex items-center p-4 pt-8 justify-between">
+      <header className="flex items-center justify-between p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
             <span className="material-symbols-outlined text-3xl">
@@ -65,17 +65,17 @@ export default function SettingsPage() {
       </header>
 
       {/* Settings List */}
-      <div className="px-5 space-y-4">
+      <div className="mx-auto w-full max-w-5xl space-y-4 px-4 sm:px-6 lg:px-0">
         {/* Avatar */}
         <GlassPanel
-          className="flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors active:scale-[0.99]"
+          className="flex cursor-pointer items-center justify-between transition-colors hover:bg-white/5 active:scale-[0.99]"
           onClick={() => setShowAvatarPicker(!showAvatarPicker)}
         >
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center text-3xl border-2 border-primary/50">
+          <div className="flex flex-1 items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary/50 bg-gradient-to-br from-primary to-purple-800 text-3xl">
               {settings.avatar}
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight">
                 อวาตาร์
               </span>
@@ -92,7 +92,7 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="grid grid-cols-8 gap-2 p-3 bg-white/5 rounded-xl border border-white/10"
+            className="grid grid-cols-5 gap-2 rounded-xl border border-white/10 bg-white/5 p-3 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10"
           >
             {AVATAR_EMOJIS.map((emoji) => (
               <button
@@ -118,7 +118,7 @@ export default function SettingsPage() {
           <h3 className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase px-1">
             ธีม
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {(Object.keys(THEMES) as ThemeId[]).map((themeId) => {
               const t = THEMES[themeId];
               const isActive = settings.theme === themeId;
@@ -126,7 +126,7 @@ export default function SettingsPage() {
                 <button
                   key={themeId}
                   onClick={() => handleThemeChange(themeId)}
-                  className={`relative p-4 rounded-xl border-2 transition-all ${
+                  className={`relative rounded-xl border-2 p-4 transition-all ${
                     isActive
                       ? "border-primary bg-primary/10"
                       : "border-white/10 bg-white/5 hover:border-white/20"
@@ -162,14 +162,14 @@ export default function SettingsPage() {
           <h3 className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase px-1">
             ความแรงสั่น
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {hapticOptions.map((opt) => {
               const isActive = settings.hapticLevel === opt.value;
               return (
                 <button
                   key={opt.value}
                   onClick={() => setHapticLevel(opt.value)}
-                  className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                     isActive
                       ? "border-neon-blue bg-neon-blue/10"
                       : "border-white/10 bg-white/5 hover:border-white/20"
@@ -195,21 +195,21 @@ export default function SettingsPage() {
         <div className="h-px w-full bg-white/10 my-2" />
 
         {/* Sound */}
-        <GlassPanel className="flex items-center justify-between">
+        <GlassPanel className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <span className="material-symbols-outlined text-2xl">
                 volume_up
               </span>
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight">
                 เสียง
               </span>
               <span className="text-white/40 text-sm">เสียงเอฟเฟกต์ในเกม</span>
             </div>
           </div>
-          <label className="relative flex items-center cursor-pointer">
+          <label className="relative flex items-center cursor-pointer self-start sm:self-auto">
             <input
               type="checkbox"
               checked={settings.soundEnabled}
@@ -221,21 +221,21 @@ export default function SettingsPage() {
         </GlassPanel>
 
         {/* Vibration */}
-        <GlassPanel className="flex items-center justify-between">
+        <GlassPanel className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-neon-blue/10 flex items-center justify-center text-neon-blue">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neon-blue/10 text-neon-blue">
               <span className="material-symbols-outlined text-2xl">
                 vibration
               </span>
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight">
                 สั่น
               </span>
               <span className="text-white/40 text-sm">สั่นเมื่อถึงตา</span>
             </div>
           </div>
-          <label className="relative flex items-center cursor-pointer">
+          <label className="relative flex items-center cursor-pointer self-start sm:self-auto">
             <input
               type="checkbox"
               checked={settings.vibrationEnabled}
@@ -250,14 +250,17 @@ export default function SettingsPage() {
         <div className="h-px w-full bg-white/10 my-2" />
 
         {/* 18+ Mode */}
-        <GlassPanel className="flex items-center justify-between" variant="red">
+        <GlassPanel
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          variant="red"
+        >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-neon-red/10 flex items-center justify-center text-neon-red">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neon-red/10 text-neon-red">
               <span className="material-symbols-outlined text-2xl">
                 warning
               </span>
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight flex items-center gap-2">
                 โหมด 18+
                 {settings.is18Plus && (
@@ -269,7 +272,7 @@ export default function SettingsPage() {
               <span className="text-white/40 text-sm">คำถามสำหรับผู้ใหญ่</span>
             </div>
           </div>
-          <label className="relative flex items-center cursor-pointer">
+          <label className="relative flex items-center cursor-pointer self-start sm:self-auto">
             <input
               type="checkbox"
               checked={settings.is18Plus}
@@ -284,7 +287,7 @@ export default function SettingsPage() {
         <div className="h-px w-full bg-white/10 my-2" />
 
         {/* About Section */}
-        <GlassPanel className="flex flex-col gap-4">
+        <GlassPanel className="mx-auto flex flex-col gap-4 lg:max-w-3xl">
           <h3 className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase">
             เกี่ยวกับ
           </h3>

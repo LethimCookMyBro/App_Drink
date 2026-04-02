@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { Button, Timer } from "@/components/ui";
 import {
   useSoundEffects,
@@ -12,7 +13,12 @@ import {
 } from "@/hooks";
 import { useGameStore } from "@/store/gameStore";
 import { GAME_SETTINGS } from "@/config/gameConstants";
-import { clearActiveGameSession, hasActiveGameSession } from "@/lib/gameSession";
+import {
+  clearActiveGameSession,
+  hasActiveGameSession,
+  saveGameSummary,
+  setGameResumePath,
+} from "@/lib/gameSession";
 
 type CardType = "truth" | "dare";
 
@@ -61,10 +67,20 @@ export default function TruthOrDarePage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    if (hasStartedGame) {
+      setGameResumePath("/game/truth-or-dare");
+    }
+  }, [hasStartedGame]);
+
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],
     avoidRepeats: true,
   });
+  const activePlayerName = currentPlayer || players[0] || "";
+  const activePlayerDrinks = activePlayerName
+    ? playerDrinks[activePlayerName] || 0
+    : 0;
 
   const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
     useQuestionPool({
@@ -122,7 +138,7 @@ export default function TruthOrDarePage() {
     // Player drinks x2
     setPlayerDrinks((prev) => ({
       ...prev,
-      [currentPlayer]: (prev[currentPlayer] || 0) + 2,
+      [activePlayerName]: (prev[activePlayerName] || 0) + 2,
     }));
     playDrink();
     vibrateLong();
@@ -160,8 +176,7 @@ export default function TruthOrDarePage() {
       drinkCount: playerDrinks[name] || 0,
       questionsAnswered: playerTurnCount[name] || 0,
     }));
-    localStorage.setItem("wongtaek-game-stats", JSON.stringify(stats));
-    localStorage.setItem("wongtaek-rounds", roundNumber.toString());
+    saveGameSummary(stats, roundNumber);
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -210,65 +225,91 @@ export default function TruthOrDarePage() {
   const isTruth = cardType === "truth";
 
   return (
-    <main className="container-mobile h-[100dvh] flex flex-col overflow-hidden bg-surface">
+    <main className="container-mobile min-h-[100dvh] flex flex-col overflow-hidden bg-surface">
       {/* Background Effects */}
       <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] bg-gradient-to-b from-neon-red/10 to-transparent pointer-events-none z-0 blur-3xl" />
       <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 bg-primary/10 rounded-full blur-[80px] pointer-events-none z-0" />
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between p-4 pt-8 pb-2">
-        {/* Back Button */}
-        <button
-          onClick={() => router.push("/game/modes")}
-          className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors mr-2"
-        >
-          <span className="material-symbols-outlined text-white text-2xl">
-            arrow_back
-          </span>
-        </button>
-        <div className="flex flex-col flex-1">
-          <span className="text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">
-            ตาของ
-          </span>
+      <header className="relative z-10 w-full">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 pb-2 pt-6 sm:px-5 sm:pt-8 lg:px-8">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center">
-              <span className="text-lg font-bold text-white">
-                {currentPlayer?.charAt(0).toUpperCase() || "?"}
+            <button
+              onClick={() => router.push("/game/modes")}
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+            >
+              <span className="material-symbols-outlined text-[28px]">
+                arrow_back
               </span>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold leading-none tracking-tight">
-                {currentPlayer}
-              </h2>
-              <span className="text-white/40 text-xs">
-                🍺 {playerDrinks[currentPlayer] || 0} แก้ว
-              </span>
-            </div>
+            </button>
           </div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-neon-red text-xs font-bold tracking-widest uppercase drop-shadow-[0_0_8px_rgba(255,0,60,0.8)]">
+            <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
               รอบ {roundNumber}
-            </span>
+            </div>
             <button
               onClick={handleEndGame}
-              className="px-2 py-1 bg-neon-red/20 hover:bg-neon-red/30 rounded-full border border-neon-red/30 text-neon-red text-xs font-bold transition-colors"
+              className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
+              <span className="material-symbols-outlined text-lg">stop</span>
               จบ
             </button>
           </div>
+          <Link
+            href="/settings"
+            className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+          >
+            <span className="material-symbols-outlined text-[28px]">
+              settings
+            </span>
+          </Link>
         </div>
       </header>
 
       {/* Card */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-5 w-full">
-        <div className="w-full h-full max-h-[60vh] relative flex flex-col">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 pb-3 pt-2 sm:px-5 lg:flex-row lg:items-center lg:gap-8 lg:px-8">
+        <div className="mb-4 flex w-full items-start justify-between gap-4 lg:mb-0 lg:w-[17rem] lg:flex-col lg:justify-center">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm">
+            <p className="text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">
+              ตาของ
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-800 flex items-center justify-center">
+                <span className="text-lg font-bold text-white">
+                  {activePlayerName?.charAt(0).toUpperCase() || "?"}
+                </span>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold leading-none tracking-tight">
+                  {activePlayerName}
+                </h2>
+                <span className="text-white/40 text-xs">
+                  🍺 {activePlayerDrinks} แก้ว
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm">
+            <p className="text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase">
+              โหมด
+            </p>
+            <p className="text-lg font-bold text-white">Truth or Dare</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-right backdrop-blur-sm lg:text-left">
+            <p className="text-white/50 text-[10px] font-bold tracking-[0.2em] uppercase">
+              สรุปตานี้
+            </p>
+            <p className="text-sm text-white/70">รอบ {roundNumber}</p>
+            <p className="text-sm text-white/70">ดื่ม {activePlayerDrinks} แก้ว</p>
+          </div>
+        </div>
+
+        <div className="w-full relative flex flex-col lg:max-w-3xl">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentContent}
               className={`
-                relative flex-1 w-full rounded-3xl border
+                relative flex-1 w-full min-h-[24rem] max-h-[66dvh] lg:min-h-[31rem] rounded-3xl border
                 ${isTruth ? "border-neon-blue shadow-neon-blue" : "border-neon-red shadow-neon-red"}
                 bg-[#1a0f1a] flex flex-col overflow-hidden ring-1 ring-inset ring-white/10
               `}
@@ -281,7 +322,7 @@ export default function TruthOrDarePage() {
               <div
                 className={`relative h-24 bg-gradient-to-b ${
                   isTruth ? "from-neon-blue/20" : "from-neon-red/20"
-                } to-transparent p-5 flex items-start justify-between z-20`}
+                } to-transparent p-4 sm:p-5 flex items-start justify-between gap-3 z-20`}
               >
                 <div className="flex flex-col">
                   <span
@@ -300,7 +341,7 @@ export default function TruthOrDarePage() {
                       {isTruth ? "psychology_alt" : "local_fire_department"}
                     </span>
                     <span
-                      className={`text-3xl font-bold tracking-tighter ${isTruth ? "text-glow" : "text-glow-red"}`}
+                      className={`text-2xl sm:text-3xl font-bold tracking-tighter ${isTruth ? "text-glow" : "text-glow-red"}`}
                     >
                       {isTruth ? "ความจริง" : "คำท้า"}
                     </span>
@@ -311,14 +352,14 @@ export default function TruthOrDarePage() {
                     isTruth
                       ? "border-neon-blue/40 bg-neon-blue/10 text-neon-blue"
                       : "border-neon-red/40 bg-neon-red/10 text-neon-red"
-                  } text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm`}
+                  } text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm shrink-0`}
                 >
                   {isTruth ? "เปิดใจ 💙" : "เผ็ดร้อน 🔥"}
                 </div>
               </div>
 
               {/* Content */}
-              <div className="flex-1 px-6 py-4 flex flex-col justify-center items-center text-center relative z-10">
+              <div className="flex-1 px-5 py-5 sm:px-6 lg:px-8 flex flex-col justify-center items-center text-center relative z-10">
                 <motion.div
                   className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 ${
                     isTruth ? "bg-neon-blue/20" : "bg-neon-red/20"
@@ -326,7 +367,7 @@ export default function TruthOrDarePage() {
                   animate={{ opacity: [0.3, 0.6, 0.3] }}
                   transition={{ duration: 2, repeat: Infinity }}
                 />
-                <p className="relative text-xl sm:text-2xl font-bold leading-relaxed text-white drop-shadow-md tracking-tight">
+                <p className="relative max-w-[24ch] text-xl sm:text-2xl lg:text-[2rem] font-bold leading-relaxed text-white drop-shadow-md tracking-tight">
                   {currentContent}
                 </p>
                 <div className="mt-6">
@@ -361,22 +402,24 @@ export default function TruthOrDarePage() {
       )}
 
       {/* Buttons */}
-      <footer className="relative z-20 px-5 pb-8 pt-4 flex flex-col gap-3 w-full bg-gradient-to-t from-background via-background/95 to-transparent">
-        <Button
-          onClick={handleComplete}
-          variant="primary"
-          size="xl"
-          fullWidth
-          icon="check_circle"
-        >
-          ทำเสร็จแล้ว
-        </Button>
+      <footer className="relative z-20 w-full bg-gradient-to-t from-background via-background/95 to-transparent">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-5 pb-6 pt-4 sm:px-5 lg:flex-row lg:px-8">
+          <Button
+            onClick={handleComplete}
+            variant="primary"
+            size="xl"
+            fullWidth
+            icon="check_circle"
+            className="lg:flex-1"
+          >
+            ทำเสร็จแล้ว
+          </Button>
 
-        <button
-          onClick={handleGiveUp}
-          className="group relative w-full h-14 rounded-xl border border-white/10 bg-white/5 text-white/60 font-medium text-base tracking-wide overflow-hidden active:scale-[0.98] transition-all hover:bg-white/10 hover:border-white/20 hover:text-white"
-        >
-          <span className="relative flex items-center justify-between px-5 w-full h-full">
+          <button
+            onClick={handleGiveUp}
+            className="group relative w-full h-14 rounded-xl border border-white/10 bg-white/5 text-white/60 font-medium text-base tracking-wide overflow-hidden active:scale-[0.98] transition-all hover:bg-white/10 hover:border-white/20 hover:text-white lg:flex-1"
+          >
+            <span className="relative flex items-center justify-between px-5 w-full h-full">
             <span className="flex items-center gap-2">
               <span className="material-symbols-outlined text-xl">close</span>
               ยอมแพ้
@@ -389,8 +432,9 @@ export default function TruthOrDarePage() {
                 ดื่ม x2
               </span>
             </span>
-          </span>
-        </button>
+            </span>
+          </button>
+        </div>
       </footer>
     </main>
   );

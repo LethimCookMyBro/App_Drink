@@ -9,6 +9,9 @@ import {
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { questionSchema, sanitizeHtml } from "@/lib/validation";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const QUESTION_TYPES = new Set(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]);
 
 function parseBoundedInt(

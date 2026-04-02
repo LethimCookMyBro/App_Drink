@@ -6,6 +6,9 @@ import { enforceRateLimit, enforceSameOrigin, jsonError } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function isDefaultAdminSeed(
   username: string,
   email: string,

@@ -6,7 +6,10 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useSoundEffects } from "@/hooks";
-import { clearGameSummary } from "@/lib/gameSession";
+import {
+  clearGameSummary,
+  normalizeStoredPlayerStats,
+} from "@/lib/gameSession";
 import confetti from "canvas-confetti";
 
 interface PlayerStats {
@@ -23,43 +26,38 @@ export default function GameSummaryPage() {
   const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
-    // Load game stats from localStorage
     const savedStats = localStorage.getItem("wongtaek-game-stats");
     const savedRounds = localStorage.getItem("wongtaek-rounds");
     const savedPlayers = localStorage.getItem("wongtaek-players");
+    const fallbackPlayers = savedPlayers
+      ? (() => {
+          try {
+            const parsed = JSON.parse(savedPlayers);
+            return Array.isArray(parsed)
+              ? parsed.filter((name): name is string => typeof name === "string")
+              : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
 
     if (savedStats) {
       try {
         const stats = JSON.parse(savedStats);
-        setPlayerStats(stats);
+        setPlayerStats(normalizeStoredPlayerStats(stats, fallbackPlayers));
       } catch {
-        // Use mock data if parse fails
-        if (savedPlayers) {
-          const players = JSON.parse(savedPlayers);
-          setPlayerStats(
-            players.map((name: string, index: number) => ({
-              name,
-              drinkCount: Math.floor(Math.random() * 5) + (index === 0 ? 3 : 0),
-              questionsAnswered: Math.floor(Math.random() * 8) + 2,
-            })),
-          );
-        }
+        setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
       }
-    } else if (savedPlayers) {
-      const players = JSON.parse(savedPlayers);
-      setPlayerStats(
-        players.map((name: string, index: number) => ({
-          name,
-          drinkCount: Math.floor(Math.random() * 5) + (index === 0 ? 3 : 0),
-          questionsAnswered: Math.floor(Math.random() * 8) + 2,
-        })),
-      );
+    } else {
+      setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
     }
 
     if (savedRounds) {
-      setTotalRounds(parseInt(savedRounds) || 10);
+      const parsedRounds = Number.parseInt(savedRounds, 10);
+      setTotalRounds(Number.isFinite(parsedRounds) && parsedRounds > 0 ? parsedRounds : 0);
     } else {
-      setTotalRounds(10);
+      setTotalRounds(0);
     }
 
     // Trigger celebration
@@ -112,7 +110,7 @@ export default function GameSummaryPage() {
   };
 
   return (
-    <main className="container-mobile min-h-screen flex flex-col overflow-hidden relative">
+    <main className="container-mobile min-h-[100dvh] flex flex-col overflow-hidden relative">
       {/* Background effects */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/30 rounded-full blur-[120px] mix-blend-screen animate-pulse-slow" />
@@ -120,7 +118,8 @@ export default function GameSummaryPage() {
       </div>
 
       {/* Header */}
-      <header className="relative z-20 flex items-center justify-center p-6 w-full">
+      <header className="relative z-20 w-full">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-center px-4 pt-6 sm:px-5 lg:px-8">
         <motion.div
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
@@ -135,10 +134,12 @@ export default function GameSummaryPage() {
           </h1>
           <p className="text-white/60 text-sm mt-1">เล่นไป {totalRounds} รอบ</p>
         </motion.div>
+        </div>
       </header>
 
       {/* Main Content */}
-      <div className="relative z-10 flex-1 px-4 pb-4 overflow-y-auto no-scrollbar">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 overflow-y-auto no-scrollbar px-4 pb-4 pt-4 sm:px-5 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start lg:gap-6 lg:px-8">
+        <div className="space-y-4">
         {/* MVP Card */}
         {mvp && (
           <motion.div
@@ -160,7 +161,7 @@ export default function GameSummaryPage() {
                 </p>
                 <h2 className="text-white text-2xl font-bold">{mvp.name}</h2>
                 <p className="text-white/60 text-sm">
-                  เจ็บไป {mvp.drinkCount} แก้ว
+                  ดื่มไป {mvp.drinkCount} แก้ว
                 </p>
               </div>
             </div>
@@ -193,13 +194,14 @@ export default function GameSummaryPage() {
             </div>
           </motion.div>
         )}
+        </div>
 
         {/* All Players Stats */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="bg-white/5 border border-white/10 rounded-2xl p-4"
+          className="bg-white/5 border border-white/10 rounded-2xl p-4 lg:sticky lg:top-4"
         >
           <h3 className="text-white/60 text-xs font-bold tracking-widest uppercase mb-3">
             📊 สถิติทุกคน
@@ -229,32 +231,34 @@ export default function GameSummaryPage() {
       </div>
 
       {/* Footer Actions */}
-      <footer className="relative z-20 w-full p-4 pb-6 max-w-lg mx-auto space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            onClick={handleShare}
-            variant="outline"
-            size="lg"
-            icon="share"
-            fullWidth
-          >
-            แชร์ผล
-          </Button>
-          <Button
-            onClick={handlePlayAgain}
-            variant="primary"
-            size="lg"
-            icon="replay"
-            fullWidth
-          >
-            เริ่มใหม่
-          </Button>
+      <footer className="relative z-20 w-full">
+        <div className="mx-auto w-full max-w-6xl space-y-3 px-4 pb-6 pt-3 sm:px-5 lg:px-8">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Button
+              onClick={handleShare}
+              variant="outline"
+              size="lg"
+              icon="share"
+              fullWidth
+            >
+              แชร์ผล
+            </Button>
+            <Button
+              onClick={handlePlayAgain}
+              variant="primary"
+              size="lg"
+              icon="replay"
+              fullWidth
+            >
+              เริ่มใหม่
+            </Button>
+          </div>
+          <Link href="/" className="block">
+            <Button variant="ghost" size="lg" fullWidth>
+              กลับหน้าหลัก
+            </Button>
+          </Link>
         </div>
-        <Link href="/" className="block">
-          <Button variant="ghost" size="lg" fullWidth>
-            กลับหน้าหลัก
-          </Button>
-        </Link>
       </footer>
     </main>
   );

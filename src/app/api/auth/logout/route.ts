@@ -7,6 +7,9 @@ import {
 } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const originBlocked = enforceSameOrigin(request);

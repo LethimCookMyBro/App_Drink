@@ -13,6 +13,9 @@ import {
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const originBlocked = enforceSameOrigin(request);

@@ -1,5 +1,8 @@
 import { enforceSameOrigin, jsonOk } from "@/lib/apiUtils";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   const originBlocked = enforceSameOrigin(request);
   if (originBlocked) return originBlocked;

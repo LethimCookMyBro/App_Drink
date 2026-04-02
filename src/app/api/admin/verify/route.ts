@@ -1,6 +1,9 @@
 import { requireAdmin } from "@/lib/adminAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const admin = await requireAdmin();

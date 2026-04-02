@@ -7,6 +7,9 @@ import {
   getRoomPlayerPayloadFromCookies,
 } from "@/lib/roomAuth";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // GET /api/rooms/[code] - Get room by code
 export async function GET(
   request: NextRequest,

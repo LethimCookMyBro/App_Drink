@@ -4,6 +4,9 @@ import { rateLimitConfigs } from "@/lib/rateLimit";
 import { roomCodeSchema } from "@/lib/validation";
 import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Valid game modes (inline to avoid import issues when DB is offline)
 type GameModeType = "QUESTION" | "VOTE" | "TRUTH_OR_DARE" | "CHAOS" | "MIXED";
 
@@ -68,7 +71,7 @@ export async function POST(
     }
 
     if (room.sessions.length > 0) {
-      return jsonError("มีเกมกำลังดำเนินการอยู่แล้ว", 400);
+      return jsonError("มีเกมกำลังดำเนินการอยู่แล้ว", 409);
     }
 
     const session = await prisma.gameSession.create({
