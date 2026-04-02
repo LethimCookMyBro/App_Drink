@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { GlassPanel, Button, BottomNav } from "@/components/ui";
+import { Button, BottomNav, TurnstileWidget } from "@/components/ui";
 import Link from "next/link";
 
 type FeedbackType = "BUG" | "FEATURE";
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function FeedbackPage() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function FeedbackPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +27,11 @@ export default function FeedbackPage() {
 
     if (!title.trim()) {
       setError("กรุณากรอกหัวข้อ");
+      return;
+    }
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนส่งความคิดเห็น");
       return;
     }
 
@@ -38,6 +46,7 @@ export default function FeedbackPage() {
           title: title.trim(),
           details: details.trim() || undefined,
           contact: contact.trim() || undefined,
+          turnstileToken,
         }),
       });
 
@@ -45,6 +54,9 @@ export default function FeedbackPage() {
 
       if (!res.ok) {
         setError(data.error || "เกิดข้อผิดพลาด");
+        if (turnstileEnabled) {
+          setTurnstileResetKey((current) => current + 1);
+        }
         return;
       }
 
@@ -52,6 +64,9 @@ export default function FeedbackPage() {
       setTimeout(() => router.push("/"), 2000);
     } catch {
       setError("ไม่สามารถส่งข้อมูลได้ ลองใหม่อีกครั้ง");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -190,13 +205,23 @@ export default function FeedbackPage() {
           </motion.div>
         )}
 
+        {turnstileEnabled && (
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <TurnstileWidget
+              action="feedback"
+              onTokenChange={setTurnstileToken}
+              resetKey={turnstileResetKey}
+            />
+          </div>
+        )}
+
         {/* Submit Button */}
         <Button
           type="submit"
           variant="primary"
           size="xl"
           fullWidth
-          disabled={isSubmitting}
+          disabled={isSubmitting || (turnstileEnabled && !turnstileToken)}
           icon={isSubmitting ? undefined : "send"}
           iconPosition="left"
         >

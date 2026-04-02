@@ -70,8 +70,22 @@ src/
 ## Environment Variables
 
 ```env
-DATABASE_URL="postgresql://..."  # Optional, for real DB
+DATABASE_PUBLIC_URL="postgresql://postgres:password@host:5432/railway"
+DATABASE_URL="postgresql://postgres:password@postgres.railway.internal:5432/railway"
+JWT_SECRET="replace-with-a-long-random-secret"
+ADMIN_JWT_SECRET="replace-with-a-long-random-secret"
+ROOM_JWT_SECRET="replace-with-a-long-random-secret"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+ALLOWED_ORIGINS="http://localhost:3000"
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=""
+TURNSTILE_SECRET_KEY=""
 ```
+
+## Security Notes
+
+- ตั้งค่า `JWT_SECRET`, `ADMIN_JWT_SECRET`, และ `ROOM_JWT_SECRET` เป็นค่าสุ่มจริงก่อน deploy
+- ถ้าเปิดใช้ Cloudflare ให้ใส่ Turnstile ทั้ง `NEXT_PUBLIC_TURNSTILE_SITE_KEY` และ `TURNSTILE_SECRET_KEY`
+- อย่าใช้ `ADMIN_SEED_PASSWORD="change-me-please"` หรือ credential เริ่มต้นใน production
 
 ## Screenshots
 

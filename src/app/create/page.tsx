@@ -4,21 +4,75 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel } from "@/components/ui";
+import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
+import { setCurrentUser } from "@/hooks/useUserSettings";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function CreateCirclePage() {
   const router = useRouter();
-  const { createRoom, vibeLevel } = useGameStore();
+  const { vibeLevel } = useGameStore();
 
   const [circleName, setCircleName] = useState("สายแข็ง 2024");
   const [playerName, setPlayerName] = useState("");
   const [playerCount, setPlayerCount] = useState(8);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const name = playerName.trim() || "ผู้เล่น 1";
-    createRoom(circleName, name, 3, false, playerCount);
-    router.push("/lobby/new");
+    const difficulty =
+      vibeLevel === "chilling" ? 1 : vibeLevel === "tipsy" ? 2 : 3;
+
+    setError("");
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนสร้างห้อง");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostName: name,
+          name: circleName.trim() || "วงของเรา",
+          maxPlayers: playerCount,
+          is18Plus: vibeLevel === "chaos",
+          difficulty,
+          turnstileToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "สร้างห้องไม่สำเร็จ");
+        if (turnstileEnabled) {
+          setTurnstileResetKey((current) => current + 1);
+        }
+        return;
+      }
+
+      localStorage.setItem("wongtaek-player-name", name);
+      localStorage.setItem("wongtaek-room-code", data.room.code);
+      localStorage.removeItem("wongtaek-game-started");
+      setCurrentUser(name);
+      router.push(`/lobby/${data.room.code}`);
+    } catch {
+      setError("ไม่สามารถสร้างห้องได้ ลองใหม่อีกครั้ง");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -141,6 +195,22 @@ export default function CreateCirclePage() {
           </span>
           เปิดโหมด 18+ ได้ในหน้าตั้งค่า
         </div>
+
+        {error && (
+          <p className="rounded-xl border border-neon-red/40 bg-neon-red/10 px-4 py-3 text-center text-sm text-neon-red">
+            {error}
+          </p>
+        )}
+
+        {turnstileEnabled && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <TurnstileWidget
+              action="room_create"
+              onTokenChange={setTurnstileToken}
+              resetKey={turnstileResetKey}
+            />
+          </div>
+        )}
       </div>
 
       {/* Submit Button */}
@@ -152,8 +222,9 @@ export default function CreateCirclePage() {
           fullWidth
           icon="arrow_forward"
           iconPosition="right"
+          disabled={isSubmitting || (turnstileEnabled && !turnstileToken)}
         >
-          สร้างวงเลย
+          {isSubmitting ? "กำลังสร้างห้อง..." : "สร้างวงเลย"}
         </Button>
       </div>
     </main>

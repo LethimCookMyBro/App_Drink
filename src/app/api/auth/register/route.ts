@@ -3,53 +3,65 @@ import {
   hashPassword,
   generateToken,
   createSession,
-  isValidEmail,
-  isValidPassword,
+  sanitizeInput,
 } from "@/lib/auth";
+import {
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+} from "@/lib/apiUtils";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { userRegisterSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
-    const { email, password, name } = body;
+    const validation = userRegisterSchema.safeParse({
+      email: body?.email,
+      password: body?.password,
+      name: body?.name,
+    });
 
-    // Validate input
-    if (!email || !password || !name) {
-      return NextResponse.json(
-        { error: "กรุณากรอกข้อมูลให้ครบถ้วน" },
-        { status: 400 }
+    if (!validation.success) {
+      return jsonError(
+        validation.error.issues[0]?.message || "กรุณากรอกข้อมูลให้ครบถ้วน",
+        400,
       );
     }
 
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return NextResponse.json(
-        { error: "รูปแบบอีเมลไม่ถูกต้อง" },
-        { status: 400 }
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "register",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
       );
     }
 
-    // Validate password strength
-    const passwordCheck = isValidPassword(password);
-    if (!passwordCheck.valid) {
-      return NextResponse.json(
-        { error: passwordCheck.message },
-        { status: 400 }
-      );
-    }
+    const email = validation.data.email.trim().toLowerCase();
+    const password = validation.data.password;
+    const name = sanitizeInput(validation.data.name);
 
     // Dynamic import to prevent crash when database is offline
     const { default: prisma } = await import("@/lib/db");
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email },
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: "อีเมลนี้ถูกใช้งานแล้ว" },
-        { status: 409 }
-      );
+      return jsonError("อีเมลนี้ถูกใช้งานแล้ว", 409);
     }
 
     // Hash password
@@ -58,9 +70,9 @@ export async function POST(request: Request) {
     // Create user
     const user = await prisma.user.create({
       data: {
-        email: email.toLowerCase(),
+        email,
         password: hashedPassword,
-        name: name.trim(),
+        name,
       },
     });
 
@@ -103,13 +115,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Register error:", error);
-    return NextResponse.json(
-      {
-        error: "เกิดข้อผิดพลาดในการสมัครสมาชิก",
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-      { status: 503 }
-    );
+    return jsonError("บริการสมัครสมาชิกไม่พร้อมใช้งานชั่วคราว", 503);
   }
 }

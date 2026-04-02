@@ -7,7 +7,58 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+}
+
+enum QuestionType {
+  QUESTION
+  TRUTH
+  DARE
+  CHAOS
+  VOTE
+}
+
+enum GameMode {
+  QUESTION
+  VOTE
+  TRUTH_OR_DARE
+  CHAOS
+  MIXED
+}
+
+enum GameSessionStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ABANDONED
+}
+
+enum GameEventType {
+  ANSWERED
+  SKIPPED
+  DRANK
+  COMPLETED
+  GAVE_UP
+  VOTED
+  TIMEOUT
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE
+}
+
+enum FeedbackStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
 }
 
 // ==========================================
@@ -27,6 +78,8 @@ model Room {
   
   players     Player[]
   sessions    GameSession[]
+
+  @@index([isActive, createdAt])
 }
 
 // ==========================================
@@ -46,6 +99,9 @@ model Player {
   
   room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   events      GameEvent[]
+
+  @@index([roomId, joinedAt])
+  @@index([roomId, isOnline])
 }
 
 // ==========================================
@@ -54,7 +110,7 @@ model Player {
 model Question {
   id          String   @id @default(cuid())
   text        String
-  type        String   // QUESTION, TRUTH, DARE, CHAOS, VOTE
+  type        QuestionType
   level       Int      // 1=chill, 2=mid, 3=spicy
   is18Plus    Boolean  @default(false)
   isPublic    Boolean  @default(true)
@@ -65,6 +121,11 @@ model Question {
   createdBy   String?  // null = system, otherwise admin id
   
   events      GameEvent[]
+
+  @@index([isActive, isPublic, type, level])
+  @@index([is18Plus, isActive, isPublic])
+  @@index([usageCount])
+  @@index([createdAt])
 }
 
 // ==========================================
@@ -82,6 +143,9 @@ model User {
   
   sessions      UserSession[]
   gameSessions  GameSession[]
+
+  @@index([createdAt])
+  @@index([lastLoginAt])
 }
 
 // ==========================================
@@ -95,6 +159,9 @@ model UserSession {
   createdAt   DateTime @default(now())
   
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ==========================================
@@ -104,15 +171,19 @@ model GameSession {
   id          String   @id @default(cuid())
   roomId      String
   userId      String?  // Link to user who created session
-  mode        String   // QUESTION, VOTE, TRUTH_OR_DARE, CHAOS, MIXED
+  mode        GameMode
   roundCount  Int      @default(0)
-  status      String   @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, ABANDONED
+  status      GameSessionStatus @default(ACTIVE)
   startedAt   DateTime @default(now())
   endedAt     DateTime?
   
   room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user        User?    @relation(fields: [userId], references: [id])
   events      GameEvent[]
+
+  @@index([roomId, status])
+  @@index([userId, status, startedAt])
+  @@index([startedAt])
 }
 
 // ==========================================
@@ -123,13 +194,17 @@ model GameEvent {
   sessionId   String
   playerId    String
   questionId  String?
-  type        String   // ANSWERED, SKIPPED, DRANK, COMPLETED, GAVE_UP, VOTED, TIMEOUT
+  type        GameEventType
   data        String?  // JSON string for additional event data
   createdAt   DateTime @default(now())
   
   session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   player      Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
   question    Question?   @relation(fields: [questionId], references: [id])
+
+  @@index([sessionId, createdAt])
+  @@index([playerId, type])
+  @@index([questionId])
 }
 
 // ==========================================
@@ -140,10 +215,13 @@ model Admin {
   email       String   @unique
   password    String   // hashed
   name        String
-  role        String   @default("MODERATOR") // SUPER_ADMIN, ADMIN, MODERATOR
+  role        AdminRole @default(MODERATOR)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   lastLoginAt DateTime?
+
+  @@index([isActive])
+  @@index([role])
 }
 
 // ==========================================
@@ -163,11 +241,14 @@ model AppSettings {
 // ==========================================
 model Feedback {
   id          String   @id @default(cuid())
-  type        String   // BUG, FEATURE
+  type        FeedbackType
   title       String
   details     String?
   contact     String?  // email or phone (optional)
-  status      String   @default("PENDING") // PENDING, READ, RESOLVED
+  status      FeedbackStatus @default(PENDING)
   createdAt   DateTime @default(now())
   resolvedAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
 }

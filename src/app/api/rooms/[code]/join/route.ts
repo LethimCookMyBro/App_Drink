@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { playerNameSchema, roomCodeSchema, sanitizeHtml } from "@/lib/validation";
+import { getRoomPlayerCookieName, signRoomPlayerToken } from "@/lib/roomAuth";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 // POST /api/rooms/[code]/join - Join a room
 export async function POST(
@@ -29,6 +31,18 @@ export async function POST(
       return jsonError(
         nameValidation.error.issues[0]?.message || "ชื่อผู้เล่นไม่ถูกต้อง",
         400,
+      );
+    }
+
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "room_join",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
       );
     }
 
@@ -74,22 +88,31 @@ export async function POST(
       include: { players: { orderBy: { joinedAt: "asc" } } },
     });
 
-    return jsonOk(
+    const response = jsonOk(
       {
         room: updatedRoom,
         player,
       },
       201,
     );
+
+    const playerToken = signRoomPlayerToken({
+      roomId: room.id,
+      playerId: player.id,
+      code: roomCode,
+    });
+
+    response.cookies.set(getRoomPlayerCookieName(roomCode), playerToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 6,
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("Error joining room:", error);
-    return jsonError(
-      "ไม่สามารถเข้าร่วมห้องได้",
-      500,
-      {
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-    );
+    return jsonError("ไม่สามารถเข้าร่วมห้องได้ในขณะนี้", 500);
   }
 }

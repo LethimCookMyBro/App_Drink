@@ -19,13 +19,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-
-  if (!id || id.length < 10) {
-    return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
-  }
-
   try {
+    const admin = await requireAdmin();
+    if (!admin) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    }
+
+    const { id } = await params;
+    if (!id || id.length < 10) {
+      return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
+    }
+
     const { default: prisma } = await import("@/lib/db");
 
     const question = await prisma.question.findUnique({
@@ -39,9 +43,7 @@ export async function GET(
     return jsonOk({ question });
   } catch (error) {
     console.error("Error fetching question:", error);
-    return jsonError("เกิดข้อผิดพลาด", 500, {
-      detail: "ไม่สามารถเชื่อมต่อ Database ได้",
-    });
+    return jsonError("เกิดข้อผิดพลาดในการโหลดคำถาม", 500);
   }
 }
 
@@ -50,13 +52,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-
-  if (!id || id.length < 10) {
-    return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
-  }
-
   try {
+    const { id } = await params;
+    if (!id || id.length < 10) {
+      return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
+    }
+
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
@@ -114,9 +115,7 @@ export async function PUT(
     return jsonOk({ question });
   } catch (error) {
     console.error("Error updating question:", error);
-    return jsonError("ไม่สามารถแก้ไขคำถามได้", 500, {
-      detail: "กรุณาลองใหม่อีกครั้ง",
-    });
+    return jsonError("ไม่สามารถแก้ไขคำถามได้ในขณะนี้", 500);
   }
 }
 
@@ -125,13 +124,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params;
-
-  if (!id || id.length < 10) {
-    return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
-  }
-
   try {
+    const { id } = await params;
+    if (!id || id.length < 10) {
+      return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
+    }
+
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
@@ -161,8 +159,6 @@ export async function DELETE(
     });
   } catch (error) {
     console.error("Error deleting question:", error);
-    return jsonError("ไม่สามารถลบคำถามได้", 500, {
-      detail: "กรุณาลองใหม่อีกครั้ง",
-    });
+    return jsonError("ไม่สามารถลบคำถามได้ในขณะนี้", 500);
   }
 }

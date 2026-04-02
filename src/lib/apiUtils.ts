@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIP, RateLimitConfig } from "@/lib/rateLimit";
+import {
+  getAllowedOrigins,
+  getRequestOrigin,
+  isUnsafeMethod,
+} from "@/lib/requestSecurity";
 
 export function jsonError(
   error: string,
@@ -31,37 +36,24 @@ export function enforceRateLimit(request: Request, config: RateLimitConfig) {
 }
 
 export function enforceSameOrigin(request: Request) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) return null;
-
-  let allowedOrigin: string;
-  try {
-    allowedOrigin = new URL(appUrl).origin;
-  } catch {
+  if (!isUnsafeMethod(request.method)) {
     return null;
   }
 
-  const origin = request.headers.get("origin");
-  const referer = request.headers.get("referer");
+  const requestOrigin = getRequestOrigin(request);
+  const allowedOrigins = getAllowedOrigins(request);
 
-  if (origin && origin !== allowedOrigin) {
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    return null;
+  }
+
+  if (!requestOrigin && process.env.NODE_ENV !== "production") {
+    return null;
+  }
+
+  if (!requestOrigin) {
     return jsonError("Invalid origin", 403);
   }
 
-  if (!origin && referer) {
-    try {
-      const refererOrigin = new URL(referer).origin;
-      if (refererOrigin !== allowedOrigin) {
-        return jsonError("Invalid origin", 403);
-      }
-    } catch {
-      return jsonError("Invalid origin", 403);
-    }
-  }
-
-  if (!origin && !referer && process.env.NODE_ENV === "production") {
-    return jsonError("Invalid origin", 403);
-  }
-
-  return null;
+  return jsonError("Invalid origin", 403);
 }

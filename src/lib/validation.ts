@@ -113,7 +113,7 @@ export const userRegisterSchema = z.object({
     }),
   password: z
     .string()
-    .min(6, "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
+    .min(8, "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
     .max(100)
     .refine((val) => !hasSqlInjection(val), {
       message: "รูปแบบข้อมูลไม่ถูกต้อง",

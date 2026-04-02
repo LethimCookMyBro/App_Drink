@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/components/ui";
-import { useGameStore } from "@/store/gameStore";
 
 interface LocalPlayer {
   id: string;
@@ -24,44 +23,117 @@ interface CustomQuestion {
 
 export default function LobbyPage() {
   const router = useRouter();
-  const { room, currentPlayer } = useGameStore();
+  const params = useParams<{ roomCode: string }>();
+  const roomCode = typeof params.roomCode === "string"
+    ? params.roomCode.toUpperCase()
+    : "";
 
   // Players state
   const [players, setPlayers] = useState<LocalPlayer[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [maxPlayers, setMaxPlayers] = useState(8);
+  const [currentPlayerName, setCurrentPlayerName] = useState("");
+  const [isHost, setIsHost] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   // Custom questions state
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [newQuestion, setNewQuestion] = useState("");
 
-  // Max players
-  const maxPlayers = room?.maxPlayers || 8;
   const canAddMore = players.length < maxPlayers;
+  const canManageLobby = isHost;
 
-  // Initialize host player from store
   useEffect(() => {
-    if (currentPlayer && players.length === 0) {
-      setPlayers([
-        {
-          id: currentPlayer.id,
-          name: currentPlayer.name,
-          isHost: true,
-          isReady: true,
-        },
-      ]);
-    } else if (players.length === 0) {
-      const storedJoinName = localStorage.getItem("wongtaek-join-name");
-      const fallbackName = storedJoinName?.trim() || "?????????";
-      if (storedJoinName) localStorage.removeItem("wongtaek-join-name");
-      setPlayers([{ id: "1", name: fallbackName, isHost: true, isReady: true }]);
+    const savedPlayerName = localStorage.getItem("wongtaek-player-name")?.trim() || "";
+    if (savedPlayerName) {
+      setCurrentPlayerName(savedPlayerName);
     }
-  }, [currentPlayer, players.length]);
+
+    const savedCustomQuestions = localStorage.getItem("wongtaek-custom-questions");
+    if (savedCustomQuestions) {
+      try {
+        const parsed = JSON.parse(savedCustomQuestions);
+        if (Array.isArray(parsed)) {
+          setCustomQuestions(parsed);
+        }
+      } catch {
+        // Ignore malformed local data
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!roomCode) {
+      setLoadError("ไม่พบรหัสห้อง");
+      setIsLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadRoom = async () => {
+      setIsLoading(true);
+      setLoadError("");
+
+      try {
+        const response = await fetch(`/api/rooms/${roomCode}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "ไม่สามารถโหลดห้องได้");
+        }
+
+        if (isCancelled) return;
+
+        const room = data.room as {
+          name: string;
+          maxPlayers: number;
+          players: LocalPlayer[];
+        };
+
+        setRoomName(room.name);
+        setMaxPlayers(room.maxPlayers);
+        setPlayers(
+          room.players.map((player) => ({
+            id: player.id,
+            name: player.name,
+            isHost: player.isHost,
+            isReady: player.isReady,
+          })),
+        );
+        setIsHost(
+          !!currentPlayerName &&
+            room.players.some(
+              (player) => player.isHost && player.name === currentPlayerName,
+            ),
+        );
+      } catch (error) {
+        if (isCancelled) return;
+        setLoadError(
+          error instanceof Error ? error.message : "ไม่สามารถโหลดข้อมูลห้องได้",
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadRoom();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [roomCode, currentPlayerName]);
 
   const [duplicateError, setDuplicateError] = useState("");
 
   const handleAddPlayer = () => {
+    if (!canManageLobby) return;
     if (!newPlayerName.trim()) return;
     if (!canAddMore) return;
 
@@ -88,10 +160,12 @@ export default function LobbyPage() {
   };
 
   const handleRemovePlayer = (id: string) => {
+    if (!canManageLobby) return;
     setPlayers(players.filter((p) => p.id !== id));
   };
 
   const handleAddQuestion = () => {
+    if (!canManageLobby) return;
     if (!newQuestion.trim() || newQuestion.length < 5) return;
 
     const question: CustomQuestion = {
@@ -108,10 +182,12 @@ export default function LobbyPage() {
   };
 
   const handleRemoveQuestion = (id: string) => {
+    if (!canManageLobby) return;
     setCustomQuestions(customQuestions.filter((q) => q.id !== id));
   };
 
   const handleStartGame = () => {
+    if (!canManageLobby) return;
     if (players.length < 2) return;
 
     // Save players to localStorage
@@ -132,9 +208,47 @@ export default function LobbyPage() {
 
     // Set game started flag
     localStorage.setItem("wongtaek-game-started", "true");
+    localStorage.setItem("wongtaek-room-code", roomCode);
 
     router.push("/game/modes");
   };
+
+  if (isLoading) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center">
+        <div className="animate-pulse text-center text-white/50">
+          <p className="text-lg font-bold">กำลังโหลดห้อง...</p>
+          <p className="mt-2 text-sm">รหัส {roomCode || "----"}</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-full max-w-sm rounded-3xl border border-neon-red/30 bg-neon-red/10 p-6">
+          <span className="material-symbols-outlined text-5xl text-neon-red">
+            error
+          </span>
+          <h1 className="mt-4 text-2xl font-bold text-white">เข้าห้องไม่สำเร็จ</h1>
+          <p className="mt-3 text-sm text-white/60">{loadError}</p>
+          <div className="mt-6 space-y-3">
+            <Link href="/join" className="block">
+              <Button variant="primary" fullWidth>
+                ลองเข้าห้องใหม่
+              </Button>
+            </Link>
+            <Link href="/create" className="block">
+              <Button variant="ghost" fullWidth>
+                สร้างห้องใหม่
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container-mobile h-[100dvh] flex flex-col overflow-hidden">
@@ -150,8 +264,14 @@ export default function LobbyPage() {
 
         <div className="flex flex-col items-center gap-2 mt-4">
           <span className="text-primary font-bold tracking-[0.1em] text-xs uppercase drop-shadow-[0_0_5px_rgba(199,61,245,0.8)]">
-            เพิ่มเพื่อนเข้าวง
+            {canManageLobby ? "เพิ่มเพื่อนเข้าวง" : "รอเจ้าของวงเริ่มเกม"}
           </span>
+          <p className="text-white/70 text-sm font-medium">
+            {roomName || `ห้อง ${roomCode}`}
+          </p>
+          <p className="text-primary/70 text-xs font-bold tracking-[0.25em]">
+            {roomCode}
+          </p>
           <div className="flex items-center gap-3">
             <motion.span
               className="block size-2 rounded-full bg-neon-green shadow-[0_0_10px_#80FF00]"
@@ -203,7 +323,7 @@ export default function LobbyPage() {
                 </p>
               </div>
 
-              {!player.isHost && (
+              {canManageLobby && !player.isHost && (
                 <button
                   onClick={() => handleRemovePlayer(player.id)}
                   className="size-10 rounded-full bg-white/5 hover:bg-neon-red/20 flex items-center justify-center text-white/40 hover:text-neon-red transition-all"
@@ -216,21 +336,27 @@ export default function LobbyPage() {
         </AnimatePresence>
 
         {/* Add Player Button */}
-        {canAddMore ? (
-          <motion.button
-            onClick={() => setShowAddModal(true)}
-            className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all h-[76px]"
-            whileTap={{ scale: 0.98 }}
-          >
-            <span className="material-symbols-outlined text-2xl">
-              person_add
-            </span>
-            <p className="font-bold text-lg">เพิ่มเพื่อน</p>
-          </motion.button>
+        {canManageLobby ? (
+          canAddMore ? (
+            <motion.button
+              onClick={() => setShowAddModal(true)}
+              className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all h-[76px]"
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="material-symbols-outlined text-2xl">
+                person_add
+              </span>
+              <p className="font-bold text-lg">เพิ่มเพื่อน</p>
+            </motion.button>
+          ) : (
+            <div className="w-full border-2 border-dashed border-neon-yellow/30 rounded-xl p-4 flex items-center justify-center gap-2 text-neon-yellow/70 h-[76px]">
+              <span className="material-symbols-outlined text-2xl">group</span>
+              <p className="font-bold text-lg">เต็มแล้ว! ({maxPlayers} คน)</p>
+            </div>
+          )
         ) : (
-          <div className="w-full border-2 border-dashed border-neon-yellow/30 rounded-xl p-4 flex items-center justify-center gap-2 text-neon-yellow/70 h-[76px]">
-            <span className="material-symbols-outlined text-2xl">group</span>
-            <p className="font-bold text-lg">เต็มแล้ว! ({maxPlayers} คน)</p>
+          <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-white/50">
+            คุณเข้าร่วมห้องนี้แล้ว รอเจ้าของวงกดเริ่มเกมได้เลย
           </div>
         )}
 
@@ -240,19 +366,25 @@ export default function LobbyPage() {
             <h3 className="text-white/60 text-sm font-bold uppercase tracking-widest">
               🎯 คำถามพิเศษ ({customQuestions.length})
             </h3>
-            <button
-              onClick={() => setShowQuestionModal(true)}
-              className="text-primary text-sm font-bold flex items-center gap-1 hover:opacity-80"
-            >
-              <span className="material-symbols-outlined text-sm">add</span>
-              เพิ่ม
-            </button>
+            {canManageLobby && (
+              <button
+                onClick={() => setShowQuestionModal(true)}
+                className="text-primary text-sm font-bold flex items-center gap-1 hover:opacity-80"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                เพิ่ม
+              </button>
+            )}
           </div>
 
           {customQuestions.length === 0 ? (
             <motion.button
-              onClick={() => setShowQuestionModal(true)}
-              className="w-full border border-dashed border-white/10 hover:border-primary/30 rounded-xl p-4 flex items-center justify-center gap-2 text-white/30 hover:text-primary/60 transition-all"
+              onClick={() => canManageLobby && setShowQuestionModal(true)}
+              className={`w-full rounded-xl border border-dashed p-4 flex items-center justify-center gap-2 transition-all ${
+                canManageLobby
+                  ? "border-white/10 hover:border-primary/30 text-white/30 hover:text-primary/60"
+                  : "border-white/10 text-white/30"
+              }`}
               whileTap={{ scale: 0.98 }}
             >
               <span className="material-symbols-outlined">lightbulb</span>
@@ -273,14 +405,16 @@ export default function LobbyPage() {
                   <p className="flex-1 text-white text-sm line-clamp-2">
                     {q.text}
                   </p>
-                  <button
-                    onClick={() => handleRemoveQuestion(q.id)}
-                    className="text-white/30 hover:text-neon-red"
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      close
-                    </span>
-                  </button>
+                  {canManageLobby && (
+                    <button
+                      onClick={() => handleRemoveQuestion(q.id)}
+                      className="text-white/30 hover:text-neon-red"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        close
+                      </span>
+                    </button>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -290,24 +424,30 @@ export default function LobbyPage() {
 
       {/* Footer */}
       <footer className="relative z-20 p-4 pb-6 bg-gradient-to-t from-[#160d1a] via-[#160d1a] to-transparent">
-        {players.length < 2 && (
+        {canManageLobby && players.length < 2 && (
           <div className="mb-4 flex items-center justify-center gap-2 text-neon-yellow text-sm">
             <span className="material-symbols-outlined text-lg">warning</span>
             <span>ต้องมีอย่างน้อย 2 คน</span>
           </div>
         )}
 
-        <Button
-          onClick={handleStartGame}
-          variant="primary"
-          size="xl"
-          fullWidth
-          disabled={players.length < 2}
-          icon="play_arrow"
-          iconPosition="right"
-        >
-          เริ่มเกมเลย
-        </Button>
+        {canManageLobby ? (
+          <Button
+            onClick={handleStartGame}
+            variant="primary"
+            size="xl"
+            fullWidth
+            disabled={players.length < 2}
+            icon="play_arrow"
+            iconPosition="right"
+          >
+            เริ่มเกมเลย
+          </Button>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-center text-sm text-white/50">
+            ห้องนี้พร้อมแล้วเมื่อเจ้าของวงกดเริ่มเกม
+          </div>
+        )}
       </footer>
 
       {/* Add Player Modal */}

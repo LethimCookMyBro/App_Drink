@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/adminAuth";
 import { sanitizeHtml } from "@/lib/validation";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 // Feedback validation schema
 const feedbackSchema = z.object({
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.standard);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.feedback);
     if (rateLimited) return rateLimited;
 
     const body = await request.json();
@@ -54,6 +55,18 @@ export async function POST(request: Request) {
       return jsonError(
         validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง",
         400,
+      );
+    }
+
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "feedback",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
       );
     }
 

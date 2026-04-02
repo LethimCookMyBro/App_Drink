@@ -1,73 +1,44 @@
-import { NextResponse } from "next/server";
-import { validateSession, getTokenFromRequest } from "@/lib/auth";
+import {
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+  jsonOk,
+} from "@/lib/apiUtils";
+import { getTokenFromRequest, sanitizeInput, validateSession } from "@/lib/auth";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import {
+  EMPTY_USER_GAME_STATS,
+  getUserStatsAndRecentSessions,
+} from "@/lib/userGameStats";
 
 export async function GET(request: Request) {
   try {
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json(
-        {
-          user: null,
-          stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
-          authenticated: false,
-          message: "กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโปรไฟล์",
-        },
-        { status: 200 }
-      );
+      return jsonOk({
+        user: null,
+        stats: EMPTY_USER_GAME_STATS,
+        authenticated: false,
+        message: "กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโปรไฟล์",
+      });
     }
 
     const session = await validateSession(token);
 
     if (!session) {
-      return NextResponse.json(
-        {
-          user: null,
-          stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
-          authenticated: false,
-          message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
-        },
-        { status: 200 }
-      );
+      return jsonOk({
+        user: null,
+        stats: EMPTY_USER_GAME_STATS,
+        authenticated: false,
+        message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
+      });
     }
 
-    // Get Prisma client dynamically
     const { default: prisma } = await import("@/lib/db");
+    const { stats } = await getUserStatsAndRecentSessions(prisma, session.user.id, 1);
 
-    // Get user's game stats
-    const gameSessions = await prisma.gameSession.findMany({
-      where: {
-        userId: session.user.id,
-        status: "COMPLETED",
-      },
-      include: {
-        events: true,
-      },
-    });
-
-    // Calculate statistics
-    const totalGames = gameSessions.length;
-
-    let totalDrinks = 0;
-    let totalPlayTimeMs = 0;
-
-    for (const gameSession of gameSessions) {
-      const drinkEvents = gameSession.events.filter(
-        (e) => e.type === "DRANK" || e.type === "SKIPPED"
-      );
-      totalDrinks += drinkEvents.length;
-
-      if (gameSession.endedAt) {
-        totalPlayTimeMs +=
-          new Date(gameSession.endedAt).getTime() -
-          new Date(gameSession.startedAt).getTime();
-      }
-    }
-
-    const totalPlayTimeHours =
-      Math.round((totalPlayTimeMs / (1000 * 60 * 60)) * 10) / 10;
-
-    return NextResponse.json({
+    return jsonOk({
       authenticated: true,
       user: {
         id: session.user.id,
@@ -76,19 +47,15 @@ export async function GET(request: Request) {
         avatarUrl: session.user.avatarUrl,
         createdAt: session.user.createdAt,
       },
-      stats: {
-        totalGames,
-        totalDrinks,
-        totalPlayTime: totalPlayTimeHours,
-      },
+      stats,
     });
   } catch (error) {
     console.error("Profile error:", error);
-    return NextResponse.json({
+    return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์", 500, {
       user: null,
-      stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+      stats: EMPTY_USER_GAME_STATS,
       authenticated: false,
-      error: "เกิดข้อผิดพลาดในการดึงข้อมูล - กรุณาเชื่อมต่อ Database",
+      error: "เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์",
     });
   }
 }
@@ -96,19 +63,22 @@ export async function GET(request: Request) {
 // Update user profile
 export async function PATCH(request: Request) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.profile);
+    if (rateLimited) return rateLimited;
+
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+      return jsonError("กรุณาเข้าสู่ระบบ", 401);
     }
 
     const session = await validateSession(token);
 
     if (!session) {
-      return NextResponse.json(
-        { error: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" },
-        { status: 401 }
-      );
+      return jsonError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่", 401);
     }
 
     // Get Prisma client dynamically
@@ -124,10 +94,7 @@ export async function PATCH(request: Request) {
         name.trim().length < 1 ||
         name.length > 50
       ) {
-        return NextResponse.json(
-          { error: "ชื่อต้องมี 1-50 ตัวอักษร" },
-          { status: 400 }
-        );
+        return jsonError("ชื่อต้องมี 1-50 ตัวอักษร", 400);
       }
     }
 
@@ -135,7 +102,7 @@ export async function PATCH(request: Request) {
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
-        ...(name !== undefined && { name: name.trim() }),
+        ...(name !== undefined && { name: sanitizeInput(name) }),
         ...(avatarUrl !== undefined && { avatarUrl }),
       },
       select: {
@@ -146,15 +113,12 @@ export async function PATCH(request: Request) {
       },
     });
 
-    return NextResponse.json({
+    return jsonOk({
       success: true,
       user: updatedUser,
     });
   } catch (error) {
     console.error("Update profile error:", error);
-    return NextResponse.json(
-      { error: "เกิดข้อผิดพลาดในการอัพเดทข้อมูล - กรุณาเชื่อมต่อ Database" },
-      { status: 500 }
-    );
+    return jsonError("เกิดข้อผิดพลาดในการอัพเดทข้อมูล", 500);
   }
 }

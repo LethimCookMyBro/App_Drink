@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel } from "@/components/ui";
+import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
 import { useAuthStore } from "@/store/authStore";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,18 +16,29 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนเข้าสู่ระบบ");
+      return;
+    }
+
     setIsLoading(true);
 
-    const result = await login(email, password);
+    const result = await login(email, password, turnstileToken);
 
     if (result.success) {
       router.push("/");
     } else {
       setError(result.error || "เกิดข้อผิดพลาด");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
     }
 
     setIsLoading(false);
@@ -97,12 +110,22 @@ export default function LoginPage() {
               </motion.div>
             )}
 
+            {turnstileEnabled && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <TurnstileWidget
+                  action="login"
+                  onTokenChange={setTurnstileToken}
+                  resetKey={turnstileResetKey}
+                />
+              </div>
+            )}
+
             <Button
               type="submit"
               variant="primary"
               size="lg"
               fullWidth
-              disabled={isLoading}
+              disabled={isLoading || (turnstileEnabled && !turnstileToken)}
             >
               {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </Button>

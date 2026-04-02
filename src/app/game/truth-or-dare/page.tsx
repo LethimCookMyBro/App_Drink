@@ -20,7 +20,6 @@ export default function TruthOrDarePage() {
   const { vibeLevel } = useGameStore();
   const is18PlusEnabled = vibeLevel === "chaos";
   const [players, setPlayers] = useState<string[]>([]);
-  const [isReady, setIsReady] = useState(false);
   const [cardType, setCardType] = useState<CardType>("dare");
   const [currentContent, setCurrentContent] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
@@ -29,6 +28,7 @@ export default function TruthOrDarePage() {
   const [roundNumber, setRoundNumber] = useState(1);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
   const [timerKey, setTimerKey] = useState(0);
+  const isReady = players.length > 0;
 
   // Load players
   useEffect(() => {
@@ -37,19 +37,21 @@ export default function TruthOrDarePage() {
       try {
         const parsed = JSON.parse(savedPlayers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setPlayers(parsed);
-          setPlayerDrinks(
-            Object.fromEntries(parsed.map((p: string) => [p, 0])),
-          );
-          setIsReady(true);
+          const timeoutId = window.setTimeout(() => {
+            setPlayers(parsed);
+            setPlayerDrinks(
+              Object.fromEntries(parsed.map((p: string) => [p, 0])),
+            );
+          }, 0);
+          return () => window.clearTimeout(timeoutId);
         } else {
-          router.push("/lobby/new");
+          router.replace("/create");
         }
       } catch {
-        router.push("/lobby/new");
+        router.replace("/create");
       }
     } else {
-      router.push("/lobby/new");
+      router.replace("/create");
     }
   }, [router]);
 
@@ -79,10 +81,14 @@ export default function TruthOrDarePage() {
     if (!currentContent && !isLoading && isReady && players.length > 0) {
       const q = getQuestionForPlayer(currentPlayer);
       if (q) {
-        setCardType(q.type === "TRUTH" ? "truth" : "dare");
-        setCurrentContent(q.text);
-        setCurrentQuestion(q);
-        playNewQuestion();
+        const timeoutId = window.setTimeout(() => {
+          setCardType(q.type === "TRUTH" ? "truth" : "dare");
+          setCurrentContent(q.text);
+          setCurrentQuestion(q);
+          playNewQuestion();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
       }
     }
   }, [
@@ -225,7 +231,7 @@ export default function TruthOrDarePage() {
             <motion.div
               key={currentContent}
               className={`
-                relative flex-1 w-full rounded-3xl border 
+                relative flex-1 w-full rounded-3xl border
                 ${isTruth ? "border-neon-blue shadow-neon-blue" : "border-neon-red shadow-neon-red"}
                 bg-[#1a0f1a] flex flex-col overflow-hidden ring-1 ring-inset ring-white/10
               `}

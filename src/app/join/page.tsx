@@ -4,13 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel } from "@/components/ui";
+import { Button, TurnstileWidget } from "@/components/ui";
+import { setCurrentUser } from "@/hooks/useUserSettings";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function JoinCirclePage() {
   const router = useRouter();
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const handleCodeChange = (value: string) => {
     // Only allow alphanumeric and uppercase
@@ -22,7 +28,7 @@ export default function JoinCirclePage() {
     setError("");
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (roomCode.length !== 4) {
       setError("กรุณาใส่รหัสห้อง 4 ตัว");
       return;
@@ -31,11 +37,48 @@ export default function JoinCirclePage() {
       setError("กรุณาใส่ชื่อของคุณ");
       return;
     }
-    if (typeof window !== "undefined") {
-      localStorage.setItem("wongtaek-join-name", playerName.trim());
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนเข้าห้อง");
+      return;
     }
-    // TODO: Validate room code with backend
-    router.push(`/lobby/${roomCode}`);
+
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerName: playerName.trim(),
+          turnstileToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "ไม่สามารถเข้าร่วมห้องได้");
+        if (turnstileEnabled) {
+          setTurnstileResetKey((current) => current + 1);
+        }
+        return;
+      }
+
+      localStorage.setItem("wongtaek-player-name", playerName.trim());
+      localStorage.setItem("wongtaek-room-code", roomCode);
+      localStorage.removeItem("wongtaek-game-started");
+      setCurrentUser(playerName.trim());
+      router.push(`/lobby/${roomCode}`);
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อกับห้องได้ ลองใหม่อีกครั้ง");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -150,6 +193,16 @@ export default function JoinCirclePage() {
             {error}
           </motion.div>
         )}
+
+        {turnstileEnabled && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <TurnstileWidget
+              action="room_join"
+              onTokenChange={setTurnstileToken}
+              resetKey={turnstileResetKey}
+            />
+          </div>
+        )}
       </div>
 
       {/* Submit Button */}
@@ -161,9 +214,14 @@ export default function JoinCirclePage() {
           fullWidth
           icon="login"
           iconPosition="right"
-          disabled={roomCode.length !== 4 || !playerName.trim()}
+          disabled={
+            roomCode.length !== 4 ||
+            !playerName.trim() ||
+            isSubmitting ||
+            (turnstileEnabled && !turnstileToken)
+          }
         >
-          เข้าร่วมวง
+          {isSubmitting ? "กำลังเข้าห้อง..." : "เข้าร่วมวง"}
         </Button>
       </div>
     </main>

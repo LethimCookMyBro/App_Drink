@@ -1,13 +1,18 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const DEV_FALLBACK_SECRET = "wong-taek-auth-dev-secret";
+
 // Get JWT secret - check at runtime, not build time
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
-    console.error("WARNING: JWT_SECRET not set in production!");
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET is required in production");
+    }
+    return DEV_FALLBACK_SECRET;
   }
-  return secret || "wong-taek-dev-secret-key";
+  return secret;
 }
 
 const TOKEN_EXPIRY = "7d"; // Token expires in 7 days

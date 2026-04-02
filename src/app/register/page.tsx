@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel } from "@/components/ui";
+import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
 import { useAuthStore } from "@/store/authStore";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,6 +18,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,20 +31,42 @@ export default function RegisterPage() {
       return;
     }
 
-    // Validate password length
-    if (password.length < 6) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+    if (name.trim().length === 0) {
+      setError("กรุณากรอกชื่อที่แสดง");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+      return;
+    }
+
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข");
+      return;
+    }
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนสมัครสมาชิก");
       return;
     }
 
     setIsLoading(true);
 
-    const result = await register(email, password, name);
+    const result = await register(
+      email,
+      password,
+      name.trim(),
+      turnstileToken,
+    );
 
     if (result.success) {
       router.push("/");
     } else {
       setError(result.error || "เกิดข้อผิดพลาด");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
     }
 
     setIsLoading(false);
@@ -112,10 +138,10 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:bg-white/10 transition-all"
-                placeholder="อย่างน้อย 6 ตัวอักษร"
+                placeholder="อย่างน้อย 8 ตัวอักษร และมีตัวเลข"
                 required
                 disabled={isLoading}
-                minLength={6}
+                minLength={8}
               />
             </div>
 
@@ -144,12 +170,22 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
+            {turnstileEnabled && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <TurnstileWidget
+                  action="register"
+                  onTokenChange={setTurnstileToken}
+                  resetKey={turnstileResetKey}
+                />
+              </div>
+            )}
+
             <Button
               type="submit"
               variant="primary"
               size="lg"
               fullWidth
-              disabled={isLoading}
+              disabled={isLoading || (turnstileEnabled && !turnstileToken)}
             >
               {isLoading ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
             </Button>

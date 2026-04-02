@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { GlassPanel } from "@/components/ui";
+import { GlassPanel, TurnstileWidget } from "@/components/ui";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -12,6 +14,8 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   // Check if already authenticated
   useEffect(() => {
@@ -34,19 +38,28 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (turnstileEnabled && !turnstileToken) {
+      setError("กรุณายืนยันว่าไม่ใช่บอทก่อนเข้าสู่ระบบ");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, turnstileToken }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         setError(data.error || "เกิดข้อผิดพลาด");
+        if (turnstileEnabled) {
+          setTurnstileResetKey((current) => current + 1);
+        }
         return;
       }
 
@@ -54,6 +67,9 @@ export default function AdminLoginPage() {
       router.push("/admin");
     } catch {
       setError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
+      if (turnstileEnabled) {
+        setTurnstileResetKey((current) => current + 1);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -127,10 +143,20 @@ export default function AdminLoginPage() {
               </motion.div>
             )}
 
+            {turnstileEnabled && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <TurnstileWidget
+                  action="admin_login"
+                  onTokenChange={setTurnstileToken}
+                  resetKey={turnstileResetKey}
+                />
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || (turnstileEnabled && !turnstileToken)}
               className="w-full py-3 bg-primary hover:bg-primary/80 disabled:bg-primary/50 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {isLoading ? (

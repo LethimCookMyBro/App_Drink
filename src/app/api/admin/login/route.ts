@@ -4,6 +4,19 @@ import { adminLoginSchema } from "@/lib/validation";
 import { signAdminToken } from "@/lib/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
+
+function isDefaultAdminSeed(
+  username: string,
+  email: string,
+  password: string,
+): boolean {
+  return (
+    username === "admin" ||
+    email === "admin@example.com" ||
+    password === "change-me-please"
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +44,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "admin_login",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
+      );
+    }
+
     const username = validation.data.username;
     const { password } = validation.data;
 
@@ -49,6 +74,14 @@ export async function POST(request: Request) {
       !!envAdminPassword &&
       username === envAdminUsername &&
       password === envAdminPassword;
+
+    if (
+      process.env.NODE_ENV === "production" &&
+      isDefaultAdminSeed(envAdminUsername, envAdminUsername, envAdminPassword)
+    ) {
+      console.error("Refusing default admin seed credentials in production");
+      return jsonError("ระบบผู้ดูแลยังตั้งค่าไม่ปลอดภัย", 503);
+    }
 
     let envAuthenticated = false;
     if (envCredentialsMatch) {

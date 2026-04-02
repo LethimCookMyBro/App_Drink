@@ -4,6 +4,7 @@ import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/ap
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { createRoomSchema, sanitizeHtml } from "@/lib/validation";
 import { signRoomHostToken, getRoomHostCookieName } from "@/lib/roomAuth";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 // Generate 4-character room code
 function generateRoomCode(): string {
@@ -38,10 +39,8 @@ export async function GET() {
     return jsonOk({ rooms });
   } catch (error) {
     console.error("Error fetching rooms:", error);
-    return jsonOk({
+    return jsonError("ไม่สามารถโหลดข้อมูลห้องได้ในขณะนี้", 500, {
       rooms: [],
-      fallback: true,
-      message: "ไม่สามารถเชื่อมต่อ Database กรุณาเริ่ม PostgreSQL",
     });
   }
 }
@@ -68,6 +67,18 @@ export async function POST(request: NextRequest) {
       return jsonError(
         validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง",
         400,
+      );
+    }
+
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "room_create",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
       );
     }
 
@@ -143,13 +154,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Error creating room:", error);
-    return jsonError(
-      "ไม่สามารถสร้างห้องได้",
-      500,
-      {
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-    );
+    return jsonError("ไม่สามารถสร้างห้องได้ในขณะนี้", 500);
   }
 }

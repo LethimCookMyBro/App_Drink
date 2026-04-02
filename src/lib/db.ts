@@ -1,15 +1,22 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+import { resolveDatabaseUrl } from "@/lib/databaseUrl";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pgPool: Pool | undefined;
 };
 
-// Initialize LibSQL adapter with database URL
-const dbUrl = process.env.DATABASE_URL || "file:/data/wongtaek.db";
-const adapter = new PrismaLibSql({ url: dbUrl });
+const dbUrl = resolveDatabaseUrl();
+const pool =
+  globalForPrisma.pgPool ??
+  new Pool({
+    connectionString: dbUrl,
+    max: process.env.NODE_ENV === "production" ? 10 : 5,
+  });
+const adapter = new PrismaPg(pool);
 
-// Create Prisma client for SQLite
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
@@ -17,6 +24,9 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.pgPool = pool;
+}
 
 export default prisma;

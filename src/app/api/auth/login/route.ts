@@ -5,25 +5,46 @@ import {
   createSession,
   isValidEmail,
 } from "@/lib/auth";
+import {
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+} from "@/lib/apiUtils";
+import { rateLimitConfigs } from "@/lib/rateLimit";
+import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 export async function POST(request: Request) {
   try {
+    const originBlocked = enforceSameOrigin(request);
+    if (originBlocked) return originBlocked;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
+    if (rateLimited) return rateLimited;
+
     const body = await request.json();
-    const { email, password } = body;
+    const email =
+      typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
 
     // Validate input
     if (!email || !password) {
-      return NextResponse.json(
-        { error: "กรุณากรอกอีเมลและรหัสผ่าน" },
-        { status: 400 }
-      );
+      return jsonError("กรุณากรอกอีเมลและรหัสผ่าน", 400);
     }
 
     // Validate email format
     if (!isValidEmail(email)) {
-      return NextResponse.json(
-        { error: "รูปแบบอีเมลไม่ถูกต้อง" },
-        { status: 400 }
+      return jsonError("รูปแบบอีเมลไม่ถูกต้อง", 400);
+    }
+
+    const turnstileCheck = await verifyTurnstileToken(
+      request,
+      body?.turnstileToken,
+      "login",
+    );
+    if (!turnstileCheck.ok) {
+      return jsonError(
+        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
+        turnstileCheck.status || 400,
       );
     }
 
@@ -32,24 +53,18 @@ export async function POST(request: Request) {
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email },
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" },
-        { status: 401 }
-      );
+      return jsonError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
 
     if (!isPasswordValid) {
-      return NextResponse.json(
-        { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" },
-        { status: 401 }
-      );
+      return jsonError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
     // Generate token and create session
@@ -92,13 +107,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Login error:", error);
-    return NextResponse.json(
-      {
-        error: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-      { status: 503 }
-    );
+    return jsonError("บริการเข้าสู่ระบบไม่พร้อมใช้งานชั่วคราว", 503);
   }
 }

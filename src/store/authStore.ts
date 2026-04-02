@@ -18,12 +18,14 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   login: (
     email: string,
-    password: string
+    password: string,
+    turnstileToken?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   register: (
     email: string,
     password: string,
-    name: string
+    name: string,
+    turnstileToken?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -44,12 +46,12 @@ export const useAuthStore = create<AuthState>()(
 
       setLoading: (loading) => set({ isLoading: loading }),
 
-      login: async (email, password) => {
+      login: async (email, password, turnstileToken) => {
         try {
           const response = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, turnstileToken }),
           });
 
           const data = await response.json();
@@ -69,12 +71,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email, password, name) => {
+      register: async (email, password, name, turnstileToken) => {
         try {
           const response = await fetch("/api/auth/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password, name }),
+            body: JSON.stringify({ email, password, name, turnstileToken }),
           });
 
           const data = await response.json();

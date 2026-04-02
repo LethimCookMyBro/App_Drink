@@ -30,11 +30,11 @@ export default function ChaosModePage() {
   const { vibeLevel } = useGameStore();
   const is18PlusEnabled = vibeLevel === "chaos";
   const [players, setPlayers] = useState<string[]>([]);
-  const [isReady, setIsReady] = useState(false);
   const [sequence, setSequence] = useState(1);
   const [currentRule, setCurrentRule] = useState(chaosRules[0]);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
   const [timerKey, setTimerKey] = useState(0);
+  const isReady = players.length > 0;
 
   const availableRules = useMemo(
     () =>
@@ -47,7 +47,6 @@ export default function ChaosModePage() {
     playDrink,
     playCountdown,
     playTimeUp,
-    vibrateLong,
     vibratePattern,
   } = useSoundEffects();
 
@@ -58,27 +57,23 @@ export default function ChaosModePage() {
       try {
         const parsed = JSON.parse(savedPlayers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setPlayers(parsed);
-          setPlayerDrinks(
-            Object.fromEntries(parsed.map((p: string) => [p, 0])),
-          );
-          setIsReady(true);
+          const timeoutId = window.setTimeout(() => {
+            setPlayers(parsed);
+            setPlayerDrinks(
+              Object.fromEntries(parsed.map((p: string) => [p, 0])),
+            );
+          }, 0);
+          return () => window.clearTimeout(timeoutId);
         } else {
-          router.push("/lobby/new");
+          router.replace("/create");
         }
       } catch {
-        router.push("/lobby/new");
+        router.replace("/create");
       }
     } else {
-      router.push("/lobby/new");
+      router.replace("/create");
     }
   }, [router]);
-
-  useEffect(() => {
-    if (availableRules.length > 0) {
-      setCurrentRule(availableRules[0]);
-    }
-  }, [availableRules]);
 
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],

@@ -2,7 +2,10 @@ import { NextRequest } from "next/server";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { roomCodeSchema } from "@/lib/validation";
-import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
+import {
+  getRoomHostPayloadFromCookies,
+  getRoomPlayerPayloadFromCookies,
+} from "@/lib/roomAuth";
 
 // GET /api/rooms/[code] - Get room by code
 export async function GET(
@@ -10,6 +13,9 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> },
 ) {
   try {
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomLookup);
+    if (rateLimited) return rateLimited;
+
     const { code } = await params;
     const roomCode = code.toUpperCase();
 
@@ -41,17 +47,29 @@ export async function GET(
       return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
     }
 
+    const hostPayload = await getRoomHostPayloadFromCookies(roomCode);
+    const playerPayload = await getRoomPlayerPayloadFromCookies(roomCode);
+
+    const hostAuthorized =
+      !!hostPayload &&
+      hostPayload.code === roomCode &&
+      hostPayload.roomId === room.id &&
+      hostPayload.hostId === room.hostId;
+
+    const playerAuthorized =
+      !!playerPayload &&
+      playerPayload.code === roomCode &&
+      playerPayload.roomId === room.id &&
+      room.players.some((player) => player.id === playerPayload.playerId);
+
+    if (!hostAuthorized && !playerAuthorized) {
+      return jsonError("กรุณาเข้าร่วมห้องก่อนดูข้อมูลห้อง", 403);
+    }
+
     return jsonOk({ room });
   } catch (error) {
     console.error("Error fetching room:", error);
-    return jsonError(
-      "ไม่สามารถดึงข้อมูลห้องได้",
-      500,
-      {
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-    );
+    return jsonError("ไม่สามารถดึงข้อมูลห้องได้ในขณะนี้", 500);
   }
 }
 
@@ -99,13 +117,6 @@ export async function DELETE(
     return jsonOk({ message: "ห้องถูกปิดแล้ว", room: updated });
   } catch (error) {
     console.error("Error closing room:", error);
-    return jsonError(
-      "ไม่สามารถปิดห้องได้",
-      500,
-      {
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-    );
+    return jsonError("ไม่สามารถปิดห้องได้ในขณะนี้", 500);
   }
 }

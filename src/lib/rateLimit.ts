@@ -3,6 +3,8 @@
  * In-memory rate limiting for API routes
  */
 
+import { getClientIPFromHeaders } from "@/lib/requestSecurity";
+
 interface RateLimitEntry {
   count: number;
   resetTime: number;
@@ -91,15 +93,7 @@ function cleanupExpiredEntries(): void {
  * Get client IP from request headers
  */
 export function getClientIP(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
-  const realIP = request.headers.get("x-real-ip");
-  if (realIP) {
-    return realIP;
-  }
-  return "unknown";
+  return getClientIPFromHeaders(request.headers);
 }
 
 /**
@@ -113,13 +107,22 @@ export const rateLimitConfigs = {
   questions: { windowMs: 60 * 1000, maxRequests: 100 },
 
   // Admin actions - stricter
-  admin: { windowMs: 60 * 1000, maxRequests: 20 },
+  admin: { windowMs: 10 * 60 * 1000, maxRequests: 15 },
 
   // Authentication - very strict
-  auth: { windowMs: 60 * 1000, maxRequests: 10 },
+  auth: { windowMs: 10 * 60 * 1000, maxRequests: 10 },
 
   // Room creation - moderate
-  rooms: { windowMs: 60 * 1000, maxRequests: 15 },
+  rooms: { windowMs: 5 * 60 * 1000, maxRequests: 12 },
+
+  // Room lookup - stricter to reduce brute-force room enumeration
+  roomLookup: { windowMs: 2 * 60 * 1000, maxRequests: 25 },
+
+  // Profile updates
+  profile: { windowMs: 5 * 60 * 1000, maxRequests: 20 },
+
+  // Public feedback
+  feedback: { windowMs: 10 * 60 * 1000, maxRequests: 6 },
 };
 
 export default {

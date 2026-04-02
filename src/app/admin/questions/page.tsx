@@ -53,77 +53,19 @@ const typeLabels: Record<string, { label: string; color: string; bg: string }> =
 
 const levelLabels = ["", "ชิลล์", "กลาง", "แรง"];
 
-// Mock data for when database is not connected
-const mockQuestions: AdminQuestion[] = [
-  {
-    id: "1",
-    text: "เคยโกหกแม่เรื่องอะไรบ้าง?",
-    type: "QUESTION",
-    level: 1,
-    is18Plus: false,
-    usageCount: 12,
-  },
-  {
-    id: "2",
-    text: "อาหารที่แอบกินคนเดียวไม่ยอมแบ่งใครคืออะไร?",
-    type: "QUESTION",
-    level: 1,
-    is18Plus: false,
-    usageCount: 8,
-  },
-  {
-    id: "3",
-    text: "เรื่องที่ไม่เคยบอกใครในวงนี้?",
-    type: "QUESTION",
-    level: 2,
-    is18Plus: false,
-    usageCount: 25,
-  },
-  {
-    id: "4",
-    text: "เคยแอบชอบเพื่อนในกลุ่มไหม?",
-    type: "QUESTION",
-    level: 2,
-    is18Plus: false,
-    usageCount: 30,
-  },
-  {
-    id: "5",
-    text: "โทรหาแฟนเก่าแล้วบอกว่าคิดถึงหมาของเขา",
-    type: "DARE",
-    level: 2,
-    is18Plus: false,
-    usageCount: 15,
-  },
-  {
-    id: "6",
-    text: "ใครมีเกณฑ์จะเป็นคนรวยที่สุด?",
-    type: "VOTE",
-    level: 1,
-    is18Plus: false,
-    usageCount: 20,
-  },
-  {
-    id: "7",
-    text: "ใครที่ใส่เสื้อสีดำ → ดื่มให้หมดแก้ว!",
-    type: "CHAOS",
-    level: 3,
-    is18Plus: false,
-    usageCount: 18,
-  },
-  {
-    id: "8",
-    text: "ถ้าต้องเลือกจีบคนในวงได้ 1 คน เลือกใคร?",
-    type: "QUESTION",
-    level: 3,
-    is18Plus: true,
-    usageCount: 45,
-  },
-];
+function getQuestionTextError(text: string): string | null {
+  const trimmed = text.trim();
+
+  if (trimmed.length === 0) return "กรุณากรอกคำถาม";
+  if (trimmed.length < 5) return "คำถามต้องมีอย่างน้อย 5 ตัวอักษร";
+  if (trimmed.length > 500) return "คำถามยาวได้ไม่เกิน 500 ตัวอักษร";
+
+  return null;
+}
 
 export default function AdminQuestionsPage() {
   const router = useRouter();
-  const [questions, setQuestions] = useState<AdminQuestion[]>(mockQuestions);
+  const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({ type: "", level: "", is18Plus: "" });
   const [showAddModal, setShowAddModal] = useState(false);
@@ -140,6 +82,7 @@ export default function AdminQuestionsPage() {
   const [dbConnected, setDbConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Custom dropdown state
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -147,6 +90,7 @@ export default function AdminQuestionsPage() {
   const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
+      setApiError(null);
       const params = new URLSearchParams();
       if (filter.type) params.set("type", filter.type);
       if (filter.level) params.set("level", filter.level);
@@ -157,21 +101,29 @@ export default function AdminQuestionsPage() {
         router.push("/admin/login");
         return;
       }
+      const data = await res.json().catch(() => null);
       if (res.ok) {
-        const data = await res.json();
         if (Array.isArray(data)) {
           setQuestions(data);
           setDbConnected(true);
+          setApiError(null);
         } else if (data.questions && Array.isArray(data.questions)) {
           setQuestions(data.questions);
           setDbConnected(true);
+          setApiError(null);
         } else {
           setQuestions([]);
           setDbConnected(true);
         }
+      } else {
+        setQuestions([]);
+        setDbConnected(false);
+        setApiError(data?.error || "ไม่สามารถโหลดคำถามจาก API ได้");
       }
     } catch {
+      setQuestions([]);
       setDbConnected(false);
+      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อโหลดคำถามได้");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -203,6 +155,11 @@ export default function AdminQuestionsPage() {
     fetchQuestions();
   };
 
+  const newQuestionTextError = getQuestionTextError(newQuestion.text);
+  const editingQuestionTextError = editingQuestion
+    ? getQuestionTextError(editingQuestion.text)
+    : null;
+
   // Filter mock data locally
   const filteredQuestions = questions.filter((q) => {
     if (filter.type && q.type !== filter.type) return false;
@@ -213,10 +170,10 @@ export default function AdminQuestionsPage() {
   });
 
   const handleAddQuestion = async () => {
-    if (!newQuestion.text.trim()) return;
+    if (newQuestionTextError) return;
 
-    // Try to add via API first
     try {
+      setApiError(null);
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -228,22 +185,16 @@ export default function AdminQuestionsPage() {
       }
       if (res.ok) {
         const data = await res.json();
-        setQuestions([data.question, ...questions]);
+        setQuestions((current) => [data.question, ...current]);
         setDbConnected(true);
       } else {
-        throw new Error("API failed");
+        const data = await res.json().catch(() => null);
+        setApiError(data?.error || "ไม่สามารถเพิ่มคำถามได้");
+        return;
       }
     } catch {
-      // Add locally for demo
-      const newQ: AdminQuestion = {
-        id: Date.now().toString(),
-        text: newQuestion.text,
-        type: newQuestion.type,
-        level: newQuestion.level,
-        is18Plus: newQuestion.is18Plus,
-        usageCount: 0,
-      };
-      setQuestions([newQ, ...questions]);
+      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อเพิ่มคำถามได้");
+      return;
     }
 
     setNewQuestion({ text: "", type: "QUESTION", level: 2, is18Plus: false });
@@ -251,9 +202,10 @@ export default function AdminQuestionsPage() {
   };
 
   const handleEditQuestion = async () => {
-    if (!editingQuestion || !editingQuestion.text.trim()) return;
+    if (!editingQuestion || editingQuestionTextError) return;
 
     try {
+      setApiError(null);
       const res = await fetch(`/api/questions/${editingQuestion.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -265,18 +217,19 @@ export default function AdminQuestionsPage() {
       }
       if (res.ok) {
         const data = await res.json();
-        setQuestions(
-          questions.map((q) =>
+        setQuestions((current) =>
+          current.map((q) =>
             q.id === editingQuestion.id ? data.question : q
           )
         );
+      } else {
+        const data = await res.json().catch(() => null);
+        setApiError(data?.error || "ไม่สามารถแก้ไขคำถามได้");
+        return;
       }
     } catch {
-      setQuestions(
-        questions.map((q) =>
-          q.id === editingQuestion.id ? editingQuestion : q
-        )
-      );
+      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อแก้ไขคำถามได้");
+      return;
     }
 
     setEditingQuestion(null);
@@ -285,15 +238,22 @@ export default function AdminQuestionsPage() {
 
   const handleDeleteQuestion = async (id: string) => {
     try {
+      setApiError(null);
       const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setApiError(data?.error || "ไม่สามารถลบคำถามได้");
+        return;
+      }
     } catch {
-      // Continue anyway
+      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อลบคำถามได้");
+      return;
     }
-    setQuestions(questions.filter((q) => q.id !== id));
+    setQuestions((current) => current.filter((q) => q.id !== id));
   };
 
   // Custom Dropdown Component
@@ -402,7 +362,10 @@ export default function AdminQuestionsPage() {
               <span className="material-symbols-outlined">refresh</span>
             </button>
             <Button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                setApiError(null);
+                setShowAddModal(true);
+              }}
               variant="primary"
               size="sm"
               icon="add"
@@ -414,11 +377,20 @@ export default function AdminQuestionsPage() {
       </header>
 
       {/* DB Status */}
-      {!dbConnected && (
+      {apiError && (
+        <div className="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+          <div className="p-3 rounded-xl bg-neon-red/10 border border-neon-red/20 flex items-center gap-2 text-neon-red text-sm">
+            <span className="material-symbols-outlined text-lg">error</span>
+            <span>{apiError}</span>
+          </div>
+        </div>
+      )}
+
+      {!apiError && !dbConnected && (
         <div className="max-w-6xl mx-auto px-4 md:px-8 mt-4">
           <div className="p-3 rounded-xl bg-neon-yellow/10 border border-neon-yellow/20 flex items-center gap-2 text-neon-yellow text-sm">
             <span className="material-symbols-outlined text-lg">info</span>
-            <span>ใช้ข้อมูลตัวอย่าง (เชื่อมต่อ Database เพื่อใช้งานจริง)</span>
+            <span>กำลังเชื่อมต่อข้อมูลคำถามจากระบบจริง</span>
           </div>
         </div>
       )}
@@ -501,6 +473,7 @@ export default function AdminQuestionsPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => {
+                            setApiError(null);
                             setEditingQuestion(q);
                             setShowEditModal(true);
                           }}
@@ -562,6 +535,18 @@ export default function AdminQuestionsPage() {
                     placeholder="พิมพ์คำถาม..."
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/30 focus:outline-none focus:border-primary resize-none h-24"
                   />
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                    <span
+                      className={
+                        newQuestionTextError ? "text-neon-red" : "text-white/40"
+                      }
+                    >
+                      {newQuestionTextError || "รองรับ 5-500 ตัวอักษร"}
+                    </span>
+                    <span className="text-white/30">
+                      {newQuestion.text.trim().length}/500
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -630,7 +615,7 @@ export default function AdminQuestionsPage() {
                   variant="primary"
                   size="lg"
                   fullWidth
-                  disabled={!newQuestion.text.trim()}
+                  disabled={Boolean(newQuestionTextError)}
                 >
                   บันทึก
                 </Button>
@@ -674,6 +659,20 @@ export default function AdminQuestionsPage() {
                     }
                     className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/30 focus:outline-none focus:border-primary resize-none h-24"
                   />
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                    <span
+                      className={
+                        editingQuestionTextError
+                          ? "text-neon-red"
+                          : "text-white/40"
+                      }
+                    >
+                      {editingQuestionTextError || "รองรับ 5-500 ตัวอักษร"}
+                    </span>
+                    <span className="text-white/30">
+                      {editingQuestion.text.trim().length}/500
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -742,7 +741,7 @@ export default function AdminQuestionsPage() {
                   variant="primary"
                   size="lg"
                   fullWidth
-                  disabled={!editingQuestion.text.trim()}
+                  disabled={Boolean(editingQuestionTextError)}
                 >
                   บันทึก
                 </Button>

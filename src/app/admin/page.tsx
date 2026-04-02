@@ -32,7 +32,7 @@ interface FeedbackItem {
 }
 
 interface StatsMeta {
-  source: "db" | "fallback" | "partial" | "empty";
+  source: "db" | "fallback" | "partial" | "empty" | "error";
   fetchedAt: string | null;
   total: number;
   shown: number;
@@ -231,6 +231,8 @@ export default function AdminDashboard() {
               source = "db";
             }
           }
+        } else {
+          throw new Error("questions_api_failed");
         }
 
         const computed = buildStats(questions as { level: number; type: string; is18Plus?: boolean }[], total);
@@ -242,12 +244,12 @@ export default function AdminDashboard() {
           shown,
         });
       } catch (error) {
-        console.error("Failed to fetch stats, using mock data:", error);
+        console.error("Failed to fetch stats:", error);
         const questions = mockQuestions;
         const computed = buildStats(questions);
         setStats(computed);
         setStatsMeta({
-          source: "fallback",
+          source: "error",
           fetchedAt: new Date().toLocaleString("th-TH"),
           total: computed.total,
           shown: questions.length,
@@ -366,6 +368,8 @@ export default function AdminDashboard() {
   const statsSourceLabel =
     statsMeta.source === "fallback"
       ? "Fallback (DB empty)"
+      : statsMeta.source === "error"
+        ? "API unavailable"
       : statsMeta.source === "partial"
         ? `Partial (${statsMeta.shown}/${statsMeta.total})`
         : statsMeta.source === "empty"
@@ -396,7 +400,10 @@ export default function AdminDashboard() {
       text: `Dashboard refreshed: ${statsMeta.fetchedAt ?? "-"}`,
     },
     {
-      level: statsMeta.source === "fallback" ? "WARN" : "INFO",
+      level:
+        statsMeta.source === "fallback" || statsMeta.source === "error"
+          ? "WARN"
+          : "INFO",
       text: `Questions source: ${statsSourceLabel}`,
     },
     {

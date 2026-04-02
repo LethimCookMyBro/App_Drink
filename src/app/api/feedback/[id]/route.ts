@@ -47,6 +47,14 @@ export async function PATCH(
     return jsonOk({ success: true, feedback: updatedFeedback });
   } catch (error) {
     console.error("Error updating feedback:", error);
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "P2025"
+    ) {
+      return jsonError("ไม่พบ feedback ที่ต้องการอัปเดต", 404);
+    }
     return jsonError("ไม่สามารถอัปเดตสถานะได้", 500);
   }
 }
@@ -78,6 +86,14 @@ export async function DELETE(
     return jsonOk({ success: true, message: "ลบ feedback สำเร็จ" });
   } catch (error) {
     console.error("Error deleting feedback:", error);
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "P2025"
+    ) {
+      return jsonError("ไม่พบ feedback ที่ต้องการลบ", 404);
+    }
     return jsonError("ไม่สามารถลบ feedback ได้", 500);
   }
 }

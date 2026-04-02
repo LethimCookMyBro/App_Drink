@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
+import { jsonError, jsonOk } from "@/lib/apiUtils";
 
 export async function GET() {
   try {
     const admin = await requireAdmin();
     if (!admin) {
-      return NextResponse.json({
+      return jsonOk({
         authenticated: false,
         error: "ไม่พบ token",
         code: "NO_SESSION",
       });
     }
 
-    return NextResponse.json({
+    return jsonOk({
       authenticated: true,
       admin: {
         username: admin.email,
@@ -23,9 +23,8 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Admin verify error:", error);
-    return NextResponse.json(
-      { authenticated: false, error: "Server misconfiguration" },
-      { status: 500 },
-    );
+    return jsonError("Server misconfiguration", 500, {
+      authenticated: false,
+    });
   }
 }

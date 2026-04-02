@@ -1,26 +1,18 @@
-import { NextResponse } from "next/server";
 import { validateSession, getTokenFromRequest } from "@/lib/auth";
+import { jsonError, jsonOk } from "@/lib/apiUtils";
 
 export async function GET(request: Request) {
   try {
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json(
-        { authenticated: false, user: null },
-        { status: 200 }
-      );
+      return jsonOk({ authenticated: false, user: null });
     }
 
     const session = await validateSession(token);
 
     if (!session) {
-      const response = NextResponse.json(
-        { authenticated: false, user: null },
-        { status: 200 }
-      );
-
-      // Clear invalid token
+      const response = jsonOk({ authenticated: false, user: null });
       response.cookies.set("auth-token", "", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -32,23 +24,20 @@ export async function GET(request: Request) {
       return response;
     }
 
-    return NextResponse.json(
-      {
-        authenticated: true,
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.name,
-          avatarUrl: session.user.avatarUrl,
-        },
+    return jsonOk({
+      authenticated: true,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        avatarUrl: session.user.avatarUrl,
       },
-      { status: 200 }
-    );
+    });
   } catch (error) {
     console.error("Me error:", error);
-    return NextResponse.json(
-      { authenticated: false, user: null, error: "เกิดข้อผิดพลาด" },
-      { status: 500 }
-    );
+    return jsonError("เกิดข้อผิดพลาด", 500, {
+      authenticated: false,
+      user: null,
+    });
   }
 }

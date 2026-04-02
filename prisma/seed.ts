@@ -1,11 +1,17 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { Pool } from "pg";
 
-const dbUrl = process.env.DATABASE_URL || "file:prisma/dev.db";
+const dbUrl =
+  process.env.DATABASE_PUBLIC_URL?.trim() || process.env.DATABASE_URL?.trim();
 
-// PrismaLibSql can take a config object for local files
-const adapter = new PrismaLibSql({ url: dbUrl });
+if (!dbUrl) {
+  throw new Error("DATABASE_PUBLIC_URL or DATABASE_URL is required");
+}
+
+const pool = new Pool({ connectionString: dbUrl });
+const adapter = new PrismaPg(pool);
 
 const prisma = new PrismaClient({ adapter });
 
@@ -272,4 +278,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

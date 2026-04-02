@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server";
+import { jsonError, jsonOk } from "@/lib/apiUtils";
 import { validateSession, getTokenFromRequest } from "@/lib/auth";
+import {
+  EMPTY_USER_GAME_STATS,
+  getUserStatsAndRecentSessions,
+} from "@/lib/userGameStats";
 
 export async function GET(request: Request) {
   try {
     const token = getTokenFromRequest(request);
 
     if (!token) {
-      return NextResponse.json({
+      return jsonOk({
         authenticated: false,
-        stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+        stats: EMPTY_USER_GAME_STATS,
         history: [],
         message: "กรุณาเข้าสู่ระบบเพื่อดูประวัติการเล่น",
       });
@@ -17,59 +21,23 @@ export async function GET(request: Request) {
     const session = await validateSession(token);
 
     if (!session) {
-      return NextResponse.json({
+      return jsonOk({
         authenticated: false,
-        stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+        stats: EMPTY_USER_GAME_STATS,
         history: [],
         message: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่",
       });
     }
 
-    // Get Prisma client dynamically
     const { default: prisma } = await import("@/lib/db");
-
-    // Get user's game sessions with statistics
-    const gameSessions = await prisma.gameSession.findMany({
-      where: {
-        userId: session.user.id,
-        status: "COMPLETED",
-      },
-      include: {
-        room: true,
-        events: true,
-      },
-      orderBy: {
-        startedAt: "desc",
-      },
-      take: 50,
-    });
-
-    // Calculate statistics
-    const totalGames = gameSessions.length;
-
-    let totalDrinks = 0;
-    let totalPlayTimeMs = 0;
-
-    for (const gameSession of gameSessions) {
-      // Count drinks from events
-      const drinkEvents = gameSession.events.filter(
-        (e) => e.type === "DRANK" || e.type === "SKIPPED"
-      );
-      totalDrinks += drinkEvents.length;
-
-      // Calculate play time
-      if (gameSession.endedAt) {
-        totalPlayTimeMs +=
-          new Date(gameSession.endedAt).getTime() -
-          new Date(gameSession.startedAt).getTime();
-      }
-    }
-
-    const totalPlayTimeHours =
-      Math.round((totalPlayTimeMs / (1000 * 60 * 60)) * 10) / 10;
+    const { stats, sessions } = await getUserStatsAndRecentSessions(
+      prisma,
+      session.user.id,
+      50,
+    );
 
     // Format history items
-    const history = gameSessions.map((gs) => {
+    const history = sessions.map((gs) => {
       const duration = gs.endedAt
         ? Math.round(
             (new Date(gs.endedAt).getTime() -
@@ -92,22 +60,18 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({
+    return jsonOk({
       authenticated: true,
-      stats: {
-        totalGames,
-        totalDrinks,
-        totalPlayTime: totalPlayTimeHours,
-      },
+      stats,
       history,
     });
   } catch (error) {
     console.error("History error:", error);
-    return NextResponse.json({
+    return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการเล่น", 500, {
       authenticated: false,
-      stats: { totalGames: 0, totalDrinks: 0, totalPlayTime: 0 },
+      stats: EMPTY_USER_GAME_STATS,
       history: [],
-      error: "เกิดข้อผิดพลาดในการดึงข้อมูล - กรุณาเชื่อมต่อ Database",
+      error: "เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการเล่น",
     });
   }
 }

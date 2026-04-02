@@ -63,7 +63,11 @@ export default function DeckBuilderPage() {
     const saved = localStorage.getItem("wongtaek-decks");
     if (saved) {
       try {
-        setDecks(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        const timeoutId = window.setTimeout(() => {
+          setDecks(parsed);
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
       } catch {
         // Ignore
       }
@@ -157,7 +161,7 @@ export default function DeckBuilderPage() {
       "wongtaek-custom-questions",
       JSON.stringify(currentDeck.questions),
     );
-    router.push("/lobby/new");
+    router.push("/create");
   };
 
   const generateShareCode = () => {
@@ -234,7 +238,7 @@ export default function DeckBuilderPage() {
             {/* Questions */}
             <div className="space-y-2">
               <AnimatePresence>
-                {currentDeck.questions.map((q, i) => {
+                {currentDeck.questions.map((q) => {
                   const typeInfo = questionTypes.find(
                     (t) => t.value === q.type,
                   );

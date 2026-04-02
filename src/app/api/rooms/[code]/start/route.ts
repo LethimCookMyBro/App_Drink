@@ -88,13 +88,6 @@ export async function POST(
     );
   } catch (error) {
     console.error("Error starting game:", error);
-    return jsonError(
-      "ไม่สามารถเริ่มเกมได้",
-      500,
-      {
-        detail:
-          "กรุณาเชื่อมต่อ Database ก่อน (Start PostgreSQL และรัน: npx prisma db push)",
-      },
-    );
+    return jsonError("ไม่สามารถเริ่มเกมได้ในขณะนี้", 500);
   }
 }
