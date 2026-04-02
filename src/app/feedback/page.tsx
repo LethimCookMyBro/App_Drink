@@ -9,6 +9,14 @@ import Link from "next/link";
 type FeedbackType = "BUG" | "FEATURE";
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
+function getTitleError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "กรุณากรอกหัวข้อ";
+  if (trimmed.length < 3) return "หัวข้อต้องมีอย่างน้อย 3 ตัวอักษร";
+  if (trimmed.length > 100) return "หัวข้อยาวได้ไม่เกิน 100 ตัวอักษร";
+  return null;
+}
+
 export default function FeedbackPage() {
   const router = useRouter();
   const [type, setType] = useState<FeedbackType>("BUG");
@@ -20,13 +28,14 @@ export default function FeedbackPage() {
   const [success, setSuccess] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const titleError = getTitleError(title);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!title.trim()) {
-      setError("กรุณากรอกหัวข้อ");
+    if (titleError) {
+      setError(titleError);
       return;
     }
 
@@ -160,9 +169,17 @@ export default function FeedbackPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="เช่น อยากได้แผนที่แบบออฟไลน์"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
+            className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-white/30 focus:outline-none transition-colors ${
+              titleError ? "border-neon-red/60" : "border-white/10 focus:border-primary"
+            }`}
             maxLength={100}
           />
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className={titleError ? "text-neon-red" : "text-white/30"}>
+              {titleError || "หัวข้อสั้น กระชับ และชัดเจนจะช่วยให้ทีมตรวจสอบได้เร็วขึ้น"}
+            </span>
+            <span className="text-white/30">{title.trim().length}/100</span>
+          </div>
         </div>
 
         {/* Details */}
@@ -177,6 +194,9 @@ export default function FeedbackPage() {
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors resize-none h-32"
             maxLength={1000}
           />
+          <div className="mt-2 text-right text-xs text-white/30">
+            {details.trim().length}/1000
+          </div>
         </div>
 
         {/* Contact */}
@@ -192,6 +212,9 @@ export default function FeedbackPage() {
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
             maxLength={100}
           />
+          <div className="mt-2 text-right text-xs text-white/30">
+            {contact.trim().length}/100
+          </div>
         </div>
 
         {/* Error */}
@@ -221,7 +244,9 @@ export default function FeedbackPage() {
           variant="primary"
           size="xl"
           fullWidth
-          disabled={isSubmitting || (turnstileEnabled && !turnstileToken)}
+          disabled={
+            isSubmitting || !!titleError || (turnstileEnabled && !turnstileToken)
+          }
           icon={isSubmitting ? undefined : "send"}
           iconPosition="left"
         >

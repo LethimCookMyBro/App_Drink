@@ -1,80 +1,63 @@
-# Plan
+# Responsive UI Orchestration Plan
 
 ## Goal
-Review the current Next.js full-stack app with a code-review mindset, then clean up dead/duplicate code and remove performance bottlenecks without removing animations.
+Make the app work cleanly on Windows laptops, MacBook, iPad/tablets, and iPhone/Android without flattening the current visual style, motion, or game-first feel.
 
-## Current Scope
-- App router pages in `src/app/*`
-- API routes in `src/app/api/*`
-- Shared logic in `src/lib/*`, `src/hooks/*`, `src/store/*`, `src/components/ui/*`
-- Database and runtime config in `prisma/*`, `prisma.config.ts`, `src/lib/db.ts`
-- App shell and client boot paths in `src/app/layout.tsx`, `src/middleware.ts`, `src/components/ThemeProvider.tsx`
+## Current Findings
 
-## Phase 1: Review Findings
-1. Inspect correctness and regressions in the main user flows.
-   - `src/app/login/page.tsx`
-   - `src/app/register/page.tsx`
-   - `src/app/create/page.tsx`
-   - `src/app/join/page.tsx`
-   - `src/app/lobby/[roomCode]/page.tsx`
-   - `src/app/game/*`
-   - `src/app/profile/page.tsx`
-   - `src/app/history/page.tsx`
-2. Inspect API safety and data flow.
-   - `src/app/api/auth/*`
-   - `src/app/api/admin/*`
-   - `src/app/api/rooms/*`
-   - `src/app/api/feedback/*`
-   - `src/app/api/questions/*`
-   - `src/app/api/user/*`
-3. Check security-sensitive plumbing.
-   - `src/middleware.ts`
-   - `src/lib/apiUtils.ts`
-   - `src/lib/auth.ts`
-   - `src/lib/adminAuth.ts`
-   - `src/lib/roomAuth.ts`
-   - `src/lib/requestSecurity.ts`
-   - `src/lib/cloudflare.ts`
+### Layout Foundation
+- [src/app/globals.css](/mnt/d/fortestdrink/wong-taek-app/src/app/globals.css): `.container-mobile` is hard-locked to `max-w-md`, which keeps every major screen in a phone-sized column even on tablet and laptop.
+- [src/app/layout.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/layout.tsx): the global shell is visually centered, but it does not provide a wider responsive stage for large screens or tablet landscape.
 
-## Phase 2: Clean Code
-1. Remove dead code and stale branches.
-   - Unused exports in `src/hooks/index.ts`, `src/components/ui/index.ts`, `src/lib/*`
-   - Fallback logic that no longer matches the PostgreSQL flow
-2. Deduplicate repeated logic.
-   - Repeated origin/rate-limit guards in API routes
-   - Repeated auth form submit/error patterns in client pages
-   - Repeated room and question sanitization checks
-3. Tighten naming and structure.
-   - Prefer small helpers with one job
-   - Keep page components thin and move shared logic into `src/lib/*` or `src/hooks/*`
+### Fixed Navigation and Safe Areas
+- [src/components/ui/BottomNav.tsx](/mnt/d/fortestdrink/wong-taek-app/src/components/ui/BottomNav.tsx): bottom nav is permanently fixed and sized for mobile only; it needs desktop/tablet behavior and better large-screen spacing.
+- [src/app/globals.css](/mnt/d/fortestdrink/wong-taek-app/src/app/globals.css): there is a `safe-area-bottom` helper, but usage is inconsistent across pages with fixed footers and bottom action bars.
 
-## Phase 3: Performance
-1. Measure first, then optimize.
-   - Load-time checks for `src/app/layout.tsx` and the heaviest game pages
-   - Interaction checks for `src/app/game/play/page.tsx`, `src/app/game/summary/page.tsx`, `src/app/lobby/[roomCode]/page.tsx`
-2. Focus on likely wins.
-   - Reduce unnecessary client re-renders in hooks and stores
-   - Avoid repeated data fetches in lobby/profile/history flows
-   - Keep animations, but make sure they do not block first paint or input
-3. Preserve the current visual language.
-   - Do not remove Framer Motion usage unless a specific animation causes measurable jank
-   - Prefer lighter animation props, shorter lists, and fewer rerenders over deleting motion
+### Entry and Form Screens
+- [src/app/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/page.tsx): hero and selector layout are mobile-first and do not yet scale typography/spacing for tablet and laptop.
+- [src/app/create/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/create/page.tsx) and [src/app/join/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/join/page.tsx): fixed bottom action areas are constrained to a phone-width overlay and need a desktop/tablet footer treatment.
+- [src/app/login/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/login/page.tsx), [src/app/register/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/register/page.tsx), [src/app/settings/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/settings/page.tsx): forms are usable on mobile, but spacing and width caps need a tablet/laptop pass.
 
-## Dependencies And Risks
-- The app recently migrated to PostgreSQL and Cloudflare Turnstile, so DB and auth changes must be reviewed as one unit.
-- Many files are already modified in the worktree; do not revert unrelated user changes.
-- `package.json`, `prisma.config.ts`, and `src/lib/db.ts` are now critical runtime files and should be treated as high-risk edits.
-- Some code paths may still be using stale SQLite assumptions or placeholder fallback text.
+### Lobby and Sheets
+- [src/app/lobby/[roomCode]/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/lobby/[roomCode]/page.tsx): uses `h-[100dvh]`, mobile-only player list density, and bottom sheets sized to `max-w-md`; likely to feel cramped on iPad landscape and underused on laptop.
 
-## Verification
-- `npx tsc --noEmit --pretty false --incremental false`
-- `cd /mnt/d/fortestdrink/wong-taek-app && git diff --check`
-- Security scan with the repo script when implementation starts
-- Lint on touched files only after each change batch
-- Manual smoke test for login, register, create/join/lobby, gameplay, profile, and admin login
+### Game Pages
+- [src/app/game/modes/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/modes/page.tsx): uses full-screen horizontal cards sized around mobile viewport assumptions; needs tablet/desktop card widths and better large-screen composition.
+- [src/app/game/play/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/play/page.tsx): header, player token, question card, timer, and dual CTA footer are tightly stacked for phone portrait and need responsive spacing and max widths.
+- [src/app/game/truth-or-dare/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/truth-or-dare/page.tsx): card height, header density, and footer CTAs are likely to compress badly in short landscape viewports.
+- [src/app/game/chaos/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/chaos/page.tsx): relies on `h-screen`, strong fixed vertical sequencing, and dense visual chrome; needs orientation-aware spacing.
+- [src/app/game/wheel/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/wheel/page.tsx): wheel sizing is static; result card and footer need better scaling for tablet and laptop.
+- [src/app/game/summary/page.tsx](/mnt/d/fortestdrink/wong-taek-app/src/app/game/summary/page.tsx): summary cards and footer actions are still framed like a phone screen, not a flexible responsive results layout.
 
-## Done Criteria
-- Review findings are documented with file-level references.
-- Dead and duplicate code is removed without breaking imports.
-- Performance changes are measured and do not remove animations.
-- The app still passes type-check and diff-check after each change batch.
+## Phase 2 Implementation Plan
+
+### 1. Foundation
+- Replace the single-width mobile shell with breakpoint-aware container utilities.
+- Add a shared responsive content pattern for phone, tablet, and laptop widths.
+- Normalize `min-h-screen` vs `100dvh` usage so Safari/iPad/mobile browser chrome behaves better.
+
+### 2. Shared UI
+- Update `Button`, bottom nav, sheets, and repeated card wrappers to scale typography, height, and padding by breakpoint.
+- Make fixed footers and bottom action bars work with safe areas on iPhone and with centered width on tablet/laptop.
+
+### 3. Responsive App Screens
+- Refactor home, create, join, login, register, settings, profile, history, feedback, and admin shells so they stop pretending every device is a phone.
+- Preserve the neon look, but allow larger, calmer spacing and wider content on tablet/laptop.
+
+### 4. Responsive Game Screens
+- Re-layout modes, play, truth-or-dare, chaos, wheel, and summary for portrait and landscape.
+- Keep animation and drama, but prevent clipping, CTA crowding, and header/footer collisions.
+
+### 5. Verification
+- Test widths: 390, 430, 768, 820, 1024, 1280, 1440.
+- Test orientations: phone portrait, phone landscape, iPad portrait, iPad landscape.
+- Smoke test flow: home -> create/join -> lobby -> modes -> play -> summary.
+- Run `git diff --check`.
+- Run `npx tsc --noEmit --pretty false --incremental false`.
+
+## Deliverables
+- Updated global responsive shell
+- Responsive bottom nav and action footers
+- Refined entry/lobby/forms for tablet and laptop
+- Responsive game pages without removing animations
+- Verification notes after implementation

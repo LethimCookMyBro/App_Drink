@@ -38,6 +38,65 @@ interface StatsMeta {
   shown: number;
 }
 
+type FeedbackStatus = "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
+type FeedbackFilter = "ALL" | FeedbackStatus;
+
+function getFeedbackTypeMeta(type: string) {
+  return type === "BUG"
+    ? {
+        label: "บัค",
+        icon: "bug_report",
+        badgeClass: "bg-neon-red/20 text-neon-red",
+        iconWrapClass: "bg-neon-red/20",
+        iconClass: "text-neon-red",
+      }
+    : {
+        label: "ฟีเจอร์",
+        icon: "lightbulb",
+        badgeClass: "bg-neon-yellow/20 text-neon-yellow",
+        iconWrapClass: "bg-neon-yellow/20",
+        iconClass: "text-neon-yellow",
+      };
+}
+
+function getFeedbackStatusMeta(status: string) {
+  switch (status) {
+    case "IN_PROGRESS":
+      return {
+        label: "กำลังดำเนินการ",
+        badgeClass: "bg-neon-blue/20 text-neon-blue",
+      };
+    case "RESOLVED":
+      return {
+        label: "แก้ไขแล้ว",
+        badgeClass: "bg-neon-green/20 text-neon-green",
+      };
+    case "REJECTED":
+      return {
+        label: "ปฏิเสธ",
+        badgeClass: "bg-neon-red/20 text-neon-red",
+      };
+    default:
+      return {
+        label: "รอดำเนินการ",
+        badgeClass: "bg-white/10 text-white/70",
+      };
+  }
+}
+
+function getErrorMessage(data: unknown, fallback: string): string {
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    typeof data.error === "string"
+  ) {
+    return data.error;
+  }
+
+  return fallback;
+}
+
 const mockQuestions: { level: number; type: string }[] = [];
 const KNOWN_TYPES = ["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"] as const;
 
@@ -112,6 +171,13 @@ export default function AdminDashboard() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authCheckedAt, setAuthCheckedAt] = useState<string | null>(null);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackNotice, setFeedbackNotice] = useState("");
+  const [feedbackBusyId, setFeedbackBusyId] = useState<string | null>(null);
+  const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(
+    null,
+  );
+  const [feedbackFilter, setFeedbackFilter] = useState<FeedbackFilter>("ALL");
   const [activeTab, setActiveTab] = useState<"logs" | "security" | "feedback">(
     "feedback",
   );
@@ -155,6 +221,9 @@ export default function AdminDashboard() {
   // Handle feedback status change
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
+      setFeedbackBusyId(id);
+      setFeedbackError("");
+      setFeedbackNotice("");
       const res = await fetch(`/api/feedback/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -164,13 +233,27 @@ export default function AdminDashboard() {
         router.push("/admin/login");
         return;
       }
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         setFeedbacks((prev) =>
-          prev.map((fb) => (fb.id === id ? { ...fb, status: newStatus } : fb)),
+          prev.map((fb) =>
+            fb.id === id
+              ? {
+                  ...fb,
+                  status: newStatus,
+                }
+              : fb,
+          ),
         );
+        setFeedbackNotice("อัปเดตสถานะ feedback แล้ว");
+      } else {
+        setFeedbackError(getErrorMessage(data, "ไม่สามารถอัปเดตสถานะ feedback ได้"));
       }
     } catch (error) {
       console.error("Failed to update feedback status:", error);
+      setFeedbackError("ไม่สามารถเชื่อมต่อเพื่ออัปเดตสถานะ feedback ได้");
+    } finally {
+      setFeedbackBusyId(null);
     }
   };
 
@@ -178,16 +261,27 @@ export default function AdminDashboard() {
   const handleDeleteFeedback = async (id: string) => {
     if (!confirm("ต้องการลบ feedback นี้?")) return;
     try {
+      setFeedbackBusyId(id);
+      setFeedbackError("");
+      setFeedbackNotice("");
       const res = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         setFeedbacks((prev) => prev.filter((fb) => fb.id !== id));
+        setExpandedFeedbackId((current) => (current === id ? null : current));
+        setFeedbackNotice("ลบ feedback สำเร็จ");
+      } else {
+        setFeedbackError(getErrorMessage(data, "ไม่สามารถลบ feedback ได้"));
       }
     } catch (error) {
       console.error("Failed to delete feedback:", error);
+      setFeedbackError("ไม่สามารถเชื่อมต่อเพื่อลบ feedback ได้");
+    } finally {
+      setFeedbackBusyId(null);
     }
   };
 
@@ -264,6 +358,7 @@ export default function AdminDashboard() {
     // Fetch feedback
     async function fetchFeedback() {
       try {
+        setFeedbackError("");
         const res = await fetch("/api/feedback");
         if (res.status === 401) {
           router.push("/admin/login");
@@ -272,9 +367,13 @@ export default function AdminDashboard() {
         if (res.ok) {
           const data = await res.json();
           setFeedbacks(data.feedbacks || []);
+        } else {
+          const data = await res.json().catch(() => null);
+          setFeedbackError(getErrorMessage(data, "ไม่สามารถโหลด feedback ได้"));
         }
       } catch (e) {
         console.error("Failed to fetch feedback:", e);
+        setFeedbackError("ไม่สามารถเชื่อมต่อเพื่อโหลด feedback ได้");
       }
     }
     fetchFeedback();
@@ -364,6 +463,10 @@ export default function AdminDashboard() {
   const pendingFeedbackCount = feedbacks.filter(
     (fb) => fb.status === "PENDING",
   ).length;
+  const filteredFeedbacks =
+    feedbackFilter === "ALL"
+      ? feedbacks
+      : feedbacks.filter((fb) => fb.status === feedbackFilter);
 
   const statsSourceLabel =
     statsMeta.source === "fallback"
@@ -764,53 +867,102 @@ export default function AdminDashboard() {
 
             {activeTab === "feedback" && (
               <>
-                {feedbacks.length === 0 ? (
+                <div className="mb-4 flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { id: "ALL" as const, label: `ทั้งหมด (${feedbacks.length})` },
+                      {
+                        id: "PENDING" as const,
+                        label: `รอดำเนินการ (${pendingFeedbackCount})`,
+                      },
+                      { id: "IN_PROGRESS" as const, label: "กำลังดำเนินการ" },
+                      { id: "RESOLVED" as const, label: "แก้ไขแล้ว" },
+                      { id: "REJECTED" as const, label: "ปฏิเสธ" },
+                    ].map((filterItem) => (
+                      <button
+                        key={filterItem.id}
+                        onClick={() => setFeedbackFilter(filterItem.id)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                          feedbackFilter === filterItem.id
+                            ? "bg-primary text-white"
+                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80"
+                        }`}
+                      >
+                        {filterItem.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {feedbackError && (
+                    <div className="rounded-xl border border-neon-red/40 bg-neon-red/10 px-4 py-3 text-sm text-neon-red">
+                      {feedbackError}
+                    </div>
+                  )}
+
+                  {feedbackNotice && (
+                    <div className="rounded-xl border border-neon-green/40 bg-neon-green/10 px-4 py-3 text-sm text-neon-green">
+                      {feedbackNotice}
+                    </div>
+                  )}
+                </div>
+
+                {filteredFeedbacks.length === 0 ? (
                   <GlassPanel className="p-6 text-center">
                     <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
                       inbox
                     </span>
-                    <p className="text-white/40">ยังไม่มี Feedback</p>
+                    <p className="text-white/40">
+                      {feedbacks.length === 0
+                        ? "ยังไม่มี Feedback"
+                        : "ไม่มี feedback ในสถานะที่เลือก"}
+                    </p>
                   </GlassPanel>
                 ) : (
                   <div className="space-y-3">
-                    {feedbacks.slice(0, 10).map((fb) => (
+                    {filteredFeedbacks.map((fb) => {
+                      const typeMeta = getFeedbackTypeMeta(fb.type);
+                      const statusMeta = getFeedbackStatusMeta(fb.status);
+                      const isExpanded = expandedFeedbackId === fb.id;
+                      const isBusy = feedbackBusyId === fb.id;
+
+                      return (
                       <GlassPanel key={fb.id} className="p-4">
                         <div className="flex items-start gap-3">
                           <div
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                              fb.type === "BUG"
-                                ? "bg-neon-red/20"
-                                : "bg-neon-yellow/20"
-                            }`}
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${typeMeta.iconWrapClass}`}
                           >
-                            <span
-                              className={`material-symbols-outlined text-xl ${
-                                fb.type === "BUG"
-                                  ? "text-neon-red"
-                                  : "text-neon-yellow"
-                              }`}
-                            >
-                              {fb.type === "BUG" ? "bug_report" : "lightbulb"}
+                            <span className={`material-symbols-outlined text-xl ${typeMeta.iconClass}`}>
+                              {typeMeta.icon}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded-full ${
-                                  fb.type === "BUG"
-                                    ? "bg-neon-red/20 text-neon-red"
-                                    : "bg-neon-yellow/20 text-neon-yellow"
-                                }`}
-                              >
-                                {fb.type === "BUG" ? "🐛 บัค" : "💡 ฟีเจอร์"}
+                            <div className="mb-2 flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${typeMeta.badgeClass}`}>
+                                {typeMeta.label}
                               </span>
-                              {/* Status Dropdown */}
-                              <div className="relative">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${statusMeta.badgeClass}`}>
+                                {statusMeta.label}
+                              </span>
+                              <span className="text-white/30 text-xs">
+                                {new Date(fb.createdAt).toLocaleString("th-TH")}
+                              </span>
+                            </div>
+                            <div className="mb-2 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h4 className="text-white font-semibold break-words">
+                                  {fb.title}
+                                </h4>
+                                <p className="mt-1 text-white/30 text-xs">
+                                  #{fb.id.slice(0, 8)}
+                                </p>
+                              </div>
+                              <div className="relative shrink-0">
                                 <select
                                   value={fb.status}
                                   onChange={(e) =>
                                     handleStatusChange(fb.id, e.target.value)
                                   }
+                                  disabled={isBusy}
                                   className={`text-xs px-2 py-0.5 rounded-full appearance-none cursor-pointer pr-6 ${
                                     fb.status === "PENDING"
                                       ? "bg-white/10 text-white/70"
@@ -832,39 +984,48 @@ export default function AdminDashboard() {
                                   expand_more
                                 </span>
                               </div>
-                              <span className="text-white/30 text-xs">
-                                {new Date(fb.createdAt).toLocaleDateString(
-                                  "th-TH",
-                                )}
-                              </span>
                             </div>
-                            <h4 className="text-white font-medium truncate">
-                              {fb.title}
-                            </h4>
                             {fb.details && (
-                              <p className="text-white/50 text-sm mt-1 line-clamp-2">
+                              <p
+                                className={`text-white/50 text-sm mt-1 break-words ${
+                                  isExpanded ? "" : "line-clamp-2"
+                                }`}
+                              >
                                 {fb.details}
                               </p>
                             )}
                             {fb.contact && (
-                              <p className="text-primary text-xs mt-2">
-                                📧 {fb.contact}
+                              <p className="text-primary text-xs mt-3 break-all">
+                                ติดต่อกลับ: {fb.contact}
                               </p>
                             )}
+                            <div className="mt-4 flex items-center gap-2 flex-wrap">
+                              {fb.details && fb.details.length > 140 && (
+                                <button
+                                  onClick={() =>
+                                    setExpandedFeedbackId((current) =>
+                                      current === fb.id ? null : fb.id,
+                                    )
+                                  }
+                                  className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:bg-white/10 hover:text-white"
+                                >
+                                  {isExpanded ? "ย่อรายละเอียด" : "ดูรายละเอียด"}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteFeedback(fb.id)}
+                                disabled={isBusy}
+                                className="rounded-lg bg-neon-red/15 px-3 py-1.5 text-xs text-neon-red hover:bg-neon-red/25 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="ลบ feedback"
+                              >
+                                {isBusy ? "กำลังลบ..." : "ลบ feedback"}
+                              </button>
+                            </div>
                           </div>
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => handleDeleteFeedback(fb.id)}
-                            className="p-2 rounded-lg hover:bg-neon-red/20 text-white/30 hover:text-neon-red transition-colors"
-                            title="ลบ"
-                          >
-                            <span className="material-symbols-outlined text-lg">
-                              delete
-                            </span>
-                          </button>
                         </div>
                       </GlassPanel>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
