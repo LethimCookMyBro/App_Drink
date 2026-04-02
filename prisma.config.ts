@@ -11,20 +11,43 @@ function hasRailwayRuntime(): boolean {
   );
 }
 
-function resolveDatabaseUrl(): string {
-  const publicUrl = process.env.DATABASE_PUBLIC_URL?.trim();
-  const internalUrl = process.env.DATABASE_URL?.trim();
+function isPostgresUrl(value: string | undefined): value is string {
+  if (!value) return false;
 
-  if (hasRailwayRuntime() && internalUrl) {
+  return value.startsWith("postgresql://") || value.startsWith("postgres://");
+}
+
+function normalizeUrl(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveDatabaseUrl(): string {
+  const publicUrl = normalizeUrl(process.env.DATABASE_PUBLIC_URL);
+  const internalUrl = normalizeUrl(process.env.DATABASE_URL);
+
+  if (hasRailwayRuntime() && isPostgresUrl(internalUrl)) {
     return internalUrl;
   }
 
-  if (publicUrl) {
+  if (isPostgresUrl(publicUrl)) {
     return publicUrl;
   }
 
-  if (internalUrl) {
+  if (isPostgresUrl(internalUrl)) {
     return internalUrl;
+  }
+
+  if (hasRailwayRuntime() && internalUrl) {
+    console.warn(
+      "Ignoring invalid Railway DATABASE_URL because it is not a PostgreSQL URL.",
+    );
+  }
+
+  if (publicUrl || internalUrl) {
+    throw new Error(
+      "Database URL is invalid. Set DATABASE_PUBLIC_URL or DATABASE_URL to a postgresql:// URL.",
+    );
   }
 
   throw new Error(
