@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { hasActiveGameSession } from "@/lib/gameSession";
 
 interface NavItem {
   href: string;
@@ -19,16 +21,26 @@ const navItems: NavItem[] = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const [hasStartedGame, setHasStartedGame] = useState(false);
+
+  useEffect(() => {
+    setHasStartedGame(hasActiveGameSession());
+  }, [pathname]);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/5 pb-safe">
       <div className="flex items-center justify-around h-20 max-w-md mx-auto px-4">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const href =
+            item.href === "/game/modes" && !hasStartedGame ? "/" : item.href;
+          const isActive =
+            item.href === "/game/modes"
+              ? pathname.startsWith("/game")
+              : pathname === item.href;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               className="relative flex flex-col items-center justify-center gap-1 p-2 flex-1"
             >
               {isActive && (

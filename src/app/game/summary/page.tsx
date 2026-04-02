@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useSoundEffects } from "@/hooks";
+import { clearGameSummary } from "@/lib/gameSession";
 import confetti from "canvas-confetti";
 
 interface PlayerStats {
@@ -87,10 +88,8 @@ export default function GameSummaryPage() {
   )[0];
 
   const handlePlayAgain = () => {
-    // Clear game stats
-    localStorage.removeItem("wongtaek-game-stats");
-    localStorage.removeItem("wongtaek-rounds");
-    router.push("/game/modes");
+    clearGameSummary();
+    router.push("/");
   };
 
   const handleShare = async () => {
@@ -248,7 +247,7 @@ export default function GameSummaryPage() {
             icon="replay"
             fullWidth
           >
-            เล่นอีก!
+            เริ่มใหม่
           </Button>
         </div>
         <Link href="/" className="block">

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/components/ui";
+import { markGameSessionStarted } from "@/lib/gameSession";
 
 interface LocalPlayer {
   id: string;
@@ -207,8 +208,7 @@ export default function LobbyPage() {
     }
 
     // Set game started flag
-    localStorage.setItem("wongtaek-game-started", "true");
-    localStorage.setItem("wongtaek-room-code", roomCode);
+    markGameSessionStarted(roomCode);
 
     router.push("/game/modes");
   };

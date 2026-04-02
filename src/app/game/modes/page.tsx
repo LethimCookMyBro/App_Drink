@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { GAME_MODES } from "@/config/gameConstants";
 import { useSoundEffects } from "@/hooks";
+import { hasActiveGameSession } from "@/lib/gameSession";
 
 export default function GameModesPage() {
   const router = useRouter();
@@ -19,9 +20,7 @@ export default function GameModesPage() {
 
   // Check if game was started properly from lobby
   useEffect(() => {
-    const gameStarted = localStorage.getItem("wongtaek-game-started");
-    const hasPlayers = localStorage.getItem("wongtaek-players");
-    setIsGameStarted(!!gameStarted && !!hasPlayers);
+    setIsGameStarted(hasActiveGameSession());
   }, []);
 
   // Detect current card based on scroll position
@@ -111,9 +110,14 @@ export default function GameModesPage() {
               เพื่อตั้งค่าผู้เล่นและเริ่มเกม
             </p>
           </div>
-          <Link href="/">
-            <Button variant="primary" size="lg" icon="home" iconPosition="left">
-              กลับหน้าหลัก
+          <Link href="/create">
+            <Button
+              variant="primary"
+              size="lg"
+              icon="play_arrow"
+              iconPosition="left"
+            >
+              เริ่มเกมเลย
             </Button>
           </Link>
         </div>
@@ -166,8 +170,8 @@ export default function GameModesPage() {
           <motion.div
             key={mode.id}
             className={`
-              snap-center relative shrink-0 w-[90vw] max-w-md h-[75vh] rounded-3xl border-2 
-              ${mode.borderColor} bg-card/90 ${mode.shadowClass} 
+              snap-center relative shrink-0 w-[90vw] max-w-md h-[75vh] rounded-3xl border-2
+              ${mode.borderColor} bg-card/90 ${mode.shadowClass}
               flex flex-col overflow-hidden group
             `}
             initial={{ opacity: 0, scale: 0.9 }}

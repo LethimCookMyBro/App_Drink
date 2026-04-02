@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, Timer } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
+import { clearActiveGameSession, hasActiveGameSession } from "@/lib/gameSession";
 import {
   usePlayerQueue,
   useQuestionPool,
@@ -30,6 +31,7 @@ function GamePlayContent() {
   // State
   const [players, setPlayers] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
+  const [hasStartedGame, setHasStartedGame] = useState<boolean | null>(null);
   const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
   const [roundNumber, setRoundNumber] = useState(1);
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
@@ -40,6 +42,10 @@ function GamePlayContent() {
 
   // Load players from localStorage on mount
   useEffect(() => {
+    const activeSession = hasActiveGameSession();
+    setHasStartedGame(activeSession);
+    if (!activeSession) return;
+
     const savedPlayers = localStorage.getItem("wongtaek-players");
     if (savedPlayers) {
       try {
@@ -168,11 +174,20 @@ function GamePlayContent() {
     }));
     localStorage.setItem("wongtaek-game-stats", JSON.stringify(stats));
     localStorage.setItem("wongtaek-rounds", roundNumber.toString());
+    clearActiveGameSession();
     router.push("/game/summary");
   };
 
   // Don't render until players are loaded - show access denied message
-  if (!isReady || players.length === 0) {
+  if (hasStartedGame === null) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="animate-pulse text-center text-white/40">กำลังโหลด...</div>
+      </main>
+    );
+  }
+
+  if (!hasStartedGame || !isReady || players.length === 0) {
     return (
       <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 text-center">
@@ -191,9 +206,14 @@ function GamePlayContent() {
               เพื่อตั้งค่าผู้เล่นและเริ่มเกม
             </p>
           </div>
-          <Link href="/">
-            <Button variant="primary" size="lg" icon="home" iconPosition="left">
-              กลับหน้าหลัก
+          <Link href="/create">
+            <Button
+              variant="primary"
+              size="lg"
+              icon="play_arrow"
+              iconPosition="left"
+            >
+              เริ่มเกมเลย
             </Button>
           </Link>
         </div>
