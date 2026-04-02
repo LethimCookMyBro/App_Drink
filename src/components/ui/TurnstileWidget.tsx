@@ -35,7 +35,9 @@ export function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | number | null>(null);
   const lastResetKeyRef = useRef(resetKey);
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState(
+    () => typeof window !== "undefined" && !!window.turnstile,
+  );
   const handleTokenChange = useEffectEvent((token: string) => {
     onTokenChange(token);
   });
@@ -50,7 +52,9 @@ export function TurnstileWidget({
       widgetIdRef.current = null;
     }
 
-    containerRef.current.innerHTML = "";
+    while (containerRef.current.firstChild) {
+      containerRef.current.removeChild(containerRef.current.firstChild);
+    }
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: siteKey,
       action,
@@ -60,12 +64,6 @@ export function TurnstileWidget({
       "error-callback": () => handleTokenChange(""),
     });
   });
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.turnstile) {
-      setIsReady(true);
-    }
-  }, []);
 
   useEffect(() => {
     if (!siteKey || !isReady) {
@@ -80,7 +78,7 @@ export function TurnstileWidget({
         widgetIdRef.current = null;
       }
     };
-  }, [action, isReady, renderWidget, siteKey, theme]);
+  }, [action, isReady, siteKey, theme]);
 
   useEffect(() => {
     if (
@@ -95,7 +93,7 @@ export function TurnstileWidget({
     lastResetKeyRef.current = resetKey;
     window.turnstile.reset(widgetIdRef.current);
     handleTokenChange("");
-  }, [handleTokenChange, resetKey]);
+  }, [resetKey]);
 
   if (!siteKey) {
     return null;

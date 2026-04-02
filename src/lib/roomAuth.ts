@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
-
-const DEV_FALLBACK_SECRET = "wong-taek-room-dev-secret";
+import { getDevelopmentFallbackSecret } from "@/lib/securityPrimitives";
 
 export interface RoomHostTokenPayload {
   roomId: string;
@@ -25,7 +24,7 @@ export function getRoomJwtSecret(): string {
     if (process.env.NODE_ENV === "production") {
       throw new Error("ROOM_JWT_SECRET is required in production");
     }
-    return DEV_FALLBACK_SECRET;
+    return getDevelopmentFallbackSecret("room-jwt");
   }
   return secret;
 }

@@ -18,6 +18,35 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function normalizeAvatarUrl(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string" || value.length > 500) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const isAllowedProtocol =
+      parsed.protocol === "https:" ||
+      (process.env.NODE_ENV !== "production" && parsed.protocol === "http:");
+
+    if (!isAllowedProtocol) {
+      return undefined;
+    }
+
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { user, clearLegacyCookie } = await getAuthenticatedAppUser(request);
@@ -82,7 +111,8 @@ export async function PATCH(request: Request) {
     const { default: prisma } = await import("@/lib/db");
 
     const body = await request.json();
-    const { name, avatarUrl } = body;
+    const { name } = body;
+    const avatarUrl = normalizeAvatarUrl(body?.avatarUrl);
 
     if (name !== undefined) {
       if (
@@ -92,6 +122,10 @@ export async function PATCH(request: Request) {
       ) {
         return jsonError("ชื่อต้องมี 1-50 ตัวอักษร", 400);
       }
+    }
+
+    if (body?.avatarUrl !== undefined && avatarUrl === undefined) {
+      return jsonError("ลิงก์รูปโปรไฟล์ไม่ถูกต้อง", 400);
     }
 
     const updatedUser = await prisma.user.update({

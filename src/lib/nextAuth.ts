@@ -5,8 +5,10 @@ import { getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "@/lib/db";
 import { normalizeEmail, sanitizeInput } from "@/lib/auth";
-
-const DEV_FALLBACK_NEXTAUTH_SECRET = "wong-taek-nextauth-dev-secret";
+import {
+  getDevelopmentFallbackSecret,
+  hashStoredSessionToken,
+} from "@/lib/securityPrimitives";
 const NEXTAUTH_SESSION_COOKIE_NAMES = [
   "__Secure-next-auth.session-token",
   "next-auth.session-token",
@@ -28,7 +30,7 @@ function getNextAuthSecret(): string {
       throw new Error("NEXTAUTH_SECRET or JWT_SECRET is required in production");
     }
 
-    return DEV_FALLBACK_NEXTAUTH_SECRET;
+    return getDevelopmentFallbackSecret("nextauth-jwt");
   }
 
   return secret;
@@ -85,9 +87,115 @@ export async function deleteNextAuthSessionFromRequest(
     }
 
     await prisma.session.deleteMany({
-      where: { sessionToken },
+      where: {
+        sessionToken: {
+          in: [hashStoredSessionToken(sessionToken), sessionToken],
+        },
+      },
     });
   }
+}
+
+function createSecureSessionAdapter() {
+  const baseAdapter = PrismaAdapter(prisma);
+
+  return {
+    ...baseAdapter,
+    async createSession(data: {
+      sessionToken: string;
+      userId: string;
+      expires: Date;
+    }) {
+      return prisma.session.create({
+        data: {
+          ...data,
+          sessionToken: hashStoredSessionToken(data.sessionToken),
+        },
+      });
+    },
+    async getSessionAndUser(sessionToken: string) {
+      const hashedSessionToken = hashStoredSessionToken(sessionToken);
+      let storedSession = await prisma.session.findUnique({
+        where: { sessionToken: hashedSessionToken },
+        include: { user: true },
+      });
+
+      if (!storedSession) {
+        storedSession = await prisma.session.findUnique({
+          where: { sessionToken },
+          include: { user: true },
+        });
+
+        if (storedSession) {
+          storedSession = await prisma.session.update({
+            where: { id: storedSession.id },
+            data: { sessionToken: hashedSessionToken },
+            include: { user: true },
+          });
+        }
+      }
+
+      if (!storedSession) {
+        return null;
+      }
+
+      return {
+        session: {
+          id: storedSession.id,
+          sessionToken,
+          userId: storedSession.userId,
+          expires: storedSession.expires,
+        },
+        user: storedSession.user,
+      };
+    },
+    async updateSession(data: {
+      sessionToken?: string;
+      userId?: string;
+      expires?: Date;
+    }) {
+      if (!data.sessionToken) {
+        return null;
+      }
+
+      const hashedSessionToken = hashStoredSessionToken(data.sessionToken);
+      const existingSession = await prisma.session.findFirst({
+        where: {
+          OR: [
+            { sessionToken: hashedSessionToken },
+            { sessionToken: data.sessionToken },
+          ],
+        },
+      });
+
+      if (!existingSession) {
+        return null;
+      }
+
+      const updatedSession = await prisma.session.update({
+        where: { id: existingSession.id },
+        data: {
+          sessionToken: hashedSessionToken,
+          expires: data.expires ?? existingSession.expires,
+          userId: data.userId ?? existingSession.userId,
+        },
+      });
+
+      return {
+        ...updatedSession,
+        sessionToken: data.sessionToken,
+      };
+    },
+    async deleteSession(sessionToken: string) {
+      await prisma.session.deleteMany({
+        where: {
+          sessionToken: {
+            in: [hashStoredSessionToken(sessionToken), sessionToken],
+          },
+        },
+      });
+    },
+  };
 }
 
 export function clearNextAuthSessionCookies(response: NextResponse) {
@@ -103,7 +211,7 @@ export function clearNextAuthSessionCookies(response: NextResponse) {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: createSecureSessionAdapter(),
   secret: getNextAuthSecret(),
   session: {
     strategy: "database",

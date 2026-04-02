@@ -1,7 +1,9 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-const DEV_FALLBACK_SECRET = "wong-taek-auth-dev-secret";
+import {
+  getDevelopmentFallbackSecret,
+  hashStoredSessionToken,
+} from "@/lib/securityPrimitives";
 
 // Get JWT secret - check at runtime, not build time
 function getJwtSecret(): string {
@@ -10,7 +12,7 @@ function getJwtSecret(): string {
     if (process.env.NODE_ENV === "production") {
       throw new Error("JWT_SECRET is required in production");
     }
-    return DEV_FALLBACK_SECRET;
+    return getDevelopmentFallbackSecret("auth-jwt");
   }
   return secret;
 }
@@ -70,11 +72,12 @@ export async function createSession(userId: string, token: string) {
   const prisma = await getPrisma();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+  const hashedToken = hashStoredSessionToken(token);
 
   return prisma.userSession.create({
     data: {
       userId,
-      token,
+      token: hashedToken,
       expiresAt,
     },
   });
@@ -84,10 +87,26 @@ export async function createSession(userId: string, token: string) {
 export async function validateSession(token: string) {
   try {
     const prisma = await getPrisma();
-    const session = await prisma.userSession.findUnique({
-      where: { token },
+    const hashedToken = hashStoredSessionToken(token);
+    let session = await prisma.userSession.findUnique({
+      where: { token: hashedToken },
       include: { user: true },
     });
+
+    if (!session) {
+      session = await prisma.userSession.findUnique({
+        where: { token },
+        include: { user: true },
+      });
+
+      if (session) {
+        session = await prisma.userSession.update({
+          where: { id: session.id },
+          data: { token: hashedToken },
+          include: { user: true },
+        });
+      }
+    }
 
     if (!session) return null;
 
@@ -108,7 +127,14 @@ export async function validateSession(token: string) {
 export async function deleteSession(token: string) {
   try {
     const prisma = await getPrisma();
-    await prisma.userSession.delete({ where: { token } });
+    const hashedToken = hashStoredSessionToken(token);
+    await prisma.userSession.deleteMany({
+      where: {
+        token: {
+          in: [hashedToken, token],
+        },
+      },
+    });
     return true;
   } catch {
     return false;

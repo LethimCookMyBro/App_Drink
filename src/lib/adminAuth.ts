@@ -1,8 +1,7 @@
 import type { Admin } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
-
-const DEV_FALLBACK_SECRET = "wong-taek-admin-dev-secret";
+import { getDevelopmentFallbackSecret } from "@/lib/securityPrimitives";
 
 export interface AdminTokenPayload {
   adminId: string;
@@ -18,7 +17,7 @@ export function getAdminJwtSecret(): string {
     if (process.env.NODE_ENV === "production") {
       throw new Error("ADMIN_JWT_SECRET is required in production");
     }
-    return DEV_FALLBACK_SECRET;
+    return getDevelopmentFallbackSecret("admin-jwt");
   }
   return secret;
 }

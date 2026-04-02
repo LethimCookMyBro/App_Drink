@@ -107,10 +107,12 @@ export const adminLoginSchema = z.object({
 export const userRegisterSchema = z.object({
   email: z
     .string()
+    .trim()
     .email("รูปแบบอีเมลไม่ถูกต้อง")
     .refine((val) => !hasSqlInjection(val), {
       message: "รูปแบบข้อมูลไม่ถูกต้อง",
-    }),
+    })
+    .transform((val) => val.toLowerCase()),
   password: z
     .string()
     .min(8, "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
