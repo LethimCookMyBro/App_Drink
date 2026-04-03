@@ -37,6 +37,20 @@ if (!parsedEnv.success) {
 
 const rawEnv = parsedEnv.data;
 
+function isProductionBuildPhase(): boolean {
+  if (rawEnv.NODE_ENV !== "production") {
+    return false;
+  }
+
+  return (
+    process.env.npm_lifecycle_event === "build" ||
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.argv.some((argument) => argument.includes("next") && argument.includes("build"))
+  );
+}
+
+const allowBuildTimeSecretFallback = isProductionBuildPhase();
+
 function parseOptionalOrigin(value: string | undefined): string | null {
   if (!value) {
     return null;
@@ -61,13 +75,15 @@ function resolveSecret(value: string | undefined, namespace: string): string {
     return value;
   }
 
-  if (rawEnv.NODE_ENV === "production") {
+  if (rawEnv.NODE_ENV === "production" && !allowBuildTimeSecretFallback) {
     throw new Error(
       `Environment secret ${namespace} must be set and at least ${MIN_SECRET_LENGTH} characters long.`,
     );
   }
 
-  return getDevelopmentFallbackSecret(namespace);
+  return getDevelopmentFallbackSecret(
+    allowBuildTimeSecretFallback ? `${namespace}-build` : namespace,
+  );
 }
 
 const resolvedSecrets = {
@@ -77,7 +93,7 @@ const resolvedSecrets = {
   nextAuth: resolveSecret(rawEnv.NEXTAUTH_SECRET ?? rawEnv.JWT_SECRET, "nextauth-secret"),
 };
 
-if (rawEnv.NODE_ENV === "production") {
+if (rawEnv.NODE_ENV === "production" && !allowBuildTimeSecretFallback) {
   const providedSecuritySecrets = [
     rawEnv.JWT_SECRET,
     rawEnv.ADMIN_JWT_SECRET,

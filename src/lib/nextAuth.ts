@@ -26,6 +26,18 @@ function getNextAuthSecret(): string {
   return env.nextAuthSecret;
 }
 
+function isConfiguredGoogleValue(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return !(
+    normalized.startsWith("PUT_YOUR_") ||
+    normalized.startsWith("put-your-")
+  );
+}
+
 function sanitizeDisplayName(name: string | undefined, email: string): string {
   const fallbackName = email.split("@")[0] || "ผู้ใช้ Google";
   return sanitizeInput((name || fallbackName).trim()).slice(0, 50);
@@ -50,7 +62,11 @@ function getCookieValue(request: Request, name: string): string | null {
 }
 
 export function isGoogleLoginEnabled(): boolean {
-  return env.googleLoginEnabled && env.googleClientId.length > 0 && env.googleClientSecret.length > 0;
+  return (
+    env.googleLoginEnabled &&
+    isConfiguredGoogleValue(env.googleClientId) &&
+    isConfiguredGoogleValue(env.googleClientSecret)
+  );
 }
 
 function getGoogleClientId(): string {
