@@ -14,6 +14,10 @@ import { useAuthStore } from "@/store/authStore";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
+function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -30,6 +34,11 @@ export default function LoginPage() {
 
     if (turnstileEnabled && !turnstileToken) {
       setError("กรุณายืนยันว่าไม่ใช่บอทก่อนเข้าสู่ระบบ");
+      return;
+    }
+
+    if (!looksLikeEmail(email)) {
+      setError("ถ้าเป็นบัญชีผู้ดูแล ให้เข้าสู่ระบบที่หน้าแอดมิน");
       return;
     }
 
@@ -102,6 +111,12 @@ export default function LoginPage() {
                 required
                 disabled={isLoading}
               />
+              <p className="mt-2 text-xs text-white/35">
+                ถ้าเป็นบัญชีผู้ดูแล ใช้หน้า{" "}
+                <Link href="/admin/login" className="text-primary hover:underline">
+                  Admin Login
+                </Link>
+              </p>
             </div>
 
             <div>

@@ -8,6 +8,19 @@ export interface AuthUser {
   avatarUrl?: string | null;
 }
 
+function normalizeAuthError(error: unknown): string {
+  const message =
+    typeof error === "string" && error.trim().length > 0
+      ? error.trim()
+      : "เกิดข้อผิดพลาดในการเข้าสู่ระบบ";
+
+  if (message === "Unauthorized" || message === "Invalid credentials") {
+    return "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+  }
+
+  return message;
+}
+
 interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
@@ -57,7 +70,7 @@ export const useAuthStore = create<AuthState>()(
           const data = await response.json();
 
           if (!response.ok) {
-            return { success: false, error: data.error };
+            return { success: false, error: normalizeAuthError(data.error) };
           }
 
           set({
@@ -82,7 +95,7 @@ export const useAuthStore = create<AuthState>()(
           const data = await response.json();
 
           if (!response.ok) {
-            return { success: false, error: data.error };
+            return { success: false, error: normalizeAuthError(data.error) };
           }
 
           set({
