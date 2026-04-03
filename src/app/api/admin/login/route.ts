@@ -97,16 +97,23 @@ export async function POST(request: Request) {
     const { password } = validation.data;
 
     const { default: prisma } = await import("@/lib/db");
-    let admin = await prisma.admin.findUnique({
-      where: { email: identifier },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        name: true,
-        role: true,
-        isActive: true,
+    const adminSelect = {
+      id: true,
+      email: true,
+      password: true,
+      name: true,
+      role: true,
+      isActive: true,
+    } as const;
+
+    let admin = await prisma.admin.findFirst({
+      where: {
+        email: {
+          equals: identifier,
+          mode: "insensitive",
+        },
       },
+      select: adminSelect,
     });
 
     const envAdminUsername = env.adminSeedUsername.trim();
@@ -135,27 +142,17 @@ export async function POST(request: Request) {
             role: "SUPER_ADMIN",
             isActive: true,
           },
-          select: {
-            id: true,
-            email: true,
-            password: true,
-            name: true,
-            role: true,
-            isActive: true,
-          },
+          select: adminSelect,
         });
       } else {
         admin = await prisma.admin.update({
           where: { id: admin.id },
-          data: { password: passwordHash, isActive: true },
-          select: {
-            id: true,
-            email: true,
-            password: true,
-            name: true,
-            role: true,
+          data: {
+            email: normalizeAdminIdentifier(envAdminUsername),
+            password: passwordHash,
             isActive: true,
           },
+          select: adminSelect,
         });
       }
       envAuthenticated = true;

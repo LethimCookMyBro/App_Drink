@@ -31,6 +31,11 @@ function applyRateLimitHeaders(response: NextResponse, limit: ReturnType<typeof 
 }
 
 export async function proxy(request: NextRequest) {
+  const isAdminLoginPage = request.nextUrl.pathname === "/admin/login";
+  const isAdminLoginApi = request.nextUrl.pathname === "/api/admin/login";
+  const isAdminVerifyApi = request.nextUrl.pathname === "/api/admin/verify";
+  const isPublicAdminAuthApi = isAdminLoginApi || isAdminVerifyApi;
+
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const preflight = handleCorsPreflight(request, {
       allowCredentials: request.nextUrl.pathname.startsWith("/api/admin/"),
@@ -45,7 +50,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (request.nextUrl.pathname.startsWith("/admin") && !request.nextUrl.pathname.startsWith("/admin/login")) {
+  if (request.nextUrl.pathname.startsWith("/admin") && !isAdminLoginPage) {
     const verification = await verifyAdminRequest(request);
     if (!verification.ok) {
       const loginUrl = new URL("/admin/login", request.url);
@@ -54,7 +59,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (request.nextUrl.pathname.startsWith("/api/admin/")) {
+  if (request.nextUrl.pathname.startsWith("/api/admin/") && !isPublicAdminAuthApi) {
     const verification = await verifyAdminRequest(request);
     if (!verification.ok) {
       return NextResponse.json(

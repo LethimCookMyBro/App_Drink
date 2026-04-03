@@ -9,6 +9,7 @@ const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const [searchReason, setSearchReason] = useState<"expired" | "invalid" | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -19,10 +20,17 @@ export default function AdminLoginPage() {
 
   // Check if already authenticated
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const reason = new URLSearchParams(window.location.search).get("reason");
+      if (reason === "expired" || reason === "invalid") {
+        setSearchReason(reason);
+      }
+    }
+
     const checkAuth = async () => {
       try {
         const res = await fetch("/api/admin/verify");
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (data.authenticated) {
           router.push("/admin");
         }
@@ -56,7 +64,15 @@ export default function AdminLoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "เกิดข้อผิดพลาด");
+        if (res.status === 401 || res.status === 423) {
+          setError(
+            data.retryAfter
+              ? `พยายามเข้าสู่ระบบหลายครั้งเกินไป ลองใหม่อีกครั้งใน ${data.retryAfter} วินาที`
+              : "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+          );
+        } else {
+          setError(data.error || "เกิดข้อผิดพลาด");
+        }
         if (turnstileEnabled) {
           setTurnstileResetKey((current) => current + 1);
         }
@@ -99,18 +115,25 @@ export default function AdminLoginPage() {
 
         {/* Login Form */}
         <GlassPanel className="p-6">
+          {searchReason && !error ? (
+            <div className="mb-4 rounded-xl border border-neon-yellow/30 bg-neon-yellow/10 p-3 text-sm text-neon-yellow">
+              {searchReason === "expired"
+                ? "เซสชันผู้ดูแลหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่"
+                : "กรุณาเข้าสู่ระบบผู้ดูแลก่อนเข้าหน้านี้"}
+            </div>
+          ) : null}
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username */}
             <div>
               <label className="block text-white/60 text-sm mb-2">
-                อีเมล
+                ชื่อผู้ใช้หรืออีเมล
               </label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
-                placeholder="Username"
+                placeholder="เช่น SuperAdmin_3175! หรือ admin@email.com"
                 required
                 autoComplete="username"
               />

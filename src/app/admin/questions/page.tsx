@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, GlassPanel } from "@/components/ui";
 import { useRouter } from "next/navigation";
+import { AdminShell } from "@/components/admin/AdminShell";
+import type { AdminIdentity } from "@/lib/adminData";
 
 // Local question type for admin
 interface AdminQuestion {
@@ -65,6 +66,7 @@ function getQuestionTextError(text: string): string | null {
 
 export default function AdminQuestionsPage() {
   const router = useRouter();
+  const [adminUser, setAdminUser] = useState<AdminIdentity | null>(null);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({ type: "", level: "", is18Plus: "" });
@@ -139,6 +141,7 @@ export default function AdminQuestionsPage() {
           router.push("/admin/login");
           return;
         }
+        setAdminUser(data.admin ?? null);
         fetchQuestions();
       } catch {
         router.push("/admin/login");
@@ -335,50 +338,40 @@ export default function AdminQuestionsPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-y-auto no-scrollbar pb-24 bg-[#0d0a10]">
-      {/* Header - Sticky */}
-      <header className="sticky top-0 z-30 glass-panel border-b border-white/5 px-4 md:px-8 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/admin" className="text-white/40 hover:text-white">
-              <span className="material-symbols-outlined">arrow_back</span>
-            </Link>
-            <div>
-              <h1 className="text-white font-bold text-lg md:text-xl">
-                จัดการคำถาม
-              </h1>
-              <p className="text-white/40 text-xs hidden md:block">
-                {filteredQuestions.length} คำถาม
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              className={`p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white transition-colors ${
-                refreshing ? "animate-spin" : ""
-              }`}
-            >
-              <span className="material-symbols-outlined">refresh</span>
-            </button>
-            <Button
-              onClick={() => {
-                setApiError(null);
-                setShowAddModal(true);
-              }}
-              variant="primary"
-              size="sm"
-              icon="add"
-            >
-              <span className="hidden sm:inline">เพิ่มคำถาม</span>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <AdminShell
+      admin={adminUser}
+      title="จัดการคำถาม"
+      description={`ฐานคำถามสำหรับทุกโหมดเกม ตอนนี้มี ${filteredQuestions.length} รายการที่ตรงกับ filter ปัจจุบัน`}
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className={`inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white ${
+              refreshing ? "animate-pulse" : ""
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">refresh</span>
+            รีเฟรช
+          </button>
+          <Button
+            onClick={() => {
+              setApiError(null);
+              setShowAddModal(true);
+            }}
+            variant="primary"
+            size="sm"
+            icon="add"
+          >
+            เพิ่มคำถาม
+          </Button>
+        </>
+      }
+    >
 
       {/* DB Status */}
       {apiError && (
-        <div className="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+        <div>
           <div className="p-3 rounded-xl bg-neon-red/10 border border-neon-red/20 flex items-center gap-2 text-neon-red text-sm">
             <span className="material-symbols-outlined text-lg">error</span>
             <span>{apiError}</span>
@@ -387,7 +380,7 @@ export default function AdminQuestionsPage() {
       )}
 
       {!apiError && !dbConnected && (
-        <div className="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+        <div>
           <div className="p-3 rounded-xl bg-neon-yellow/10 border border-neon-yellow/20 flex items-center gap-2 text-neon-yellow text-sm">
             <span className="material-symbols-outlined text-lg">info</span>
             <span>กำลังเชื่อมต่อข้อมูลคำถามจากระบบจริง</span>
@@ -396,7 +389,7 @@ export default function AdminQuestionsPage() {
       )}
 
       {/* Filters */}
-      <section className="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+      <section>
         <div className="flex flex-wrap gap-3">
           <CustomDropdown
             id="type"
@@ -423,7 +416,7 @@ export default function AdminQuestionsPage() {
       </section>
 
       {/* Question List */}
-      <section className="max-w-6xl mx-auto px-4 md:px-8 mt-6">
+      <section>
         {loading ? (
           <div className="text-center py-12">
             <span className="material-symbols-outlined animate-spin text-4xl text-primary">
@@ -750,6 +743,6 @@ export default function AdminQuestionsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </main>
+    </AdminShell>
   );
 }
