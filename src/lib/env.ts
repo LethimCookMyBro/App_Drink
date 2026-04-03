@@ -16,7 +16,7 @@ const rawEnvSchema = z.object({
   ROOM_JWT_SECRET_PREVIOUS: z.string().optional(),
   NEXTAUTH_SECRET: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
-  NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED: z.enum(["true", "false"]).default("false"),
+  NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED: z.enum(["true", "false"]).optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
@@ -122,7 +122,12 @@ export const env = {
   nextAuthSecret: resolvedSecrets.nextAuth,
   apiEncryptionKey: rawEnv.API_ENCRYPTION_KEY || "",
   rateLimitMax: rawEnv.RATE_LIMIT_MAX,
-  googleLoginEnabled: rawEnv.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true",
+  googleLoginEnabled:
+    rawEnv.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "false"
+      ? false
+      : rawEnv.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true"
+        ? true
+        : Boolean(rawEnv.GOOGLE_CLIENT_ID && rawEnv.GOOGLE_CLIENT_SECRET),
   googleClientId: rawEnv.GOOGLE_CLIENT_ID || "",
   googleClientSecret: rawEnv.GOOGLE_CLIENT_SECRET || "",
   nextAuthUrl: rawEnv.NEXTAUTH_URL || "",
