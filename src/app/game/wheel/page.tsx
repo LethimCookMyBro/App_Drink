@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
-import { useSoundEffects } from "@/hooks";
-import {
-  clearActiveGameSession,
-  hasActiveGameSession,
-  setGameResumePath,
-} from "@/lib/gameSession";
+import { useSoundEffects, useStoredGamePlayers } from "@/hooks";
+import { clearActiveGameSession } from "@/lib/gameSession";
 
 // Punishments list
 const punishments = [
@@ -34,7 +30,7 @@ const punishments = [
 
 export default function PunishmentWheelPage() {
   const router = useRouter();
-  const [hasStartedGame, setHasStartedGame] = useState<boolean | null>(null);
+  const { hasStartedGame } = useStoredGamePlayers("/game/wheel");
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState<(typeof punishments)[0] | null>(null);
   const [rotation, setRotation] = useState(0);
@@ -42,14 +38,6 @@ export default function PunishmentWheelPage() {
 
   const { playDrink, playCelebration, vibratePattern, vibrateLong } =
     useSoundEffects();
-
-  useEffect(() => {
-    const activeSession = hasActiveGameSession();
-    setHasStartedGame(activeSession);
-    if (activeSession) {
-      setGameResumePath("/game/wheel");
-    }
-  }, []);
 
   const handleEndGame = () => {
     clearActiveGameSession();
@@ -160,7 +148,7 @@ export default function PunishmentWheelPage() {
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
               <span className="material-symbols-outlined text-lg">stop</span>
-              จบ
+              จบเกม
             </button>
           </div>
           <Link

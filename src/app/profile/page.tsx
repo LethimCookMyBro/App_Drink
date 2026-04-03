@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -23,24 +23,30 @@ export default function ProfilePage() {
     totalPlayTime: 0,
   });
 
-  useEffect(() => {
-    checkAuth();
-    fetchStats();
-  }, [checkAuth]);
-
-  async function fetchStats() {
+  const fetchStats = useCallback(async () => {
     try {
       const res = await fetch("/api/user/profile");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.stats) {
-          setStats(data.stats);
-        }
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+      if (data.stats) {
+        setStats(data.stats);
       }
     } catch {
       // Use default stats
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+    const timeoutId = window.setTimeout(() => {
+      fetchStats();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [checkAuth, fetchStats]);
 
   const handleLogout = async () => {
     await logout();

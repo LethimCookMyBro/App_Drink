@@ -3,7 +3,7 @@
  * เสียงเอฟเฟกต์และการสั่นสำหรับเกม (ใช้ per-user settings)
  */
 
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback } from "react";
 import { useUserSettings } from "./useUserSettings";
 
 interface UseSoundEffectsOptions {
@@ -31,7 +31,53 @@ const HAPTIC_MULTIPLIERS = {
   off: 0,
   light: 0.5,
   strong: 1.5,
-};
+} as const;
+
+let sharedAudioContext: AudioContext | null = null;
+let sharedGainNode: GainNode | null = null;
+
+function getAudioContextConstructor():
+  | typeof AudioContext
+  | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (
+    window.AudioContext ||
+    (
+      window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext
+  );
+}
+
+function ensureAudioEngine(volume: number) {
+  const AudioContextConstructor = getAudioContextConstructor();
+  if (!AudioContextConstructor) {
+    return null;
+  }
+
+  if (!sharedAudioContext) {
+    sharedAudioContext = new AudioContextConstructor();
+    sharedGainNode = sharedAudioContext.createGain();
+    sharedGainNode.connect(sharedAudioContext.destination);
+  }
+
+  if (sharedGainNode) {
+    sharedGainNode.gain.value = volume;
+  }
+
+  if (sharedAudioContext.state === "suspended") {
+    void sharedAudioContext.resume().catch(() => undefined);
+  }
+
+  return {
+    audioContext: sharedAudioContext,
+    gainNode: sharedGainNode,
+  };
+}
 
 export function useSoundEffects({
   enabled,
@@ -46,53 +92,6 @@ export function useSoundEffects({
   const vibrationEnabled = hapticEnabled ?? settings.vibrationEnabled;
   const hapticLevel = settings.hapticLevel;
   const effectiveVolume = volume ?? 0.6;
-
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-
-  // Initialize AudioContext on first interaction
-  useEffect(() => {
-    const initAudio = () => {
-      if (!audioContextRef.current && typeof window !== "undefined") {
-        try {
-          audioContextRef.current = new (
-            window.AudioContext ||
-            (
-              window as typeof window & {
-                webkitAudioContext: typeof AudioContext;
-              }
-            ).webkitAudioContext
-          )();
-          gainNodeRef.current = audioContextRef.current.createGain();
-          gainNodeRef.current.gain.value = effectiveVolume;
-          gainNodeRef.current.connect(audioContextRef.current.destination);
-        } catch {
-          console.warn("Web Audio API not supported");
-        }
-      }
-    };
-
-    const handleInteraction = () => {
-      initAudio();
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume();
-      }
-    };
-
-    window.addEventListener("click", handleInteraction, { once: true });
-    window.addEventListener("touchstart", handleInteraction, { once: true });
-
-    return () => {
-      window.removeEventListener("click", handleInteraction);
-      window.removeEventListener("touchstart", handleInteraction);
-    };
-  }, [effectiveVolume]);
-
-  useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = effectiveVolume;
-    }
-  }, [effectiveVolume]);
 
   // Scale vibration pattern by haptic level
   const scaleVibration = useCallback(
@@ -116,14 +115,18 @@ export function useSoundEffects({
       type: OscillatorType = "sine",
       delay: number = 0,
     ) => {
-      if (!soundEnabled || !audioContextRef.current) return;
+      if (!soundEnabled) return;
 
       try {
-        const ctx = audioContextRef.current;
-        const now = ctx.currentTime + delay;
+        const engine = ensureAudioEngine(effectiveVolume);
+        if (!engine?.gainNode) {
+          return;
+        }
 
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        const now = engine.audioContext.currentTime + delay;
+
+        const oscillator = engine.audioContext.createOscillator();
+        const gainNode = engine.audioContext.createGain();
 
         oscillator.type = type;
         oscillator.frequency.setValueAtTime(frequency, now);
@@ -137,7 +140,7 @@ export function useSoundEffects({
         gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
         oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        gainNode.connect(engine.gainNode);
 
         oscillator.start(now);
         oscillator.stop(now + duration);

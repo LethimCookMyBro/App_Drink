@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 interface TimerProps {
@@ -28,8 +28,8 @@ export function Timer({
   className = "",
   warningThreshold = 5,
 }: TimerProps) {
-  const [hasTriggeredWarning, setHasTriggeredWarning] = useState(false);
   const [timeLeft, setTimeLeft] = useState(duration);
+  const hasTriggeredWarningRef = useRef(false);
   const circumference = 2 * Math.PI * 46; // radius = 46 for viewBox 0 0 100 100
   const progress = (timeLeft / duration) * circumference;
   const strokeDashoffset = circumference - progress;
@@ -55,21 +55,16 @@ export function Timer({
     if (timeLeft === 0) {
       onComplete?.();
     }
-  }, [timeLeft, onComplete]);
 
-  // Call onWarning when entering warning zone
-  useEffect(() => {
-    if (timeLeft <= warningThreshold && timeLeft > 0 && !hasTriggeredWarning) {
-      setHasTriggeredWarning(true);
+    if (
+      timeLeft <= warningThreshold &&
+      timeLeft > 0 &&
+      !hasTriggeredWarningRef.current
+    ) {
+      hasTriggeredWarningRef.current = true;
       onWarning?.();
     }
-  }, [timeLeft, warningThreshold, hasTriggeredWarning, onWarning]);
-
-  // Reset timer when duration changes
-  useEffect(() => {
-    setTimeLeft(duration);
-    setHasTriggeredWarning(false);
-  }, [duration]);
+  }, [timeLeft, onComplete, onWarning, warningThreshold]);
 
   // Determine color based on time left
   const getColor = () => {

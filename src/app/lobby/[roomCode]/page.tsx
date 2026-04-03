@@ -46,6 +46,7 @@ export default function LobbyPage() {
 
   const canAddMore = players.length < maxPlayers;
   const canManageLobby = isHost;
+  const displayRoomName = roomName || "วงของคุณ";
 
   useEffect(() => {
     const savedPlayerName =
@@ -71,7 +72,7 @@ export default function LobbyPage() {
 
   useEffect(() => {
     if (!roomCode) {
-      setLoadError("ไม่พบรหัสห้อง");
+      setLoadError("ไม่พบวงนี้");
       setIsLoading(false);
       return;
     }
@@ -219,8 +220,8 @@ export default function LobbyPage() {
     return (
       <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 sm:px-6">
         <div className="animate-pulse text-center text-white/50">
-          <p className="text-lg font-bold">กำลังโหลดห้อง...</p>
-          <p className="mt-2 text-sm">รหัส {roomCode || "----"}</p>
+          <p className="text-lg font-bold">กำลังเปิดวง...</p>
+          <p className="mt-2 text-sm">กำลังดึงรายชื่อผู้เล่น</p>
         </div>
       </main>
     );
@@ -272,10 +273,7 @@ export default function LobbyPage() {
               {canManageLobby ? "เพิ่มเพื่อนเข้าวง" : "รอเจ้าของวงเริ่มเกม"}
             </span>
             <p className="text-white/70 text-sm font-medium">
-              {roomName || `ห้อง ${roomCode}`}
-            </p>
-            <p className="text-primary/70 text-xs font-bold tracking-[0.25em]">
-              {roomCode}
+              {displayRoomName}
             </p>
             <div className="flex items-center gap-3">
               <motion.span
@@ -382,7 +380,7 @@ export default function LobbyPage() {
                     ห้องนี้
                   </p>
                   <h3 className="mt-1 text-xl font-bold text-white">
-                    {roomName || `ห้อง ${roomCode}`}
+                    {displayRoomName}
                   </h3>
                 </div>
                 <span className="material-symbols-outlined text-primary">
@@ -390,12 +388,6 @@ export default function LobbyPage() {
                 </span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-2xl bg-black/20 p-3">
-                  <p className="text-white/40">รหัส</p>
-                  <p className="mt-1 font-mono text-lg font-bold tracking-[0.2em] text-white">
-                    {roomCode}
-                  </p>
-                </div>
                 <div className="rounded-2xl bg-black/20 p-3">
                   <p className="text-white/40">ผู้เล่น</p>
                   <p className="mt-1 text-lg font-bold text-white">
@@ -414,7 +406,16 @@ export default function LobbyPage() {
                     {customQuestions.length}
                   </p>
                 </div>
+                <div className="rounded-2xl bg-black/20 p-3">
+                  <p className="text-white/40">รูปแบบ</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    เครื่องเดียว
+                  </p>
+                </div>
               </div>
+              <p className="mt-4 text-sm leading-relaxed text-white/45">
+                เล่นกันบนมือถือเครื่องเดียวได้เลย ถ้าจะเปลี่ยนชื่อค่อยเริ่มเกมใหม่
+              </p>
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5">

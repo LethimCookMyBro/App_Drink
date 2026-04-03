@@ -184,10 +184,12 @@ export const AVATAR_GRADIENTS = [
   "from-teal-400 to-cyan-600",
 ];
 
-export default {
+const themeConfig = {
   THEMES,
   DEFAULT_THEME,
   getThemeCSSVariables,
   AVATAR_EMOJIS,
   AVATAR_GRADIENTS,
 };
+
+export default themeConfig;

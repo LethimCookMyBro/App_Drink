@@ -28,7 +28,15 @@ const MAX_REASONABLE_DRINKS = 99;
 const MAX_REASONABLE_QUESTIONS = 999;
 const MAX_REASONABLE_ROUNDS = 999;
 
-function getStoredPlayers(): string[] {
+export const EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT: ActiveGameSessionSnapshot = {
+  isActive: false,
+  roomCode: "",
+  players: [],
+  playerCount: 0,
+  resumePath: "/create",
+};
+
+export function getStoredPlayerNames(): string[] {
   if (typeof window === "undefined") return [];
 
   const rawPlayers = window.localStorage.getItem(GAME_SESSION_KEYS.players);
@@ -70,7 +78,7 @@ export function hasActiveGameSession(): boolean {
   const gameStarted =
     window.localStorage.getItem(GAME_SESSION_KEYS.started) === "true";
 
-  return gameStarted && getStoredPlayers().length > 0;
+  return gameStarted && getStoredPlayerNames().length > 0;
 }
 
 export function setGameResumePath(path: string): void {
@@ -84,15 +92,19 @@ export function getGameLaunchHref(): string {
 }
 
 export function getActiveGameSessionSnapshot(): ActiveGameSessionSnapshot {
-  const players = getStoredPlayers();
+  const players = getStoredPlayerNames();
   const isActive = hasActiveGameSession();
 
+  if (!isActive) {
+    return EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT;
+  }
+
   return {
-    isActive,
-    roomCode: isActive ? getStoredRoomCode() : "",
-    players: isActive ? players : [],
-    playerCount: isActive ? players.length : 0,
-    resumePath: isActive ? getStoredResumePath() : "/create",
+    isActive: true,
+    roomCode: getStoredRoomCode(),
+    players,
+    playerCount: players.length,
+    resumePath: getStoredResumePath(),
   };
 }
 

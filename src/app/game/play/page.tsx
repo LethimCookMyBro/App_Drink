@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button, Timer } from "@/components/ui";
+import { Button, GamePauseButton, Timer } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
 import {
   clearActiveGameSession,
-  hasActiveGameSession,
   saveGameSummary,
-  setGameResumePath,
 } from "@/lib/gameSession";
 import {
+  useStoredGamePlayers,
   usePlayerQueue,
   useQuestionPool,
   useSoundEffects,
@@ -23,6 +22,13 @@ import { GAME_SETTINGS } from "@/config/gameConstants";
 export const dynamic = "force-dynamic";
 
 type GameCardType = "QUESTION" | "TRUTH" | "DARE" | "CHAOS" | "VOTE";
+const RANDOM_TYPES: readonly GameCardType[] = [
+  "QUESTION",
+  "VOTE",
+  "TRUTH",
+  "DARE",
+  "CHAOS",
+];
 
 interface QuestionVisualTheme {
   eyebrow: string;
@@ -155,55 +161,50 @@ function GamePlayContent() {
       : "question";
   const { vibeLevel } = useGameStore();
   const is18PlusEnabled = vibeLevel === "chaos";
+  const resumePath = `/game/play?mode=${normalizedMode}`;
+  const {
+    hasStartedGame,
+    players,
+    isReady,
+  } = useStoredGamePlayers(resumePath);
 
-  const [players, setPlayers] = useState<string[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  const [hasStartedGame, setHasStartedGame] = useState<boolean | null>(null);
   const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
   const [roundNumber, setRoundNumber] = useState(1);
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
     null,
   );
   const [timerKey, setTimerKey] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
-  const resumePath = `/game/play?mode=${normalizedMode}`;
 
   useEffect(() => {
-    const activeSession = hasActiveGameSession();
-    setHasStartedGame(activeSession);
-    if (!activeSession) return;
-
-    const savedPlayers = localStorage.getItem("wongtaek-players");
-    if (savedPlayers) {
-      try {
-        const parsed = JSON.parse(savedPlayers);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setPlayers(parsed);
-          setPlayerDrinks(
-            Object.fromEntries(parsed.map((player: string) => [player, 0])),
-          );
-          setIsReady(true);
-        }
-      } catch {
-        // Keep access denied state.
+    const timeoutId = window.setTimeout(() => {
+      if (players.length === 0) {
+        setPlayerDrinks({});
+      } else {
+        setPlayerDrinks((current) =>
+          Object.fromEntries(
+            players.map((player) => [player, current[player] ?? 0]),
+          ),
+        );
       }
-    }
 
-    const savedCustom = localStorage.getItem("wongtaek-custom-questions");
-    if (savedCustom) {
-      try {
-        setCustomQuestions(JSON.parse(savedCustom));
-      } catch {
-        // Ignore malformed local data.
+      const savedCustom = localStorage.getItem("wongtaek-custom-questions");
+      if (!savedCustom) {
+        setCustomQuestions([]);
+        return;
       }
-    }
-  }, []);
 
-  useEffect(() => {
-    if (hasStartedGame) {
-      setGameResumePath(resumePath);
-    }
-  }, [hasStartedGame, resumePath]);
+      try {
+        const parsed = JSON.parse(savedCustom);
+        setCustomQuestions(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setCustomQuestions([]);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [players]);
 
   const { currentPlayerIndex, currentPlayer, getNextPlayer, playerTurnCount } =
     usePlayerQueue({
@@ -229,17 +230,22 @@ function GamePlayContent() {
     vibrateLong,
   } = useSoundEffects();
 
-  const randomTypes = ["QUESTION", "VOTE", "TRUTH", "DARE", "CHAOS"] as const;
-  const pickRandomType = () =>
-    randomTypes[Math.floor(Math.random() * randomTypes.length)];
+  const pickRandomType = useCallback(
+    () => RANDOM_TYPES[Math.floor(Math.random() * RANDOM_TYPES.length)],
+    [],
+  );
 
   useEffect(() => {
     if (!currentQuestion && !isLoading && isReady && players.length > 0) {
       const preferredType =
         normalizedMode === "random" ? pickRandomType() : undefined;
       const question = getQuestionForPlayer(currentPlayer, preferredType);
-      setCurrentQuestion(question);
-      playNewQuestion();
+      const timeoutId = window.setTimeout(() => {
+        setCurrentQuestion(question);
+        playNewQuestion();
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [
     currentQuestion,
@@ -248,6 +254,7 @@ function GamePlayContent() {
     isLoading,
     isReady,
     normalizedMode,
+    pickRandomType,
     playNewQuestion,
     players.length,
   ]);
@@ -281,6 +288,7 @@ function GamePlayContent() {
   };
 
   const nextRound = () => {
+    setIsTimerPaused(false);
     setTimeout(() => {
       const nextIndex = getNextPlayer();
       const nextPlayer = players[nextIndex] || players[0] || "";
@@ -313,6 +321,10 @@ function GamePlayContent() {
     saveGameSummary(stats, roundNumber);
     clearActiveGameSession();
     router.push("/game/summary");
+  };
+
+  const toggleTimerPaused = () => {
+    setIsTimerPaused((current) => !current);
   };
 
   if (hasStartedGame === null) {
@@ -382,16 +394,20 @@ function GamePlayContent() {
             </span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
               รอบ {roundNumber}
             </div>
+            <GamePauseButton
+              isPaused={isTimerPaused}
+              onToggle={toggleTimerPaused}
+            />
             <button
               onClick={handleEndGame}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
               <span className="material-symbols-outlined text-lg">stop</span>
-              จบ
+              จบเกม
             </button>
           </div>
 
@@ -526,9 +542,20 @@ function GamePlayContent() {
                         duration={GAME_SETTINGS.defaultTimerDuration}
                         onComplete={handleTimerComplete}
                         onWarning={handleTimerWarning}
+                        isPaused={isTimerPaused}
                         size="lg"
                       />
                     </div>
+                    <GamePauseButton
+                      isPaused={isTimerPaused}
+                      onToggle={toggleTimerPaused}
+                      className="mt-4 min-w-[10.5rem] justify-center text-sm shadow-[0_0_24px_rgba(251,255,0,0.16)]"
+                    />
+                    {isTimerPaused && (
+                      <div className="mt-4 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70">
+                        เวลาถูกหยุดไว้ กดเล่นต่อเมื่อพร้อม
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-6 rounded-2xl border border-white/8 bg-black/18 px-4 py-3 text-center text-sm text-white/55">

@@ -1,38 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, TurnstileWidget } from "@/components/ui";
+import { useActiveGameSession } from "@/hooks";
 import { setCurrentUser } from "@/hooks/useUserSettings";
 import {
-  getActiveGameSessionSnapshot,
   resetGameSessionForRestart,
-  type ActiveGameSessionSnapshot,
 } from "@/lib/gameSession";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 export default function JoinCirclePage() {
   const router = useRouter();
-  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
-    isActive: false,
-    roomCode: "",
-    players: [],
-    playerCount: 0,
-    resumePath: "/create",
-  });
+  const { activeGame } = useActiveGameSession();
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
-
-  useEffect(() => {
-    setActiveGame(getActiveGameSessionSnapshot());
-  }, []);
 
   const handleCodeChange = (value: string) => {
     // Only allow alphanumeric and uppercase

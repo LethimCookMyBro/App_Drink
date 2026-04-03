@@ -6,41 +6,30 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { GAME_MODES } from "@/config/gameConstants";
-import { useSoundEffects } from "@/hooks";
+import { useActiveGameSession, useSoundEffects } from "@/hooks";
 import {
-  getActiveGameSessionSnapshot,
-  hasActiveGameSession,
   setGameResumePath,
-  type ActiveGameSessionSnapshot,
 } from "@/lib/gameSession";
 
 export default function GameModesPage() {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isGameStarted, setIsGameStarted] = useState<boolean | null>(null);
-  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
-    isActive: false,
-    roomCode: "",
-    players: [],
-    playerCount: 0,
-    resumePath: "/create",
-  });
+  const { activeGame, isHydrated, refreshActiveGame } = useActiveGameSession();
   const isAtLastCard = currentIndex === GAME_MODES.length - 1;
+  const isGameStarted = activeGame.isActive;
 
   const { vibrateShort } = useSoundEffects();
-
-  // Check if game was started properly from lobby
-  useEffect(() => {
-    setIsGameStarted(hasActiveGameSession());
-    setActiveGame(getActiveGameSessionSnapshot());
-  }, []);
 
   useEffect(() => {
     if (isGameStarted) {
       setGameResumePath("/game/modes");
     }
   }, [isGameStarted]);
+
+  useEffect(() => {
+    refreshActiveGame();
+  }, [refreshActiveGame]);
 
   // Detect current card based on scroll position
   const handleScrollEnd = useCallback(() => {
@@ -101,7 +90,7 @@ export default function GameModesPage() {
   };
 
   // Show loading state
-  if (isGameStarted === null) {
+  if (!isHydrated) {
     return (
       <main className="h-screen flex flex-col items-center justify-center bg-[#141414]">
         <div className="animate-pulse text-white/40">กำลังโหลด...</div>

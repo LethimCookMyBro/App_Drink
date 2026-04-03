@@ -27,6 +27,23 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
+function createInitialTurnCount(
+  players: string[],
+  firstPlayerIndex?: number,
+): Record<string, number> {
+  const turnCount = Object.fromEntries(players.map((name) => [name, 0]));
+
+  if (
+    firstPlayerIndex !== undefined &&
+    firstPlayerIndex >= 0 &&
+    firstPlayerIndex < players.length
+  ) {
+    turnCount[players[firstPlayerIndex]] = 1;
+  }
+
+  return turnCount;
+}
+
 export function usePlayerQueue({
   players,
   avoidRepeats = true,
@@ -44,21 +61,26 @@ export function usePlayerQueue({
   // Track how many times each player has been selected
   const [playerTurnCount, setPlayerTurnCount] = useState<
     Record<string, number>
-  >(() => Object.fromEntries(players.map((name) => [name, 0])));
+  >(() => createInitialTurnCount(players, queue[0]));
 
   // Track last player to avoid immediate repeats
   const lastPlayerRef = useRef<number>(-1);
 
   useEffect(() => {
-    const newQueue = shuffleArray(
-      Array.from({ length: players.length }, (_, i) => i),
-    );
-    setQueue(newQueue);
-    setQueuePosition(0);
-    setCurrentPlayerIndex(newQueue[0] ?? 0);
-    setPlayerTurnCount(Object.fromEntries(players.map((name) => [name, 0])));
-    lastPlayerRef.current = -1;
-  }, [playersKey]);
+    const timeoutId = window.setTimeout(() => {
+      const newQueue = shuffleArray(
+        Array.from({ length: players.length }, (_, i) => i),
+      );
+      const firstPlayerIndex = newQueue[0] ?? 0;
+      setQueue(newQueue);
+      setQueuePosition(0);
+      setCurrentPlayerIndex(firstPlayerIndex);
+      setPlayerTurnCount(createInitialTurnCount(players, newQueue[0]));
+      lastPlayerRef.current = -1;
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [players, playersKey]);
 
   const getNextPlayer = useCallback(() => {
     if (players.length <= 1) {

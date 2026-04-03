@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button, Timer } from "@/components/ui";
+import { Button, GamePauseButton, Timer } from "@/components/ui";
 import {
+  useStoredGamePlayers,
   useSoundEffects,
   usePlayerQueue,
   useQuestionPool,
@@ -15,9 +16,7 @@ import { useGameStore } from "@/store/gameStore";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 import {
   clearActiveGameSession,
-  hasActiveGameSession,
   saveGameSummary,
-  setGameResumePath,
 } from "@/lib/gameSession";
 
 type CardType = "truth" | "dare";
@@ -26,7 +25,8 @@ export default function TruthOrDarePage() {
   const router = useRouter();
   const { vibeLevel } = useGameStore();
   const is18PlusEnabled = vibeLevel === "chaos";
-  const [players, setPlayers] = useState<string[]>([]);
+  const { hasStartedGame, players, isReady } =
+    useStoredGamePlayers("/game/truth-or-dare");
   const [cardType, setCardType] = useState<CardType>("dare");
   const [currentContent, setCurrentContent] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
@@ -35,43 +35,24 @@ export default function TruthOrDarePage() {
   const [roundNumber, setRoundNumber] = useState(1);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
   const [timerKey, setTimerKey] = useState(0);
-  const [hasStartedGame, setHasStartedGame] = useState<boolean | null>(null);
-  const isReady = players.length > 0;
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
 
-  // Load players
   useEffect(() => {
-    const activeSession = hasActiveGameSession();
-    setHasStartedGame(activeSession);
-    if (!activeSession) return;
-
-    const savedPlayers = localStorage.getItem("wongtaek-players");
-    if (savedPlayers) {
-      try {
-        const parsed = JSON.parse(savedPlayers);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const timeoutId = window.setTimeout(() => {
-            setPlayers(parsed);
-            setPlayerDrinks(
-              Object.fromEntries(parsed.map((p: string) => [p, 0])),
-            );
-          }, 0);
-          return () => window.clearTimeout(timeoutId);
-        } else {
-          router.replace("/create");
-        }
-      } catch {
-        router.replace("/create");
+    const timeoutId = window.setTimeout(() => {
+      if (players.length === 0) {
+        setPlayerDrinks({});
+        return;
       }
-    } else {
-      router.replace("/create");
-    }
-  }, [router]);
 
-  useEffect(() => {
-    if (hasStartedGame) {
-      setGameResumePath("/game/truth-or-dare");
-    }
-  }, [hasStartedGame]);
+      setPlayerDrinks((current) =>
+        Object.fromEntries(
+          players.map((player) => [player, current[player] ?? 0]),
+        ),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [players]);
 
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],
@@ -146,6 +127,7 @@ export default function TruthOrDarePage() {
   };
 
   const nextCard = () => {
+    setIsTimerPaused(false);
     setTimeout(() => {
       const nextIdx = getNextPlayer();
       const nextPlayer = players[nextIdx] || currentPlayer;
@@ -179,6 +161,10 @@ export default function TruthOrDarePage() {
     saveGameSummary(stats, roundNumber);
     clearActiveGameSession();
     router.push("/game/summary");
+  };
+
+  const toggleTimerPaused = () => {
+    setIsTimerPaused((current) => !current);
   };
 
   if (hasStartedGame === null) {
@@ -233,7 +219,7 @@ export default function TruthOrDarePage() {
       {/* Header */}
       <header className="relative z-10 w-full">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 pb-2 pt-6 sm:px-5 sm:pt-8 lg:px-8">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => router.push("/game/modes")}
               className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
@@ -247,12 +233,16 @@ export default function TruthOrDarePage() {
             <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
               รอบ {roundNumber}
             </div>
+            <GamePauseButton
+              isPaused={isTimerPaused}
+              onToggle={toggleTimerPaused}
+            />
             <button
               onClick={handleEndGame}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
               <span className="material-symbols-outlined text-lg">stop</span>
-              จบ
+              จบเกม
             </button>
           </div>
           <Link
@@ -376,10 +366,20 @@ export default function TruthOrDarePage() {
                     duration={GAME_SETTINGS.defaultTimerDuration}
                     onComplete={handleTimerComplete}
                     onWarning={handleTimerWarning}
-                    isPaused={!currentQuestion || isLoading}
+                    isPaused={isTimerPaused || !currentQuestion || isLoading}
                     size="md"
                   />
                 </div>
+                <GamePauseButton
+                  isPaused={isTimerPaused}
+                  onToggle={toggleTimerPaused}
+                  className="mt-4 min-w-[10.5rem] justify-center self-center text-sm shadow-[0_0_24px_rgba(251,255,0,0.16)]"
+                />
+                {isTimerPaused && (
+                  <div className="mt-4 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70">
+                    เวลาถูกหยุดไว้ กดเล่นต่อเมื่อพร้อม
+                  </div>
+                )}
               </div>
 
               {/* Bottom Gradient */}

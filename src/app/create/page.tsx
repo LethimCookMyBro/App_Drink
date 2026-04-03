@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel, TurnstileWidget } from "@/components/ui";
+import { useActiveGameSession } from "@/hooks";
 import { useGameStore } from "@/store/gameStore";
 import { setCurrentUser } from "@/hooks/useUserSettings";
 import {
-  getActiveGameSessionSnapshot,
   resetGameSessionForRestart,
-  type ActiveGameSessionSnapshot,
 } from "@/lib/gameSession";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
@@ -18,13 +17,7 @@ const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 export default function CreateCirclePage() {
   const router = useRouter();
   const { vibeLevel } = useGameStore();
-  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
-    isActive: false,
-    roomCode: "",
-    players: [],
-    playerCount: 0,
-    resumePath: "/create",
-  });
+  const { activeGame } = useActiveGameSession();
 
   const [circleName, setCircleName] = useState("สายแข็ง 2024");
   const [playerName, setPlayerName] = useState("");
@@ -33,10 +26,6 @@ export default function CreateCirclePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
-
-  useEffect(() => {
-    setActiveGame(getActiveGameSessionSnapshot());
-  }, []);
 
   const handleCreate = async () => {
     const name = playerName.trim() || "ผู้เล่น 1";

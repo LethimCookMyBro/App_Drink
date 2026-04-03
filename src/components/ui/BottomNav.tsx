@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  getActiveGameSessionSnapshot,
-  getGameLaunchHref,
-} from "@/lib/gameSession";
+import { getGameLaunchHref } from "@/lib/gameSession";
+import { useActiveGameSession } from "@/hooks";
 
 interface NavItem {
   href: string;
@@ -24,14 +22,13 @@ const navItems: NavItem[] = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const [hasStartedGame, setHasStartedGame] = useState(false);
-  const [gameHref, setGameHref] = useState("/create");
+  const { activeGame, refreshActiveGame } = useActiveGameSession();
+  const hasStartedGame = activeGame.isActive;
+  const gameHref = getGameLaunchHref();
 
   useEffect(() => {
-    const snapshot = getActiveGameSessionSnapshot();
-    setHasStartedGame(snapshot.isActive);
-    setGameHref(getGameLaunchHref());
-  }, [pathname]);
+    refreshActiveGame();
+  }, [pathname, refreshActiveGame]);
 
   return (
     <nav

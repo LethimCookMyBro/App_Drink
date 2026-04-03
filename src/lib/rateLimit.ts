@@ -125,8 +125,10 @@ export const rateLimitConfigs = {
   feedback: { windowMs: 10 * 60 * 1000, maxRequests: 6 },
 };
 
-export default {
+const rateLimitModule = {
   checkRateLimit,
   getClientIP,
   rateLimitConfigs,
 };
+
+export default rateLimitModule;

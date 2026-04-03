@@ -129,14 +129,17 @@ export function useUserSettings(customUserId?: string) {
   // Load user ID and settings on mount
   useEffect(() => {
     const id = customUserId || getCurrentUserId();
-    setUserId(id);
-    setSettings(loadUserSettings(id));
-    setIsLoaded(true);
+    const timeoutId = window.setTimeout(() => {
+      setUserId(id);
+      setSettings(loadUserSettings(id));
+      setIsLoaded(true);
 
-    // Also save this as current user for future reference
-    if (id !== "default") {
-      setCurrentUser(id);
-    }
+      if (id !== "default") {
+        setCurrentUser(id);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [customUserId]);
 
   // Update a single setting

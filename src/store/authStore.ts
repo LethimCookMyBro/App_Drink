@@ -1,8 +1,5 @@
-"use client";
-
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { signOut as signOutNextAuth } from "next-auth/react";
 
 export interface AuthUser {
   id: string;
@@ -36,7 +33,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isLoading: true,
       isAuthenticated: false,
@@ -100,11 +97,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        try {
-          await signOutNextAuth({ redirect: false });
-        } catch {
-          // Ignore OAuth logout errors
-        }
         try {
           await fetch("/api/auth/logout", { method: "POST" });
         } catch {

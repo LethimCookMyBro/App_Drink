@@ -4,7 +4,7 @@
  * Custom questions แทรกสุ่มบ้าง (ไม่ใช่ทุกรอบ)
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 
 export interface GameQuestion {
@@ -36,6 +36,49 @@ interface UseQuestionPoolReturn {
   resetPlayerQuestions: (playerName: string) => void;
   resetAllQuestions: () => void;
   answeredCount: Record<string, number>;
+}
+
+function createAnsweredState(players: string[]): Record<string, Set<string>> {
+  return Object.fromEntries(players.map((name) => [name, new Set<string>()]));
+}
+
+const QUESTION_TYPE_BY_MODE: Record<string, string> = {
+  question: "QUESTION",
+  vote: "VOTE",
+  "truth-or-dare": "TRUTH",
+  chaos: "CHAOS",
+  random: "",
+};
+
+function pickRandomItem<T>(items: T[]): T | null {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return items[Math.floor(Math.random() * items.length)] ?? null;
+}
+
+function filterQuestions(
+  questions: GameQuestion[],
+  {
+    answered,
+    preferredType,
+    is18PlusEnabled,
+    level,
+  }: {
+    answered: Set<string>;
+    preferredType?: string;
+    is18PlusEnabled: boolean;
+    level: number;
+  },
+): GameQuestion[] {
+  return questions.filter((question) => {
+    if (answered.has(question.id)) return false;
+    if (question.is18Plus && !is18PlusEnabled) return false;
+    if (question.level > level) return false;
+    if (preferredType && question.type !== preferredType) return false;
+    return true;
+  });
 }
 
 // Fallback questions
@@ -112,6 +155,20 @@ const fallbackQuestions: GameQuestion[] = [
   },
 ];
 
+function getFallbackQuestionsForMode(mode: string): GameQuestion[] {
+  const fallbackByMode: Record<string, GameQuestion[]> = {
+    question: fallbackQuestions.filter((question) => question.type === "QUESTION"),
+    vote: fallbackQuestions.filter((question) => question.type === "VOTE"),
+    "truth-or-dare": fallbackQuestions.filter(
+      (question) => question.type === "TRUTH" || question.type === "DARE",
+    ),
+    chaos: fallbackQuestions.filter((question) => question.type === "CHAOS"),
+    random: fallbackQuestions,
+  };
+
+  return fallbackByMode[mode]?.length ? fallbackByMode[mode] : fallbackQuestions;
+}
+
 export function useQuestionPool({
   mode,
   level = 3,
@@ -120,24 +177,21 @@ export function useQuestionPool({
   customQuestions = [],
   customQuestionChance = 0.25, // 25% chance to show custom question
 }: UseQuestionPoolOptions): UseQuestionPoolReturn {
-  const playersKey = players.join("|");
   const [questions, setQuestions] = useState<GameQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Track answered questions per player
   const [playerAnswered, setPlayerAnswered] = useState<
     Record<string, Set<string>>
-  >(() => Object.fromEntries(players.map((name) => [name, new Set<string>()])));
+  >(() => createAnsweredState(players));
 
   // Track used custom questions (globally)
   const usedCustomQuestionsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setPlayerAnswered(
-      Object.fromEntries(players.map((name) => [name, new Set<string>()])),
-    );
+    setPlayerAnswered(createAnsweredState(players));
     usedCustomQuestionsRef.current.clear();
-  }, [playersKey]);
+  }, [players]);
 
   useEffect(() => {
     usedCustomQuestionsRef.current.clear();
@@ -147,17 +201,10 @@ export function useQuestionPool({
   useEffect(() => {
     const fetchQuestions = async () => {
       setIsLoading(true);
+      const fallbackPool = getFallbackQuestionsForMode(mode);
 
       try {
-        const modeToType: Record<string, string> = {
-          question: "QUESTION",
-          vote: "VOTE",
-          "truth-or-dare": "TRUTH",
-          chaos: "CHAOS",
-          random: "",
-        };
-
-        const questionType = modeToType[mode] ?? "QUESTION";
+        const questionType = QUESTION_TYPE_BY_MODE[mode] ?? "QUESTION";
         const params = new URLSearchParams();
         params.set("count", "50");
         params.set("is18Plus", is18PlusEnabled.toString());
@@ -183,24 +230,21 @@ export function useQuestionPool({
             ? await dareRes.json()
             : { questions: [] };
 
-          const combined = [
-            ...(truthData.questions || []),
-            ...(dareData.questions || []),
-          ];
-          setQuestions(combined.length > 0 ? combined : fallbackQuestions);
+          const combined = [...(truthData.questions || []), ...(dareData.questions || [])];
+          setQuestions(combined.length > 0 ? combined : fallbackPool);
         } else {
           const res = await fetch(`/api/questions/random?${params.toString()}`);
           if (res.ok) {
             const data = await res.json();
             setQuestions(
-              data.questions?.length > 0 ? data.questions : fallbackQuestions,
+              data.questions?.length > 0 ? data.questions : fallbackPool,
             );
           } else {
-            setQuestions(fallbackQuestions);
+            setQuestions(fallbackPool);
           }
         }
       } catch {
-        setQuestions(fallbackQuestions);
+        setQuestions(fallbackPool);
       } finally {
         setIsLoading(false);
       }
@@ -213,13 +257,11 @@ export function useQuestionPool({
   const getAvailableForPlayer = useCallback(
     (playerName: string, preferredType?: string): GameQuestion[] => {
       const answered = playerAnswered[playerName] || new Set<string>();
-
-      return questions.filter((q) => {
-        if (answered.has(q.id)) return false;
-        if (q.is18Plus && !is18PlusEnabled) return false;
-        if (q.level > level) return false;
-        if (preferredType && q.type !== preferredType) return false;
-        return true;
+      return filterQuestions(questions, {
+        answered,
+        preferredType,
+        is18PlusEnabled,
+        level,
       });
     },
     [questions, playerAnswered, is18PlusEnabled, level],
@@ -236,23 +278,19 @@ export function useQuestionPool({
   const getQuestionForPlayer = useCallback(
     (playerName: string, preferredType?: string): GameQuestion | null => {
       const availableCustom = getAvailableCustomQuestions();
+      const preferredCustomQuestions = preferredType
+        ? availableCustom.filter((question) => question.type === preferredType)
+        : availableCustom;
 
-      // Random chance to show custom question (if available)
       if (
-        availableCustom.length > 0 &&
+        preferredCustomQuestions.length > 0 &&
         Math.random() < customQuestionChance &&
-        (!preferredType || availableCustom.some((q) => q.type === preferredType))
+        (!preferredType || preferredCustomQuestions.length > 0)
       ) {
-        const customQ =
-          preferredType
-            ? availableCustom.filter((q) => q.type === preferredType)[
-                Math.floor(
-                  Math.random() *
-                    availableCustom.filter((q) => q.type === preferredType)
-                      .length,
-                )
-              ]
-            : availableCustom[Math.floor(Math.random() * availableCustom.length)];
+        const customQ = pickRandomItem(preferredCustomQuestions);
+        if (!customQ) {
+          return null;
+        }
         usedCustomQuestionsRef.current.add(customQ.id);
         return { ...customQ, isCustom: true };
       }
@@ -263,44 +301,35 @@ export function useQuestionPool({
         : available;
 
       if (available.length === 0) {
-        // Reset this player's history if they've seen all questions
         setPlayerAnswered((prev) => ({
           ...prev,
           [playerName]: new Set<string>(),
         }));
-        const allAvailable = questions.filter((q) => {
-          if (q.is18Plus && !is18PlusEnabled) return false;
-          if (q.level > level) return false;
-          if (preferredType && q.type !== preferredType) return false;
-          return true;
+        const allAvailable = filterQuestions(questions, {
+          answered: new Set<string>(),
+          preferredType,
+          is18PlusEnabled,
+          level,
         });
         const fallbackAll = preferredType
-          ? questions.filter(
-              (q) => (!q.is18Plus || is18PlusEnabled) && q.level <= level,
-            )
+          ? filterQuestions(questions, {
+              answered: new Set<string>(),
+              is18PlusEnabled,
+              level,
+            })
           : allAvailable;
-        return (
-          allAvailable[Math.floor(Math.random() * allAvailable.length)] ||
-          fallbackAll[Math.floor(Math.random() * fallbackAll.length)] ||
-          null
-        );
+        return pickRandomItem(allAvailable) ?? pickRandomItem(fallbackAll);
       }
 
-      // If 18+ enabled, prioritize 18+ questions (80% chance)
       if (is18PlusEnabled && Math.random() < GAME_SETTINGS.adult18PlusRatio) {
-        const adultQuestions = available.filter((q) => q.is18Plus);
-        if (adultQuestions.length > 0) {
-          return adultQuestions[
-            Math.floor(Math.random() * adultQuestions.length)
-          ];
+        const adultQuestions = available.filter((question) => question.is18Plus);
+        const prioritizedQuestion = pickRandomItem(adultQuestions);
+        if (prioritizedQuestion) {
+          return prioritizedQuestion;
         }
       }
 
-      return (
-        available[Math.floor(Math.random() * available.length)] ||
-        fallbackAvailable[Math.floor(Math.random() * fallbackAvailable.length)] ||
-        null
-      );
+      return pickRandomItem(available) ?? pickRandomItem(fallbackAvailable);
     },
     [
       getAvailableForPlayer,
@@ -333,15 +362,19 @@ export function useQuestionPool({
 
   // Reset all players' answered questions
   const resetAllQuestions = useCallback(() => {
-    setPlayerAnswered(
-      Object.fromEntries(players.map((name) => [name, new Set<string>()])),
-    );
+    setPlayerAnswered(createAnsweredState(players));
     usedCustomQuestionsRef.current.clear();
   }, [players]);
 
-  // Count answered questions per player
-  const answeredCount = Object.fromEntries(
-    Object.entries(playerAnswered).map(([name, set]) => [name, set.size]),
+  const answeredCount = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(playerAnswered).map(([name, answered]) => [
+          name,
+          answered.size,
+        ]),
+      ),
+    [playerAnswered],
   );
 
   return {

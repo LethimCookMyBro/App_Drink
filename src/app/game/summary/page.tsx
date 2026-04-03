@@ -8,9 +8,9 @@ import { Button } from "@/components/ui";
 import { useSoundEffects } from "@/hooks";
 import {
   clearGameSummary,
+  getStoredPlayerNames,
   normalizeStoredPlayerStats,
 } from "@/lib/gameSession";
-import confetti from "canvas-confetti";
 
 interface PlayerStats {
   name: string;
@@ -23,57 +23,55 @@ export default function GameSummaryPage() {
   const { playCelebration } = useSoundEffects();
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [totalRounds, setTotalRounds] = useState(0);
-  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     const savedStats = localStorage.getItem("wongtaek-game-stats");
     const savedRounds = localStorage.getItem("wongtaek-rounds");
-    const savedPlayers = localStorage.getItem("wongtaek-players");
-    const fallbackPlayers = savedPlayers
-      ? (() => {
-          try {
-            const parsed = JSON.parse(savedPlayers);
-            return Array.isArray(parsed)
-              ? parsed.filter((name): name is string => typeof name === "string")
-              : [];
-          } catch {
-            return [];
-          }
-        })()
-      : [];
+    const fallbackPlayers = getStoredPlayerNames();
 
-    if (savedStats) {
-      try {
-        const stats = JSON.parse(savedStats);
-        setPlayerStats(normalizeStoredPlayerStats(stats, fallbackPlayers));
-      } catch {
+    const initTimeoutId = window.setTimeout(() => {
+      if (savedStats) {
+        try {
+          const stats = JSON.parse(savedStats);
+          setPlayerStats(normalizeStoredPlayerStats(stats, fallbackPlayers));
+        } catch {
+          setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
+        }
+      } else {
         setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
       }
-    } else {
-      setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
-    }
 
-    if (savedRounds) {
-      const parsedRounds = Number.parseInt(savedRounds, 10);
-      setTotalRounds(Number.isFinite(parsedRounds) && parsedRounds > 0 ? parsedRounds : 0);
-    } else {
-      setTotalRounds(0);
-    }
+      if (savedRounds) {
+        const parsedRounds = Number.parseInt(savedRounds, 10);
+        setTotalRounds(
+          Number.isFinite(parsedRounds) && parsedRounds > 0 ? parsedRounds : 0,
+        );
+      } else {
+        setTotalRounds(0);
+      }
+    }, 0);
 
-    // Trigger celebration
-    setTimeout(() => {
-      setShowConfetti(true);
+    const runCelebration = async () => {
       playCelebration();
 
-      // Fire confetti
       if (typeof window !== "undefined") {
+        const { default: confetti } = await import("canvas-confetti");
         confetti({
           particleCount: 100,
           spread: 70,
           origin: { y: 0.6 },
         });
       }
+    };
+
+    const celebrationTimeoutId = window.setTimeout(() => {
+      void runCelebration();
     }, 500);
+
+    return () => {
+      window.clearTimeout(initTimeoutId);
+      window.clearTimeout(celebrationTimeoutId);
+    };
   }, [playCelebration]);
 
   // Sort players by drink count (MVP = most drinks)
@@ -103,8 +101,11 @@ export default function GameSummaryPage() {
         // User cancelled or error
       }
     } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(shareText);
+      if (!navigator.clipboard) {
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareText);
       alert("คัดลอกแล้ว!");
     }
   };

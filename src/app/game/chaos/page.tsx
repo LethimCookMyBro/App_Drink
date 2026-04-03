@@ -4,15 +4,13 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useSoundEffects, usePlayerQueue } from "@/hooks";
+import { usePlayerQueue, useSoundEffects, useStoredGamePlayers } from "@/hooks";
 import { useGameStore } from "@/store/gameStore";
-import { Timer } from "@/components/ui";
+import { GamePauseButton, Timer } from "@/components/ui";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 import {
   clearActiveGameSession,
-  hasActiveGameSession,
   saveGameSummary,
-  setGameResumePath,
 } from "@/lib/gameSession";
 
 const chaosRules = [
@@ -36,13 +34,13 @@ export default function ChaosModePage() {
   const router = useRouter();
   const { vibeLevel } = useGameStore();
   const is18PlusEnabled = vibeLevel === "chaos";
-  const [players, setPlayers] = useState<string[]>([]);
+  const { hasStartedGame, players, isReady } =
+    useStoredGamePlayers("/game/chaos");
   const [sequence, setSequence] = useState(1);
   const [currentRule, setCurrentRule] = useState(chaosRules[0]);
   const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
   const [timerKey, setTimerKey] = useState(0);
-  const [hasStartedGame, setHasStartedGame] = useState<boolean | null>(null);
-  const isReady = players.length > 0;
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
 
   const availableRules = useMemo(
     () =>
@@ -58,40 +56,22 @@ export default function ChaosModePage() {
     vibratePattern,
   } = useSoundEffects();
 
-  // Load players
   useEffect(() => {
-    const activeSession = hasActiveGameSession();
-    setHasStartedGame(activeSession);
-    if (!activeSession) return;
-
-    const savedPlayers = localStorage.getItem("wongtaek-players");
-    if (savedPlayers) {
-      try {
-        const parsed = JSON.parse(savedPlayers);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const timeoutId = window.setTimeout(() => {
-            setPlayers(parsed);
-            setPlayerDrinks(
-              Object.fromEntries(parsed.map((p: string) => [p, 0])),
-            );
-          }, 0);
-          return () => window.clearTimeout(timeoutId);
-        } else {
-          router.replace("/create");
-        }
-      } catch {
-        router.replace("/create");
+    const timeoutId = window.setTimeout(() => {
+      if (players.length === 0) {
+        setPlayerDrinks({});
+        return;
       }
-    } else {
-      router.replace("/create");
-    }
-  }, [router]);
 
-  useEffect(() => {
-    if (hasStartedGame) {
-      setGameResumePath("/game/chaos");
-    }
-  }, [hasStartedGame]);
+      setPlayerDrinks((current) =>
+        Object.fromEntries(
+          players.map((player) => [player, current[player] ?? 0]),
+        ),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [players]);
 
   const { currentPlayer, getNextPlayer, playerTurnCount } = usePlayerQueue({
     players: isReady ? players : ["Loading"],
@@ -103,6 +83,7 @@ export default function ChaosModePage() {
     : 0;
 
   const handleNext = () => {
+    setIsTimerPaused(false);
     // Track drink for current player (chaos mode always drinks)
     setPlayerDrinks((prev) => ({
       ...prev,
@@ -139,6 +120,10 @@ export default function ChaosModePage() {
     saveGameSummary(stats, sequence);
     clearActiveGameSession();
     router.push("/game/summary");
+  };
+
+  const toggleTimerPaused = () => {
+    setIsTimerPaused((current) => !current);
   };
 
   if (hasStartedGame === null) {
@@ -200,10 +185,14 @@ export default function ChaosModePage() {
                 arrow_back
               </span>
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
                 รอบ {sequence}
               </div>
+              <GamePauseButton
+                isPaused={isTimerPaused}
+                onToggle={toggleTimerPaused}
+              />
               <button
                 onClick={handleEndGame}
                 className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
@@ -312,8 +301,19 @@ export default function ChaosModePage() {
             duration={GAME_SETTINGS.defaultTimerDuration}
             onComplete={handleTimerComplete}
             onWarning={handleTimerWarning}
+            isPaused={isTimerPaused}
             size="md"
           />
+          <GamePauseButton
+            isPaused={isTimerPaused}
+            onToggle={toggleTimerPaused}
+            className="min-w-[10.5rem] justify-center text-sm shadow-[0_0_24px_rgba(251,255,0,0.16)]"
+          />
+          {isTimerPaused && (
+            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/70">
+              เวลาถูกหยุดไว้ กดเล่นต่อเมื่อพร้อม
+            </div>
+          )}
         </motion.div>
 
         {/* Bottom Section */}

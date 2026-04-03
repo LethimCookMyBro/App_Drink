@@ -4,6 +4,7 @@
 
 export { usePlayerQueue } from "./usePlayerQueue";
 export { useQuestionPool, type GameQuestion } from "./useQuestionPool";
-export { useGameTimer } from "./useGameTimer";
 export { useSoundEffects } from "./useSoundEffects";
 export { useUserSettings } from "./useUserSettings";
+export { useActiveGameSession } from "./useActiveGameSession";
+export { useStoredGamePlayers } from "./useStoredGamePlayers";

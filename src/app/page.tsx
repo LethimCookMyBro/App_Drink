@@ -1,27 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel, BottomNav } from "@/components/ui";
-import { useGameStore, VibeLevel } from "@/store/gameStore";
-import { useUserSettings } from "@/hooks/useUserSettings";
-import {
-  getActiveGameSessionSnapshot,
-  type ActiveGameSessionSnapshot,
-} from "@/lib/gameSession";
+import { useGameStore } from "@/store/gameStore";
+import { useActiveGameSession, useUserSettings } from "@/hooks";
+import type { VibeLevel } from "@/config/gameConstants";
 
 export default function WelcomePage() {
   const { vibeLevel, setVibeLevel } = useGameStore();
+  const { activeGame } = useActiveGameSession();
   const { settings, isLoaded } = useUserSettings();
   const is18PlusEnabled = isLoaded ? settings.is18Plus : false;
-  const [activeGame, setActiveGame] = useState<ActiveGameSessionSnapshot>({
-    isActive: false,
-    roomCode: "",
-    players: [],
-    playerCount: 0,
-    resumePath: "/create",
-  });
   const currentVibe =
     !is18PlusEnabled && vibeLevel === "chaos" ? "tipsy" : vibeLevel;
 
@@ -32,10 +23,6 @@ export default function WelcomePage() {
       setVibeLevel("tipsy");
     }
   }, [is18PlusEnabled, isLoaded, setVibeLevel, vibeLevel]);
-
-  useEffect(() => {
-    setActiveGame(getActiveGameSessionSnapshot());
-  }, []);
 
   // Build vibe options based on 18+ setting
   const vibeOptions: {
@@ -215,8 +202,7 @@ export default function WelcomePage() {
                   เล่นต่อได้เลย ไม่ต้องเริ่มใหม่ทุกครั้ง
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-white/60">
-                  ตอนนี้มี {activeGame.playerCount} คนในวง
-                  {activeGame.roomCode ? ` • ห้อง ${activeGame.roomCode}` : ""}
+                  ตอนนี้มี {activeGame.playerCount} คนในวง เล่นต่อได้เลย
                   ถ้าจะเปลี่ยนรายชื่อ ให้กดเริ่มเกมใหม่แทน
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
