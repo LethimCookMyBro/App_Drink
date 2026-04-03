@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { roomCodeSchema } from "@/lib/validation";
+import { roomCodeSchema, roomStartSchema } from "@/lib/schemas";
 import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function POST(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomMutation);
     if (rateLimited) return rateLimited;
 
     const { code } = await params;
@@ -31,18 +32,11 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { mode = "QUESTION" } = body;
-
-    const validModes: GameModeType[] = [
-      "QUESTION",
-      "VOTE",
-      "TRUTH_OR_DARE",
-      "CHAOS",
-      "MIXED",
-    ];
-    if (!validModes.includes(mode as GameModeType)) {
+    const modeValidation = roomStartSchema.safeParse(body);
+    if (!modeValidation.success) {
       return jsonError("โหมดเกมไม่ถูกต้อง", 400);
     }
+    const { mode } = modeValidation.data;
 
     const payload = await getRoomHostPayloadFromCookies(roomCode);
     if (!payload || payload.code !== roomCode) {
@@ -80,6 +74,12 @@ export async function POST(
         mode: mode as GameModeType,
         status: "ACTIVE",
       },
+      select: {
+        id: true,
+        mode: true,
+        status: true,
+        startedAt: true,
+      },
     });
 
     return jsonOk(
@@ -90,7 +90,9 @@ export async function POST(
       201,
     );
   } catch (error) {
-    console.error("Error starting game:", error);
-    return jsonError("ไม่สามารถเริ่มเกมได้ในขณะนี้", 500);
+    logger.error("rooms.start.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถเริ่มเกมได้ในขณะนี้");
   }
 }

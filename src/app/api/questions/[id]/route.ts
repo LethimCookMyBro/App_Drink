@@ -1,21 +1,14 @@
-import { z } from "zod";
 import { NextRequest } from "next/server";
+import { toAdminQuestion } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { mapServerError } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { sanitizeHtml } from "@/lib/validation";
+import { questionUpdateSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const updateSchema = z.object({
-  text: z.string().min(5).max(500).optional(),
-  type: z.enum(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]).optional(),
-  level: z.number().int().min(1).max(3).optional(),
-  is18Plus: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-  isPublic: z.boolean().optional(),
-});
 
 // GET /api/questions/[id] - Get single question
 export async function GET(
@@ -37,16 +30,28 @@ export async function GET(
 
     const question = await prisma.question.findUnique({
       where: { id },
+      select: {
+        id: true,
+        text: true,
+        type: true,
+        level: true,
+        is18Plus: true,
+        isPublic: true,
+        isActive: true,
+        usageCount: true,
+      },
     });
 
     if (!question) {
       return jsonError("ไม่พบคำถาม", 404);
     }
 
-    return jsonOk({ question });
+    return jsonOk({ question: toAdminQuestion(question) });
   } catch (error) {
-    console.error("Error fetching question:", error);
-    return jsonError("เกิดข้อผิดพลาดในการโหลดคำถาม", 500);
+    logger.error("questions.get.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "เกิดข้อผิดพลาดในการโหลดคำถาม");
   }
 }
 
@@ -64,7 +69,7 @@ export async function PUT(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
     const admin = await requireAdmin();
@@ -73,7 +78,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const validation = updateSchema.safeParse(body);
+    const validation = questionUpdateSchema.safeParse(body);
     if (!validation.success) {
       return jsonError(
         validation.error.issues[0]?.message || "ข้อมูลไม่ถูกต้อง",
@@ -103,7 +108,7 @@ export async function PUT(
     }
 
     const updateData: Record<string, unknown> = {};
-    if (text !== undefined) updateData.text = sanitizeHtml(text.trim());
+    if (text !== undefined) updateData.text = text;
     if (type !== undefined) updateData.type = type;
     if (level !== undefined) updateData.level = level;
     if (is18Plus !== undefined) updateData.is18Plus = is18Plus;
@@ -113,12 +118,24 @@ export async function PUT(
     const question = await prisma.question.update({
       where: { id },
       data: updateData,
+      select: {
+        id: true,
+        text: true,
+        type: true,
+        level: true,
+        is18Plus: true,
+        isPublic: true,
+        isActive: true,
+        usageCount: true,
+      },
     });
 
-    return jsonOk({ question });
+    return jsonOk({ question: toAdminQuestion(question) });
   } catch (error) {
-    console.error("Error updating question:", error);
-    return jsonError("ไม่สามารถแก้ไขคำถามได้ในขณะนี้", 500);
+    logger.error("questions.update.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถแก้ไขคำถามได้ในขณะนี้");
   }
 }
 
@@ -136,7 +153,7 @@ export async function DELETE(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
     const admin = await requireAdmin();
@@ -161,7 +178,9 @@ export async function DELETE(
       message: "ลบคำถามเรียบร้อย",
     });
   } catch (error) {
-    console.error("Error deleting question:", error);
-    return jsonError("ไม่สามารถลบคำถามได้ในขณะนี้", 500);
+    logger.error("questions.delete.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถลบคำถามได้ในขณะนี้");
   }
 }

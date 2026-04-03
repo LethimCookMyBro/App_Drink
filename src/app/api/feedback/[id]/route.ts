@@ -1,15 +1,12 @@
-import { z } from "zod";
+import { toFeedbackResponse } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { feedbackStatusSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Status update schema
-const statusSchema = z.object({
-  status: z.enum(["PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"]),
-});
 
 // PATCH - Update feedback status
 export async function PATCH(
@@ -31,7 +28,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const validation = statusSchema.safeParse(body);
+    const validation = feedbackStatusSchema.safeParse(body);
     if (!validation.success) {
       return jsonError("สถานะไม่ถูกต้อง", 400);
     }
@@ -45,20 +42,27 @@ export async function PATCH(
         status,
         resolvedAt: status === "RESOLVED" ? new Date() : null,
       },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        details: true,
+        contact: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+      },
     });
 
-    return jsonOk({ success: true, feedback: updatedFeedback });
+    return jsonOk({
+      success: true,
+      feedback: toFeedbackResponse(updatedFeedback),
+    });
   } catch (error) {
-    console.error("Error updating feedback:", error);
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "P2025"
-    ) {
-      return jsonError("ไม่พบ feedback ที่ต้องการอัปเดต", 404);
-    }
-    return jsonError("ไม่สามารถอัปเดตสถานะได้", 500);
+    logger.error("feedback.update.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถอัปเดตสถานะได้");
   }
 }
 
@@ -88,15 +92,9 @@ export async function DELETE(
 
     return jsonOk({ success: true, message: "ลบ feedback สำเร็จ" });
   } catch (error) {
-    console.error("Error deleting feedback:", error);
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "P2025"
-    ) {
-      return jsonError("ไม่พบ feedback ที่ต้องการลบ", 404);
-    }
-    return jsonError("ไม่สามารถลบ feedback ได้", 500);
+    logger.error("feedback.delete.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถลบ feedback ได้");
   }
 }

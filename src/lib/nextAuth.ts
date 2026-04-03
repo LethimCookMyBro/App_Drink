@@ -4,9 +4,9 @@ import type { NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "@/lib/db";
+import env from "@/lib/env";
 import { normalizeEmail, sanitizeInput } from "@/lib/auth";
 import {
-  getDevelopmentFallbackSecret,
   hashStoredSessionToken,
 } from "@/lib/securityPrimitives";
 const NEXTAUTH_SESSION_COOKIE_NAMES = [
@@ -23,17 +23,7 @@ type GoogleProfile = {
 };
 
 function getNextAuthSecret(): string {
-  const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
-
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("NEXTAUTH_SECRET or JWT_SECRET is required in production");
-    }
-
-    return getDevelopmentFallbackSecret("nextauth-jwt");
-  }
-
-  return secret;
+  return env.nextAuthSecret;
 }
 
 function sanitizeDisplayName(name: string | undefined, email: string): string {
@@ -60,21 +50,15 @@ function getCookieValue(request: Request, name: string): string | null {
 }
 
 export function isGoogleLoginEnabled(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true" &&
-    typeof process.env.GOOGLE_CLIENT_ID === "string" &&
-    process.env.GOOGLE_CLIENT_ID.length > 0 &&
-    typeof process.env.GOOGLE_CLIENT_SECRET === "string" &&
-    process.env.GOOGLE_CLIENT_SECRET.length > 0
-  );
+  return env.googleLoginEnabled && env.googleClientId.length > 0 && env.googleClientSecret.length > 0;
 }
 
 function getGoogleClientId(): string {
-  return process.env.GOOGLE_CLIENT_ID || "disabled-google-client-id";
+  return env.googleClientId || "disabled-google-client-id";
 }
 
 function getGoogleClientSecret(): string {
-  return process.env.GOOGLE_CLIENT_SECRET || "disabled-google-client-secret";
+  return env.googleClientSecret || "disabled-google-client-secret";
 }
 
 export async function deleteNextAuthSessionFromRequest(
@@ -202,7 +186,7 @@ export function clearNextAuthSessionCookies(response: NextResponse) {
   for (const cookieName of NEXTAUTH_SESSION_COOKIE_NAMES) {
     response.cookies.set(cookieName, "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: env.isProduction,
       sameSite: "lax",
       maxAge: 0,
       path: "/",

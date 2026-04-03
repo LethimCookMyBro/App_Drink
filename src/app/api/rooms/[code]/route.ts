@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { toRoomSummary } from "@/lib/apiFilter";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { roomCodeSchema } from "@/lib/validation";
+import { roomCodeSchema } from "@/lib/schemas";
 import {
   getRoomHostPayloadFromCookies,
   getRoomPlayerPayloadFromCookies,
@@ -31,13 +33,21 @@ export async function GET(
 
     const room = await prisma.room.findUnique({
       where: { code: roomCode },
-      include: {
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hostId: true,
+        maxPlayers: true,
+        isActive: true,
         players: {
           orderBy: { joinedAt: "asc" },
-        },
-        sessions: {
-          where: { status: "ACTIVE" },
-          take: 1,
+          select: {
+            id: true,
+            name: true,
+            isHost: true,
+            isReady: true,
+          },
         },
       },
     });
@@ -69,10 +79,12 @@ export async function GET(
       return jsonError("กรุณาเข้าร่วมห้องก่อนดูข้อมูลห้อง", 403);
     }
 
-    return jsonOk({ room });
+    return jsonOk({ room: toRoomSummary(room) });
   } catch (error) {
-    console.error("Error fetching room:", error);
-    return jsonError("ไม่สามารถดึงข้อมูลห้องได้ในขณะนี้", 500);
+    logger.error("rooms.get.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถดึงข้อมูลห้องได้ในขณะนี้");
   }
 }
 
@@ -85,7 +97,7 @@ export async function DELETE(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomMutation);
     if (rateLimited) return rateLimited;
 
     const { code } = await params;
@@ -115,11 +127,27 @@ export async function DELETE(
     const updated = await prisma.room.update({
       where: { code: roomCode },
       data: { isActive: false },
+      select: {
+        code: true,
+        name: true,
+        maxPlayers: true,
+        isActive: true,
+        players: {
+          select: {
+            id: true,
+            name: true,
+            isHost: true,
+            isReady: true,
+          },
+        },
+      },
     });
 
-    return jsonOk({ message: "ห้องถูกปิดแล้ว", room: updated });
+    return jsonOk({ message: "ห้องถูกปิดแล้ว", room: toRoomSummary(updated) });
   } catch (error) {
-    console.error("Error closing room:", error);
-    return jsonError("ไม่สามารถปิดห้องได้ในขณะนี้", 500);
+    logger.error("rooms.delete.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถปิดห้องได้ในขณะนี้");
   }
 }

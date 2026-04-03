@@ -13,8 +13,6 @@ import {
 import { useAuthStore } from "@/store/authStore";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
-const googleLoginEnabled =
-  process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "true";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -78,21 +76,19 @@ export default function LoginPage() {
             เข้าสู่ระบบ
           </h2>
 
-          {googleLoginEnabled && (
-            <div className="mb-5 space-y-4">
-              <GoogleAuthButton
-                label="เข้าสู่ระบบด้วย Google"
-                callbackUrl="/profile"
-              />
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-white/10" />
-                <span className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">
-                  หรือ
-                </span>
-                <div className="h-px flex-1 bg-white/10" />
-              </div>
+          <div className="mb-5 space-y-4">
+            <GoogleAuthButton
+              label="เข้าสู่ระบบด้วย Google"
+              callbackUrl="/profile"
+            />
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs font-bold uppercase tracking-[0.22em] text-white/35">
+                หรือ
+              </span>
+              <div className="h-px flex-1 bg-white/10" />
             </div>
-          )}
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

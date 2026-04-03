@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, getClientIP, RateLimitConfig } from "@/lib/rateLimit";
+import { filterApiResponse } from "@/lib/apiFilter";
+import env from "@/lib/env";
+import logger from "@/lib/logger";
+import {
+  buildRateLimitKey,
+  checkRateLimit,
+  RateLimitConfig,
+} from "@/lib/rateLimit";
 import {
   getAllowedOrigins,
   getRequestOrigin,
@@ -11,23 +18,46 @@ export function jsonError(
   status = 400,
   extra?: Record<string, unknown>,
 ) {
-  return NextResponse.json({ error, ...(extra || {}) }, { status });
+  return NextResponse.json(
+    filterApiResponse({ error, ...(extra || {}) }),
+    { status },
+  );
 }
 
 export function jsonOk(data: Record<string, unknown>, status = 200) {
-  return NextResponse.json(data, { status });
+  return NextResponse.json(filterApiResponse(data), { status });
 }
 
-export function enforceRateLimit(request: Request, config: RateLimitConfig) {
-  const ip = getClientIP(request);
-  const limit = checkRateLimit(ip, config);
+export function buildSessionCookieOptions(
+  maxAge: number,
+  path = "/",
+  sameSite: "strict" | "lax" = "strict",
+) {
+  return {
+    httpOnly: true,
+    secure: env.isProduction,
+    sameSite,
+    maxAge,
+    path,
+  } as const;
+}
+
+export function enforceRateLimit(
+  request: Request,
+  config: RateLimitConfig,
+  subject?: string,
+) {
+  const limit = checkRateLimit(buildRateLimitKey(request, config, subject), config);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please try again shortly." },
       {
         status: 429,
         headers: {
-          "Retry-After": Math.ceil(limit.resetIn / 1000).toString(),
+          "Retry-After": limit.retryAfter.toString(),
+          "X-RateLimit-Limit": limit.limit.toString(),
+          "X-RateLimit-Remaining": limit.remaining.toString(),
+          "X-RateLimit-Reset": limit.resetAt.toString(),
         },
       },
     );
@@ -47,7 +77,7 @@ export function enforceSameOrigin(request: Request) {
     return null;
   }
 
-  if (!requestOrigin && process.env.NODE_ENV !== "production") {
+  if (!requestOrigin && !env.isProduction) {
     return null;
   }
 
@@ -56,4 +86,22 @@ export function enforceSameOrigin(request: Request) {
   }
 
   return jsonError("Invalid origin", 403);
+}
+
+export function mapServerError(
+  error: unknown,
+  fallbackMessage: string,
+) {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String(error.code);
+    if (code === "P2002") {
+      return jsonError("Already exists", 409);
+    }
+    if (code === "P2025") {
+      return jsonError("Not found", 404);
+    }
+  }
+
+  logger.error("api.route.error", { fallbackMessage });
+  return jsonError(fallbackMessage, 500);
 }

@@ -1,7 +1,9 @@
 import type { Admin } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
-import { getDevelopmentFallbackSecret } from "@/lib/securityPrimitives";
+import env from "@/lib/env";
+import logger from "@/lib/logger";
+import { createTokenFingerprint } from "@/lib/securityPrimitives";
 
 export interface AdminTokenPayload {
   adminId: string;
@@ -12,14 +14,7 @@ export interface AdminTokenPayload {
 }
 
 export function getAdminJwtSecret(): string {
-  const secret = process.env.ADMIN_JWT_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("ADMIN_JWT_SECRET is required in production");
-    }
-    return getDevelopmentFallbackSecret("admin-jwt");
-  }
-  return secret;
+  return env.adminJwtSecret;
 }
 
 export function signAdminToken(admin: Pick<Admin, "id" | "email" | "role">) {
@@ -31,8 +26,12 @@ export function signAdminToken(admin: Pick<Admin, "id" | "email" | "role">) {
       iat: Math.floor(Date.now() / 1000),
     },
     getAdminJwtSecret(),
-    { expiresIn: "24h" },
+    { expiresIn: "2h" },
   );
+}
+
+export function getAdminTokenFingerprint(token: string) {
+  return createTokenFingerprint(token);
 }
 
 export async function getAdminTokenFromCookies(): Promise<string | null> {
@@ -54,6 +53,26 @@ export function verifyAdminToken(token: string): AdminTokenPayload | null {
   }
 }
 
+export function verifyAdminTokenDetailed(token: string): {
+  payload: AdminTokenPayload | null;
+  reason?: "expired" | "invalid";
+} {
+  try {
+    const decoded = jwt.verify(token, getAdminJwtSecret()) as AdminTokenPayload;
+    if (!decoded?.adminId || !decoded.username) {
+      return { payload: null, reason: "invalid" };
+    }
+
+    return { payload: decoded };
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return { payload: null, reason: "expired" };
+    }
+
+    return { payload: null, reason: "invalid" };
+  }
+}
+
 export async function getAdminFromCookies(): Promise<Admin | null> {
   const token = await getAdminTokenFromCookies();
   if (!token) return null;
@@ -65,12 +84,32 @@ export async function getAdminFromCookies(): Promise<Admin | null> {
     const { default: prisma } = await import("./db");
     const admin = await prisma.admin.findUnique({
       where: { id: payload.adminId },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        lastLoginAt: true,
+        activeTokenFingerprint: true,
+        activeTokenIssuedAt: true,
+      },
     });
     if (!admin || !admin.isActive) return null;
     if (admin.email !== payload.username) return null;
+    if (
+      admin.activeTokenFingerprint &&
+      admin.activeTokenFingerprint !== getAdminTokenFingerprint(token)
+    ) {
+      return null;
+    }
     return admin;
   } catch (error) {
-    console.error("Admin lookup failed:", error);
+    logger.error("admin.lookup.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return null;
   }
 }

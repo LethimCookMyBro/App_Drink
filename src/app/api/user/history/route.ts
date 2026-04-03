@@ -3,6 +3,7 @@ import {
   getAuthenticatedAppUser,
 } from "@/lib/appAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import {
   EMPTY_USER_GAME_STATS,
   getUserStatsAndRecentSessions,
@@ -72,7 +73,9 @@ export async function GET(request: Request) {
 
     return response;
   } catch (error) {
-    console.error("History error:", error);
+    logger.error("history.get.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลประวัติการเล่น", 500, {
       authenticated: false,
       stats: EMPTY_USER_GAME_STATS,

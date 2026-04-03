@@ -1,131 +1,136 @@
-/**
- * Rate Limiter
- * In-memory rate limiting for API routes
- */
-
+import { createTokenFingerprint } from "@/lib/securityPrimitives";
 import { getClientIPFromHeaders } from "@/lib/requestSecurity";
 
 interface RateLimitEntry {
-  count: number;
-  resetTime: number;
+  hits: number[];
+}
+
+export interface RateLimitConfig {
+  scope: string;
+  windowMs: number;
+  maxRequests: number;
+  keyStrategy?: "ip" | "ip+subject" | "ip+token";
 }
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
-export interface RateLimitConfig {
-  windowMs: number; // Time window in milliseconds
-  maxRequests: number; // Max requests per window
-}
-
-const defaultConfig: RateLimitConfig = {
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 30, // 30 requests per minute
-};
-
-/**
- * Check if request should be rate limited
- * @param identifier - Unique identifier (IP address, user ID, etc.)
- * @param config - Rate limit configuration
- * @returns Object with allowed status and remaining requests
- */
 export function checkRateLimit(
   identifier: string,
-  config: RateLimitConfig = defaultConfig,
+  config: RateLimitConfig,
 ): {
   allowed: boolean;
+  limit: number;
   remaining: number;
-  resetIn: number;
+  resetAt: number;
+  retryAfter: number;
 } {
   const now = Date.now();
-  const entry = rateLimitStore.get(identifier);
+  const windowStart = now - config.windowMs;
+  const existing = rateLimitStore.get(identifier)?.hits ?? [];
+  const activeHits = existing.filter((timestamp) => timestamp > windowStart);
 
-  // Clean up expired entries periodically
   if (rateLimitStore.size > 10000) {
     cleanupExpiredEntries();
   }
 
-  // No existing entry or expired
-  if (!entry || now > entry.resetTime) {
-    rateLimitStore.set(identifier, {
-      count: 1,
-      resetTime: now + config.windowMs,
-    });
-    return {
-      allowed: true,
-      remaining: config.maxRequests - 1,
-      resetIn: config.windowMs,
-    };
-  }
-
-  // Check if limit exceeded
-  if (entry.count >= config.maxRequests) {
+  if (activeHits.length >= config.maxRequests) {
+    const resetAt = activeHits[0] + config.windowMs;
     return {
       allowed: false,
+      limit: config.maxRequests,
       remaining: 0,
-      resetIn: entry.resetTime - now,
+      resetAt,
+      retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
     };
   }
 
-  // Increment count
-  entry.count++;
-  rateLimitStore.set(identifier, entry);
+  const updatedHits = [...activeHits, now];
+  rateLimitStore.set(identifier, { hits: updatedHits });
+
+  const resetAt = updatedHits[0] + config.windowMs;
 
   return {
     allowed: true,
-    remaining: config.maxRequests - entry.count,
-    resetIn: entry.resetTime - now,
+    limit: config.maxRequests,
+    remaining: Math.max(0, config.maxRequests - updatedHits.length),
+    resetAt,
+    retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
   };
 }
 
-/**
- * Clean up expired entries from the store
- */
 function cleanupExpiredEntries(): void {
   const now = Date.now();
   for (const [key, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetTime) {
+    entry.hits = entry.hits.filter((timestamp) => timestamp > now - 24 * 60 * 60 * 1000);
+    if (entry.hits.length === 0) {
       rateLimitStore.delete(key);
     }
   }
 }
 
-/**
- * Get client IP from request headers
- */
 export function getClientIP(request: Request): string {
   return getClientIPFromHeaders(request.headers);
 }
 
-/**
- * Rate limit configurations for different endpoints
- */
+function getTokenCandidate(request: Request): string | null {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const matched = cookieHeader
+    .split(";")
+    .map((entry) => entry.trim())
+    .find((entry) =>
+      entry.startsWith("admin-token=") ||
+      entry.startsWith("auth-token=") ||
+      entry.startsWith("next-auth.session-token=") ||
+      entry.startsWith("__Secure-next-auth.session-token="),
+    );
+
+  return matched?.split("=")[1] ?? null;
+}
+
+export function buildRateLimitKey(
+  request: Request,
+  config: RateLimitConfig,
+  subject?: string,
+): string {
+  const ip = getClientIP(request);
+  const baseKey = `${config.scope}:${ip}`;
+
+  if (config.keyStrategy === "ip+subject") {
+    return `${baseKey}:${subject || "anonymous"}`;
+  }
+
+  if (config.keyStrategy === "ip+token") {
+    const token = subject || getTokenCandidate(request);
+    const fingerprint = token ? createTokenFingerprint(token) : "anonymous";
+    return `${baseKey}:${fingerprint}`;
+  }
+
+  return baseKey;
+}
+
 export const rateLimitConfigs = {
-  // Standard API endpoints
-  standard: { windowMs: 60 * 1000, maxRequests: 60 },
-
-  // Question fetching - more lenient
-  questions: { windowMs: 60 * 1000, maxRequests: 100 },
-
-  // Admin actions - stricter
-  admin: { windowMs: 10 * 60 * 1000, maxRequests: 15 },
-
-  // Authentication - very strict
-  auth: { windowMs: 10 * 60 * 1000, maxRequests: 10 },
-
-  // Room creation - moderate
-  rooms: { windowMs: 5 * 60 * 1000, maxRequests: 12 },
-
-  // Room lookup - stricter to reduce brute-force room enumeration
-  roomLookup: { windowMs: 2 * 60 * 1000, maxRequests: 25 },
-
-  // Profile updates
-  profile: { windowMs: 5 * 60 * 1000, maxRequests: 20 },
-
-  // Public feedback
-  feedback: { windowMs: 10 * 60 * 1000, maxRequests: 6 },
+  global: { scope: "global", windowMs: 60 * 1000, maxRequests: 200, keyStrategy: "ip" } as RateLimitConfig,
+  auth: { scope: "auth", windowMs: 60 * 1000, maxRequests: 5, keyStrategy: "ip+subject" } as RateLimitConfig,
+  admin: { scope: "admin", windowMs: 60 * 1000, maxRequests: 10, keyStrategy: "ip+token" } as RateLimitConfig,
+  questionMutations: { scope: "question-mutations", windowMs: 60 * 1000, maxRequests: 20, keyStrategy: "ip" } as RateLimitConfig,
+  roomCreate: { scope: "room-create", windowMs: 10 * 60 * 1000, maxRequests: 10, keyStrategy: "ip" } as RateLimitConfig,
+  roomMutation: { scope: "room-mutation", windowMs: 60 * 1000, maxRequests: 30, keyStrategy: "ip" } as RateLimitConfig,
+  roomLookup: { scope: "room-lookup", windowMs: 60 * 1000, maxRequests: 60, keyStrategy: "ip" } as RateLimitConfig,
+  profile: { scope: "profile", windowMs: 5 * 60 * 1000, maxRequests: 20, keyStrategy: "ip+token" } as RateLimitConfig,
+  feedback: { scope: "feedback", windowMs: 10 * 60 * 1000, maxRequests: 6, keyStrategy: "ip" } as RateLimitConfig,
 };
 
 const rateLimitModule = {
+  buildRateLimitKey,
   checkRateLimit,
   getClientIP,
   rateLimitConfigs,

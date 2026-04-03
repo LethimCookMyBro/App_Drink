@@ -28,3 +28,7 @@ export function hashStoredSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export function createTokenFingerprint(token: string): string {
+  const signature = token.split(".")[2] || token;
+  return createHash("sha256").update(signature).digest("hex").slice(0, 16);
+}

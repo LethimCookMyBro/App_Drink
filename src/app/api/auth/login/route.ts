@@ -3,15 +3,17 @@ import {
   verifyPassword,
   generateToken,
   createSession,
-  isValidEmail,
-  normalizeEmail,
 } from "@/lib/auth";
 import {
+  buildSessionCookieOptions,
   enforceRateLimit,
   enforceSameOrigin,
   jsonError,
+  mapServerError,
 } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { userLoginSchema } from "@/lib/schemas";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 export const runtime = "nodejs";
@@ -22,22 +24,21 @@ export async function POST(request: Request) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
-    if (rateLimited) return rateLimited;
-
     const body = await request.json();
-    const email = typeof body?.email === "string" ? normalizeEmail(body.email) : "";
-    const password = typeof body?.password === "string" ? body.password : "";
-
-    // Validate input
-    if (!email || !password) {
-      return jsonError("กรุณากรอกอีเมลและรหัสผ่าน", 400);
+    const validation = userLoginSchema.safeParse({
+      email: body?.email,
+      password: body?.password,
+    });
+    if (!validation.success) {
+      return jsonError(
+        validation.error.issues[0]?.message || "ข้อมูลเข้าสู่ระบบไม่ถูกต้อง",
+        400,
+      );
     }
+    const { email, password } = validation.data;
 
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return jsonError("รูปแบบอีเมลไม่ถูกต้อง", 400);
-    }
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth, email);
+    if (rateLimited) return rateLimited;
 
     const turnstileCheck = await verifyTurnstileToken(
       request,
@@ -57,14 +58,18 @@ export async function POST(request: Request) {
     // Find user
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        avatarUrl: true,
+        image: true,
+      },
     });
 
-    if (!user) {
+    if (!user || !user.password) {
       return jsonError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
-    }
-
-    if (!user.password) {
-      return jsonError("บัญชีนี้ยังไม่รองรับการเข้าสู่ระบบด้วยรหัสผ่าน", 401);
     }
 
     // Verify password
@@ -82,14 +87,11 @@ export async function POST(request: Request) {
     });
 
     await createSession(user.id, token);
-
-    // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // Set cookie and return response
     const response = NextResponse.json(
       {
         success: true,
@@ -100,20 +102,20 @@ export async function POST(request: Request) {
           avatarUrl: user.avatarUrl ?? user.image,
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
 
-    response.cookies.set("auth-token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
+    response.cookies.set(
+      "auth-token",
+      token,
+      buildSessionCookieOptions(60 * 60 * 24 * 7),
+    );
 
     return response;
   } catch (error) {
-    console.error("Login error:", error);
-    return jsonError("บริการเข้าสู่ระบบไม่พร้อมใช้งานชั่วคราว", 503);
+    logger.error("auth.login.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "บริการเข้าสู่ระบบไม่พร้อมใช้งานชั่วคราว");
   }
 }

@@ -1,17 +1,40 @@
-import { requireAdmin } from "@/lib/adminAuth";
+import {
+  getAdminFromCookies,
+  getAdminTokenFromCookies,
+  verifyAdminTokenDetailed,
+} from "@/lib/adminAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
+    const token = await getAdminTokenFromCookies();
+    if (!token) {
       return jsonOk({
         authenticated: false,
         error: "ไม่พบ token",
         code: "NO_SESSION",
+      });
+    }
+
+    const verification = verifyAdminTokenDetailed(token);
+    if (!verification.payload) {
+      return jsonOk({
+        authenticated: false,
+        error: "เซสชันไม่ถูกต้อง",
+        code: verification.reason === "expired" ? "EXPIRED" : "INVALID",
+      });
+    }
+
+    const admin = await getAdminFromCookies();
+    if (!admin) {
+      return jsonOk({
+        authenticated: false,
+        error: "ไม่พบเซสชันที่ใช้งานได้",
+        code: "INVALID",
       });
     }
 
@@ -25,7 +48,9 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Admin verify error:", error);
+    logger.error("admin.verify.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return jsonError("Server misconfiguration", 500, {
       authenticated: false,
     });

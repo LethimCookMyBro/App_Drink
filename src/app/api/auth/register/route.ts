@@ -3,17 +3,18 @@ import {
   hashPassword,
   generateToken,
   createSession,
-  normalizeEmail,
-  sanitizeInput,
 } from "@/lib/auth";
 import {
+  buildSessionCookieOptions,
   enforceRateLimit,
   enforceSameOrigin,
   jsonError,
+  mapServerError,
 } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { userRegisterSchema } from "@/lib/validation";
+import { userRegisterSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,9 +23,6 @@ export async function POST(request: Request) {
   try {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
-
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
-    if (rateLimited) return rateLimited;
 
     const body = await request.json();
     const validation = userRegisterSchema.safeParse({
@@ -40,6 +38,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const rateLimited = enforceRateLimit(
+      request,
+      rateLimitConfigs.auth,
+      validation.data.email,
+    );
+    if (rateLimited) return rateLimited;
+
     const turnstileCheck = await verifyTurnstileToken(
       request,
       body?.turnstileToken,
@@ -52,9 +57,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = normalizeEmail(validation.data.email);
+    const email = validation.data.email;
     const password = validation.data.password;
-    const name = sanitizeInput(validation.data.name);
+    const name = validation.data.name;
 
     // Dynamic import to prevent crash when database is offline
     const { default: prisma } = await import("@/lib/db");
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
+      select: { id: true },
     });
 
     if (existingUser) {
@@ -78,6 +84,13 @@ export async function POST(request: Request) {
         password: hashedPassword,
         name,
       },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        image: true,
+      },
     });
 
     // Generate token and create session
@@ -88,14 +101,11 @@ export async function POST(request: Request) {
     });
 
     await createSession(user.id, token);
-
-    // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // Set cookie and return response
     const response = NextResponse.json(
       {
         success: true,
@@ -106,20 +116,20 @@ export async function POST(request: Request) {
           avatarUrl: user.avatarUrl ?? user.image,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
 
-    response.cookies.set("auth-token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
+    response.cookies.set(
+      "auth-token",
+      token,
+      buildSessionCookieOptions(60 * 60 * 24 * 7),
+    );
 
     return response;
   } catch (error) {
-    console.error("Register error:", error);
-    return jsonError("บริการสมัครสมาชิกไม่พร้อมใช้งานชั่วคราว", 503);
+    logger.error("auth.register.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "บริการสมัครสมาชิกไม่พร้อมใช้งานชั่วคราว");
   }
 }

@@ -1,8 +1,26 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { adminLoginSchema } from "@/lib/validation";
-import { signAdminToken } from "@/lib/adminAuth";
-import { enforceRateLimit, enforceSameOrigin, jsonError } from "@/lib/apiUtils";
+import { adminLoginSchema } from "@/lib/schemas";
+import {
+  getAdminTokenFingerprint,
+  signAdminToken,
+} from "@/lib/adminAuth";
+import {
+  handleLoginFailure,
+  handleLoginSuccess,
+  getAdminLockout,
+  normalizeAdminIdentifier,
+} from "@/lib/adminSecurity";
+import {
+  buildSessionCookieOptions,
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+  mapServerError,
+} from "@/lib/apiUtils";
+import { env } from "@/lib/env";
+import logger from "@/lib/logger";
+import { getClientIP } from "@/lib/rateLimit";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
@@ -26,9 +44,6 @@ export async function POST(request: Request) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth);
-    if (rateLimited) return rateLimited;
-
     const body = await request.json();
     const usernameInput =
       typeof body?.username === "string"
@@ -47,6 +62,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const identifier = normalizeAdminIdentifier(validation.data.username);
+    const ip = getClientIP(request);
+    const userAgent = request.headers.get("user-agent") ?? undefined;
+
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.auth, identifier);
+    if (rateLimited) return rateLimited;
+
+    const lockout = await getAdminLockout(identifier);
+    if (lockout.locked) {
+      await handleLoginFailure({
+        identifier,
+        ip,
+        userAgent,
+        reason: "locked",
+      });
+      return jsonError("Invalid credentials", 423, {
+        retryAfter: lockout.retryAfterSeconds,
+      });
+    }
+
     const turnstileCheck = await verifyTurnstileToken(
       request,
       body?.turnstileToken,
@@ -59,30 +94,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const username = validation.data.username;
     const { password } = validation.data;
 
     const { default: prisma } = await import("@/lib/db");
-    let admin = await prisma.admin.findUnique({ where: { email: username } });
+    let admin = await prisma.admin.findUnique({
+      where: { email: identifier },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        role: true,
+        isActive: true,
+      },
+    });
 
-    const envAdminUsername = (
-      process.env.ADMIN_SEED_USERNAME ||
-      process.env.ADMIN_SEED_EMAIL ||
-      ""
-    ).trim();
-    const envAdminPassword = process.env.ADMIN_SEED_PASSWORD || "";
-    const envAdminName = process.env.ADMIN_SEED_NAME || "Admin";
+    const envAdminUsername = env.adminSeedUsername.trim();
+    const envAdminPassword = env.adminSeedPassword;
+    const envAdminName = env.adminSeedName;
     const envCredentialsMatch =
       !!envAdminUsername &&
       !!envAdminPassword &&
-      username === envAdminUsername &&
+      identifier === normalizeAdminIdentifier(envAdminUsername) &&
       password === envAdminPassword;
 
-    if (
-      process.env.NODE_ENV === "production" &&
-      isDefaultAdminSeed(envAdminUsername, envAdminUsername, envAdminPassword)
-    ) {
-      console.error("Refusing default admin seed credentials in production");
+    if (env.isProduction && isDefaultAdminSeed(envAdminUsername, envAdminUsername, envAdminPassword)) {
+      logger.error("admin.login.default_seed_blocked");
       return jsonError("ระบบผู้ดูแลยังตั้งค่าไม่ปลอดภัย", 503);
     }
 
@@ -92,40 +129,84 @@ export async function POST(request: Request) {
       if (!admin) {
         admin = await prisma.admin.create({
           data: {
-            email: envAdminUsername,
+            email: normalizeAdminIdentifier(envAdminUsername),
             password: passwordHash,
             name: envAdminName,
             role: "SUPER_ADMIN",
             isActive: true,
           },
+          select: {
+            id: true,
+            email: true,
+            password: true,
+            name: true,
+            role: true,
+            isActive: true,
+          },
         });
       } else {
-        // Keep env credentials as the source of truth when explicitly used
         admin = await prisma.admin.update({
           where: { id: admin.id },
           data: { password: passwordHash, isActive: true },
+          select: {
+            id: true,
+            email: true,
+            password: true,
+            name: true,
+            role: true,
+            isActive: true,
+          },
         });
       }
       envAuthenticated = true;
     }
 
     if (!admin || !admin.isActive) {
-      return jsonError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
+      await handleLoginFailure({
+        identifier,
+        ip,
+        userAgent,
+        reason: "invalid_credentials",
+      });
+      return jsonError("Invalid credentials", 401);
     }
 
     const isPasswordValid = envAuthenticated
       ? true
       : await bcrypt.compare(password, admin.password);
     if (!isPasswordValid) {
-      return jsonError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
+      await handleLoginFailure({
+        identifier,
+        ip,
+        userAgent,
+        reason: "invalid_credentials",
+      });
+      return jsonError("Invalid credentials", 401);
     }
 
     await prisma.admin.update({
       where: { id: admin.id },
-      data: { lastLoginAt: new Date() },
+      data: {
+        lastLoginAt: new Date(),
+      },
     });
 
     const token = signAdminToken(admin);
+    const tokenFingerprint = getAdminTokenFingerprint(token);
+
+    await prisma.admin.update({
+      where: { id: admin.id },
+      data: {
+        activeTokenFingerprint: tokenFingerprint,
+        activeTokenIssuedAt: new Date(),
+      },
+    });
+    await handleLoginSuccess({
+      adminId: admin.id,
+      identifier,
+      ip,
+      userAgent,
+    });
 
     const response = NextResponse.json(
       {
@@ -140,17 +221,13 @@ export async function POST(request: Request) {
       { status: 200 },
     );
 
-    response.cookies.set("admin-token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 24 hours
-      path: "/",
-    });
+    response.cookies.set("admin-token", token, buildSessionCookieOptions(60 * 60 * 2));
 
     return response;
   } catch (error) {
-    console.error("Admin login error:", error);
-    return jsonError("เกิดข้อผิดพลาดในการเข้าสู่ระบบ", 500);
+    logger.error("admin.login.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
   }
 }

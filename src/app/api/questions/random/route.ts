@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { enforceRateLimit, jsonError, jsonOk } from "@/lib/apiUtils";
-import { rateLimitConfigs } from "@/lib/rateLimit";
+import { toPublicQuestion } from "@/lib/apiFilter";
+import { jsonError, jsonOk } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,9 +45,6 @@ function parseOptionalLevel(value: string | null): number | null {
 
 // GET /api/questions/random - Get random question(s) for gameplay
 export async function GET(request: NextRequest) {
-  const rateLimited = enforceRateLimit(request, rateLimitConfigs.questions);
-  if (rateLimited) return rateLimited;
-
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
   const is18Plus = searchParams.get("is18Plus") === "true";
@@ -88,6 +86,13 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: [{ usageCount: "asc" }, { updatedAt: "asc" }, { id: "asc" }],
       take: candidateLimit,
+      select: {
+        id: true,
+        text: true,
+        type: true,
+        level: true,
+        is18Plus: true,
+      },
     });
 
     if (candidates.length === 0) {
@@ -118,12 +123,14 @@ export async function GET(request: NextRequest) {
     }
 
     return jsonOk({
-      questions: selectedQuestions,
+      questions: selectedQuestions.map(toPublicQuestion),
       count: selectedQuestions.length,
       source: "db",
     });
   } catch (error) {
-    console.error("Error fetching random questions:", error);
+    logger.error("questions.random.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return jsonError("ไม่สามารถโหลดคำถามได้ในขณะนี้", 500);
   }
 }

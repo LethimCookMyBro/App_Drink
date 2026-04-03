@@ -1,3 +1,5 @@
+import env from "@/lib/env";
+
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const FORWARDED_IP_HEADERS = [
   "cf-connecting-ip",
@@ -5,6 +7,9 @@ const FORWARDED_IP_HEADERS = [
   "x-forwarded-for",
   "x-real-ip",
 ] as const;
+const IPV4_PATTERN =
+  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const IPV6_PATTERN = /^[a-f0-9:]+$/i;
 
 function parseOrigin(value: string | null): string | null {
   if (!value) return null;
@@ -22,7 +27,13 @@ function normalizeIp(rawValue: string | null): string | null {
   const firstValue = rawValue.split(",")[0]?.trim();
   if (!firstValue) return null;
 
-  return firstValue.replace(/^\[|\]$/g, "");
+  const normalized = firstValue.replace(/^\[|\]$/g, "");
+
+  if (IPV4_PATTERN.test(normalized) || IPV6_PATTERN.test(normalized)) {
+    return normalized;
+  }
+
+  return null;
 }
 
 export function getClientIPFromHeaders(headers: Headers): string {
@@ -48,16 +59,13 @@ export function getAllowedOrigins(
 ): string[] {
   const origins = new Set<string>();
 
-  const appUrl = parseOrigin(process.env.NEXT_PUBLIC_APP_URL ?? null);
+  const appUrl = env.appUrl;
   if (appUrl) {
     origins.add(appUrl);
   }
 
-  for (const entry of (process.env.ALLOWED_ORIGINS ?? "").split(",")) {
-    const origin = parseOrigin(entry.trim());
-    if (origin) {
-      origins.add(origin);
-    }
+  for (const origin of env.allowedOrigins) {
+    origins.add(origin);
   }
 
   try {
@@ -75,7 +83,7 @@ export function getAllowedOrigins(
         try {
           return new URL(request.url).protocol.replace(":", "");
         } catch {
-          return process.env.NODE_ENV === "production" ? "https" : "http";
+          return env.isProduction ? "https" : "http";
         }
       })();
 
@@ -95,24 +103,24 @@ export function isUnsafeMethod(method: string): boolean {
   return !SAFE_METHODS.has(method.toUpperCase());
 }
 
-export function buildContentSecurityPolicy(): string {
-  const scriptSources =
-    process.env.NODE_ENV === "development"
-      ? "'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com"
-      : "'self' 'unsafe-inline' https://challenges.cloudflare.com";
+export function buildContentSecurityPolicy(options?: { admin?: boolean }): string {
+  const isAdmin = options?.admin === true;
+  const scriptSources = env.isDevelopment
+    ? "'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com"
+    : "'self' 'unsafe-inline' https://challenges.cloudflare.com";
 
   return [
     "default-src 'self'",
     `script-src ${scriptSources}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https:",
+    "img-src 'self' data: blob:",
     "connect-src 'self' https://challenges.cloudflare.com",
-    "frame-src 'self' https://challenges.cloudflare.com",
+    `frame-src ${isAdmin ? "https://challenges.cloudflare.com" : "'self' https://challenges.cloudflare.com"}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self'",
     "upgrade-insecure-requests",
   ].join("; ");
 }

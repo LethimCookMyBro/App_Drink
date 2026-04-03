@@ -1,13 +1,16 @@
 import { NextRequest } from "next/server";
+import { toAdminQuestion } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
 import {
   enforceRateLimit,
   enforceSameOrigin,
   jsonError,
   jsonOk,
+  mapServerError,
 } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { questionSchema, sanitizeHtml } from "@/lib/validation";
+import { questionSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     const levelParam = searchParams.get("level");
     const level = levelParam ? parseBoundedInt(levelParam, 1, 1, 3) : null;
-    const limit = parseBoundedInt(searchParams.get("limit"), 50, 1, 1000);
+    const limit = parseBoundedInt(searchParams.get("limit"), 50, 1, 100);
     const offset = parseBoundedInt(searchParams.get("offset"), 0, 0, 100000);
     const includeInactive = searchParams.get("includeInactive") === "true";
 
@@ -89,12 +92,22 @@ export async function GET(request: NextRequest) {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: limit,
         skip: offset,
+        select: {
+          id: true,
+          text: true,
+          type: true,
+          level: true,
+          is18Plus: true,
+          isPublic: true,
+          isActive: true,
+          usageCount: true,
+        },
       }),
       prisma.question.count({ where }),
     ]);
 
     return jsonOk({
-      questions,
+      questions: questions.map(toAdminQuestion),
       total,
       limit,
       offset,
@@ -102,8 +115,10 @@ export async function GET(request: NextRequest) {
       source: "db",
     });
   } catch (error) {
-    console.error("Error fetching questions:", error);
-    return jsonError("ไม่สามารถโหลดคำถามได้ในขณะนี้", 500);
+    logger.error("questions.list.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถโหลดคำถามได้ในขณะนี้");
   }
 }
 
@@ -113,7 +128,7 @@ export async function POST(request: NextRequest) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
     const admin = await requireAdmin();
@@ -138,19 +153,31 @@ export async function POST(request: NextRequest) {
 
     const question = await prisma.question.create({
       data: {
-        text: sanitizeHtml(text.trim()),
+        text,
         type,
-        level: Math.min(3, Math.max(1, level)),
+        level,
         is18Plus,
         isPublic,
         isActive: true,
         createdBy: admin.id,
       },
+      select: {
+        id: true,
+        text: true,
+        type: true,
+        level: true,
+        is18Plus: true,
+        isPublic: true,
+        isActive: true,
+        usageCount: true,
+      },
     });
 
-    return jsonOk({ question }, 201);
+    return jsonOk({ question: toAdminQuestion(question) }, 201);
   } catch (error) {
-    console.error("Error creating question:", error);
-    return jsonError("ไม่สามารถสร้างคำถามได้ในขณะนี้", 500);
+    logger.error("questions.create.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถสร้างคำถามได้ในขณะนี้");
   }
 }

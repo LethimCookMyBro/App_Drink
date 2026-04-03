@@ -1,8 +1,17 @@
 import { NextRequest } from "next/server";
+import { toRoomPlayer, toRoomSummary } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import {
+  buildSessionCookieOptions,
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+  jsonOk,
+  mapServerError,
+} from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { createRoomSchema, sanitizeHtml } from "@/lib/validation";
+import { createRoomSchema } from "@/lib/schemas";
 import { signRoomHostToken, getRoomHostCookieName } from "@/lib/roomAuth";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
@@ -31,20 +40,36 @@ export async function GET() {
 
     const rooms = await prisma.room.findMany({
       where: { isActive: true },
-      include: {
-        players: true,
+      select: {
+        code: true,
+        name: true,
+        maxPlayers: true,
+        isActive: true,
+        players: {
+          select: {
+            id: true,
+            name: true,
+            isHost: true,
+            isReady: true,
+          },
+        },
         _count: { select: { sessions: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
 
-    return jsonOk({ rooms });
-  } catch (error) {
-    console.error("Error fetching rooms:", error);
-    return jsonError("ไม่สามารถโหลดข้อมูลห้องได้ในขณะนี้", 500, {
-      rooms: [],
+    return jsonOk({
+      rooms: rooms.map((room) => ({
+        ...toRoomSummary(room),
+        activeSessionCount: room._count.sessions,
+      })),
     });
+  } catch (error) {
+    logger.error("rooms.list.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถโหลดข้อมูลห้องได้ในขณะนี้");
   }
 }
 
@@ -54,7 +79,7 @@ export async function POST(request: NextRequest) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomCreate);
     if (rateLimited) return rateLimited;
 
     const body = await request.json();
@@ -89,8 +114,6 @@ export async function POST(request: NextRequest) {
       validation.data;
 
     const name = roomName?.trim() || "Wong Taek Room";
-    const safeHostName = sanitizeHtml(hostName);
-    const safeRoomName = sanitizeHtml(name);
 
     const { default: prisma } = await import("@/lib/db");
 
@@ -109,59 +132,73 @@ export async function POST(request: NextRequest) {
       return jsonError("ไม่สามารถสร้างรหัสห้องใหม่ได้ กรุณาลองอีกครั้ง", 503);
     }
 
-    const room = await prisma.room.create({
-      data: {
-        code,
-        name: safeRoomName,
-        hostId: "", // Will be updated after player creation
-        difficulty: Math.min(5, Math.max(1, difficulty)),
-        is18Plus,
-        maxPlayers,
-        players: {
-          create: {
-            name: safeHostName,
-            isHost: true,
-            isReady: true,
+    const room = await prisma.$transaction(async (tx) => {
+      const createdRoom = await tx.room.create({
+        data: {
+          code,
+          name,
+          hostId: "",
+          difficulty: Math.min(5, Math.max(1, difficulty)),
+          is18Plus,
+          maxPlayers,
+          players: {
+            create: {
+              name: hostName,
+              isHost: true,
+              isReady: true,
+            },
           },
         },
-      },
-      include: { players: true },
-    });
+        include: {
+          players: {
+            select: {
+              id: true,
+              name: true,
+              isHost: true,
+              isReady: true,
+            },
+          },
+        },
+      });
 
-    const host = room.players[0];
-    await prisma.room.update({
-      where: { id: room.id },
-      data: { hostId: host.id },
+      const host = createdRoom.players[0];
+
+      await tx.room.update({
+        where: { id: createdRoom.id },
+        data: { hostId: host.id },
+      });
+
+      return {
+        room: createdRoom,
+        host,
+      };
     });
 
     const hostToken = signRoomHostToken({
-      roomId: room.id,
-      hostId: host.id,
+      roomId: room.room.id,
+      hostId: room.host.id,
       code,
     });
 
     const response = jsonOk(
       {
-        room: {
-          ...room,
-          hostId: host.id,
-        },
-        player: host,
+        room: toRoomSummary(room.room),
+        player: toRoomPlayer(room.host),
       },
       201,
     );
 
-    response.cookies.set(getRoomHostCookieName(code), hostToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 6, // 6 hours
-      path: "/",
-    });
+    response.cookies.set(
+      getRoomHostCookieName(code),
+      hostToken,
+      buildSessionCookieOptions(60 * 60 * 4, "/api/rooms"),
+    );
 
     return response;
   } catch (error) {
-    console.error("Error creating room:", error);
-    return jsonError("ไม่สามารถสร้างห้องได้ในขณะนี้", 500);
+    logger.error("rooms.create.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถสร้างห้องได้ในขณะนี้");
   }
 }

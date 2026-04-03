@@ -1,5 +1,6 @@
 import { getAuthenticatedAppUser, clearLegacyAuthCookie } from "@/lib/appAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,9 @@ export async function GET(request: Request) {
 
     return response;
   } catch (error) {
-    console.error("Me error:", error);
+    logger.error("auth.me.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return jsonError("เกิดข้อผิดพลาด", 500, {
       authenticated: false,
       user: null,

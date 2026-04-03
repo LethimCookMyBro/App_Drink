@@ -1,7 +1,16 @@
 import { NextRequest } from "next/server";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { toRoomPlayer, toRoomSummary } from "@/lib/apiFilter";
+import {
+  buildSessionCookieOptions,
+  enforceRateLimit,
+  enforceSameOrigin,
+  jsonError,
+  jsonOk,
+  mapServerError,
+} from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { playerNameSchema, roomCodeSchema, sanitizeHtml } from "@/lib/validation";
+import { roomCodeSchema, roomJoinSchema } from "@/lib/schemas";
 import { getRoomPlayerCookieName, signRoomPlayerToken } from "@/lib/roomAuth";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
@@ -17,7 +26,7 @@ export async function POST(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.rooms);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomMutation);
     if (rateLimited) return rateLimited;
 
     const { code } = await params;
@@ -29,7 +38,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const nameValidation = playerNameSchema.safeParse(body.playerName);
+    const nameValidation = roomJoinSchema.safeParse({ playerName: body.playerName });
     if (!nameValidation.success) {
       return jsonError(
         nameValidation.error.issues[0]?.message || "ชื่อผู้เล่นไม่ถูกต้อง",
@@ -49,13 +58,22 @@ export async function POST(
       );
     }
 
-    const playerName = sanitizeHtml(nameValidation.data);
+    const playerName = nameValidation.data.playerName;
 
     const { default: prisma } = await import("@/lib/db");
 
     const room = await prisma.room.findUnique({
       where: { code: roomCode },
-      include: { players: true },
+      include: {
+        players: {
+          select: {
+            id: true,
+            name: true,
+            isHost: true,
+            isReady: true,
+          },
+        },
+      },
     });
 
     if (!room) {
@@ -88,13 +106,27 @@ export async function POST(
 
     const updatedRoom = await prisma.room.findUnique({
       where: { id: room.id },
-      include: { players: { orderBy: { joinedAt: "asc" } } },
+      select: {
+        code: true,
+        name: true,
+        maxPlayers: true,
+        isActive: true,
+        players: {
+          orderBy: { joinedAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+            isHost: true,
+            isReady: true,
+          },
+        },
+      },
     });
 
     const response = jsonOk(
       {
-        room: updatedRoom,
-        player,
+        room: updatedRoom ? toRoomSummary(updatedRoom) : null,
+        player: toRoomPlayer(player),
       },
       201,
     );
@@ -105,17 +137,17 @@ export async function POST(
       code: roomCode,
     });
 
-    response.cookies.set(getRoomPlayerCookieName(roomCode), playerToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 6,
-      path: "/",
-    });
+    response.cookies.set(
+      getRoomPlayerCookieName(roomCode),
+      playerToken,
+      buildSessionCookieOptions(60 * 60 * 4, "/api/rooms"),
+    );
 
     return response;
   } catch (error) {
-    console.error("Error joining room:", error);
-    return jsonError("ไม่สามารถเข้าร่วมห้องได้ในขณะนี้", 500);
+    logger.error("rooms.join.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถเข้าร่วมห้องได้ในขณะนี้");
   }
 }

@@ -263,11 +263,41 @@ model Admin {
   name        String
   role        AdminRole @default(MODERATOR)
   isActive    Boolean  @default(true)
+  activeTokenFingerprint String?
+  activeTokenIssuedAt DateTime?
   createdAt   DateTime @default(now())
   lastLoginAt DateTime?
 
+  auditLogs   AuditLog[]
+
   @@index([isActive])
   @@index([role])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminId     String?
+  action      String
+  status      String
+  ip          String?
+  userAgent   String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  admin       Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+}
+
+model AdminLockout {
+  identifier      String   @id
+  failedAttempts  Int      @default(0)
+  lockedUntil     DateTime?
+  lastAttemptAt   DateTime @default(now())
+  lastIp          String?
+
+  @@index([lockedUntil])
 }
 
 // ==========================================

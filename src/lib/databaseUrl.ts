@@ -1,3 +1,6 @@
+import logger from "@/lib/logger";
+import env from "@/lib/env";
+
 function hasRailwayRuntime(): boolean {
   return Boolean(
     process.env.RAILWAY_PROJECT_ID ||
@@ -18,8 +21,8 @@ function normalizeUrl(value: string | undefined): string | undefined {
 }
 
 export function resolveDatabaseUrl(): string {
-  const publicUrl = normalizeUrl(process.env.DATABASE_PUBLIC_URL);
-  const internalUrl = normalizeUrl(process.env.DATABASE_URL);
+  const publicUrl = normalizeUrl(env.databasePublicUrl);
+  const internalUrl = normalizeUrl(env.databaseUrl);
 
   if (hasRailwayRuntime() && isPostgresUrl(internalUrl)) {
     return internalUrl;
@@ -34,9 +37,7 @@ export function resolveDatabaseUrl(): string {
   }
 
   if (hasRailwayRuntime() && internalUrl) {
-    console.warn(
-      "Ignoring invalid Railway DATABASE_URL because it is not a PostgreSQL URL.",
-    );
+    logger.warn("database.invalid_railway_internal_url");
   }
 
   if (publicUrl || internalUrl) {

@@ -1,6 +1,7 @@
 import type { User } from "@prisma/client";
 import type { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { buildSessionCookieOptions } from "@/lib/apiUtils";
 import { getTokenFromRequest, validateSession } from "@/lib/auth";
 import { getAuthSession } from "@/lib/nextAuth";
 
@@ -26,13 +27,7 @@ function toAppUser(user: AppUser | null): AppUser | null {
 }
 
 export function clearLegacyAuthCookie(response: NextResponse) {
-  response.cookies.set("auth-token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+  response.cookies.set("auth-token", "", buildSessionCookieOptions(0));
 }
 
 export async function getAuthenticatedAppUser(

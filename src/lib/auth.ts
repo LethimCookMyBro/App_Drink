@@ -1,20 +1,15 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import env from "@/lib/env";
+import logger from "@/lib/logger";
+import sanitize from "@/lib/sanitize";
 import {
-  getDevelopmentFallbackSecret,
   hashStoredSessionToken,
 } from "@/lib/securityPrimitives";
 
 // Get JWT secret - check at runtime, not build time
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("JWT_SECRET is required in production");
-    }
-    return getDevelopmentFallbackSecret("auth-jwt");
-  }
-  return secret;
+  return env.jwtSecret;
 }
 
 const TOKEN_EXPIRY = "7d"; // Token expires in 7 days
@@ -118,7 +113,9 @@ export async function validateSession(token: string) {
 
     return session;
   } catch (error) {
-    console.error("validateSession error:", error);
+    logger.error("auth.validateSession.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return null;
   }
 }
@@ -147,7 +144,9 @@ export async function deleteAllUserSessions(userId: string) {
     const prisma = await getPrisma();
     await prisma.userSession.deleteMany({ where: { userId } });
   } catch (error) {
-    console.error("deleteAllUserSessions error:", error);
+    logger.error("auth.deleteAllUserSessions.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
   }
 }
 
@@ -198,8 +197,5 @@ export function isValidPassword(password: string): {
 
 // Sanitize user input - remove potentially dangerous characters
 export function sanitizeInput(input: string): string {
-  return input
-    .trim()
-    .replace(/[<>]/g, "") // Remove HTML-like tags
-    .slice(0, 500); // Limit length
+  return sanitize(input, 500);
 }

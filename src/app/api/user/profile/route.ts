@@ -3,13 +3,16 @@ import {
   enforceSameOrigin,
   jsonError,
   jsonOk,
+  mapServerError,
 } from "@/lib/apiUtils";
-import { sanitizeInput } from "@/lib/auth";
+import env from "@/lib/env";
 import {
   clearLegacyAuthCookie,
   getAuthenticatedAppUser,
 } from "@/lib/appAuth";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { profileUpdateSchema } from "@/lib/schemas";
 import {
   EMPTY_USER_GAME_STATS,
   getUserStatsAndRecentSessions,
@@ -35,7 +38,7 @@ function normalizeAvatarUrl(value: unknown): string | null | undefined {
     const parsed = new URL(value);
     const isAllowedProtocol =
       parsed.protocol === "https:" ||
-      (process.env.NODE_ENV !== "production" && parsed.protocol === "http:");
+      (!env.isProduction && parsed.protocol === "http:");
 
     if (!isAllowedProtocol) {
       return undefined;
@@ -74,7 +77,6 @@ export async function GET(request: Request) {
         email: user.email,
         name: user.name,
         avatarUrl: user.avatarUrl,
-        createdAt: user.createdAt,
       },
       stats,
     });
@@ -85,7 +87,9 @@ export async function GET(request: Request) {
 
     return authenticatedResponse;
   } catch (error) {
-    console.error("Profile error:", error);
+    logger.error("profile.get.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return jsonError("เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์", 500, {
       user: null,
       stats: EMPTY_USER_GAME_STATS,
@@ -111,27 +115,23 @@ export async function PATCH(request: Request) {
     const { default: prisma } = await import("@/lib/db");
 
     const body = await request.json();
-    const { name } = body;
-    const avatarUrl = normalizeAvatarUrl(body?.avatarUrl);
-
-    if (name !== undefined) {
-      if (
-        typeof name !== "string" ||
-        name.trim().length < 1 ||
-        name.length > 50
-      ) {
-        return jsonError("ชื่อต้องมี 1-50 ตัวอักษร", 400);
-      }
+    const validation = profileUpdateSchema.safeParse({
+      name: body?.name,
+      avatarUrl: body?.avatarUrl,
+    });
+    if (!validation.success) {
+      return jsonError(
+        validation.error.issues[0]?.message || "ข้อมูลโปรไฟล์ไม่ถูกต้อง",
+        400,
+      );
     }
-
-    if (body?.avatarUrl !== undefined && avatarUrl === undefined) {
-      return jsonError("ลิงก์รูปโปรไฟล์ไม่ถูกต้อง", 400);
-    }
+    const { name } = validation.data;
+    const avatarUrl = normalizeAvatarUrl(validation.data.avatarUrl);
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
-        ...(name !== undefined && { name: sanitizeInput(name) }),
+        ...(name !== undefined && { name }),
         ...(avatarUrl !== undefined && { avatarUrl, image: avatarUrl }),
       },
       select: {
@@ -151,7 +151,9 @@ export async function PATCH(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Update profile error:", error);
-    return jsonError("เกิดข้อผิดพลาดในการอัพเดทข้อมูล", 500);
+    logger.error("profile.update.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "เกิดข้อผิดพลาดในการอัพเดทข้อมูล");
   }
 }

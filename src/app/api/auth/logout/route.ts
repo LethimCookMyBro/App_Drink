@@ -1,10 +1,12 @@
 import { deleteSession, getTokenFromRequest } from "@/lib/auth";
 import {
+  buildSessionCookieOptions,
   enforceRateLimit,
   enforceSameOrigin,
-  jsonError,
   jsonOk,
+  mapServerError,
 } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import {
   clearNextAuthSessionCookies,
   deleteNextAuthSessionFromRequest,
@@ -31,18 +33,14 @@ export async function POST(request: Request) {
     await deleteNextAuthSessionFromRequest(request);
 
     const response = jsonOk({ success: true, message: "ออกจากระบบสำเร็จ" });
-    response.cookies.set("auth-token", "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-      path: "/",
-    });
+    response.cookies.set("auth-token", "", buildSessionCookieOptions(0));
     clearNextAuthSessionCookies(response);
 
     return response;
   } catch (error) {
-    console.error("Logout error:", error);
-    return jsonError("ไม่สามารถออกจากระบบได้ในขณะนี้", 500);
+    logger.error("auth.logout.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถออกจากระบบได้ในขณะนี้");
   }
 }

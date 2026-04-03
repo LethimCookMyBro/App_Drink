@@ -1,4 +1,6 @@
 import { getClientIP } from "@/lib/rateLimit";
+import env from "@/lib/env";
+import logger from "@/lib/logger";
 
 const TURNSTILE_VERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -17,10 +19,7 @@ export interface TurnstileVerificationResult {
 }
 
 export function isTurnstileConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY &&
-      process.env.TURNSTILE_SECRET_KEY,
-  );
+  return Boolean(env.turnstileSiteKey && env.turnstileSecretKey);
 }
 
 function buildExpectedHosts(request: Request): Set<string> {
@@ -32,9 +31,9 @@ function buildExpectedHosts(request: Request): Set<string> {
     // Ignore malformed request URLs.
   }
 
-  if (process.env.NEXT_PUBLIC_APP_URL) {
+  if (env.appUrl) {
     try {
-      hosts.add(new URL(process.env.NEXT_PUBLIC_APP_URL).hostname);
+      hosts.add(new URL(env.appUrl).hostname);
     } catch {
       // Ignore malformed app URL config.
     }
@@ -60,7 +59,7 @@ export async function verifyTurnstileToken(
     };
   }
 
-  const secret = process.env.TURNSTILE_SECRET_KEY;
+  const secret = env.turnstileSecretKey;
   if (!secret) {
     return {
       ok: false,
@@ -94,7 +93,7 @@ export async function verifyTurnstileToken(
     });
 
     if (!response.ok) {
-      console.error("Turnstile verification failed:", response.status);
+      logger.warn("turnstile.verify.failed", { status: response.status });
       return {
         ok: false,
         error: "ระบบตรวจสอบความปลอดภัยไม่พร้อมใช้งานชั่วคราว",
@@ -114,7 +113,7 @@ export async function verifyTurnstileToken(
     }
 
     if (expectedAction && data.action && data.action !== expectedAction) {
-      console.warn("Unexpected Turnstile action:", data.action);
+      logger.warn("turnstile.verify.unexpected_action", { action: data.action });
       return {
         ok: false,
         error: "การยืนยันความปลอดภัยไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง",
@@ -125,7 +124,9 @@ export async function verifyTurnstileToken(
     if (data.hostname) {
       const expectedHosts = buildExpectedHosts(request);
       if (expectedHosts.size > 0 && !expectedHosts.has(data.hostname)) {
-        console.warn("Unexpected Turnstile hostname:", data.hostname);
+        logger.warn("turnstile.verify.unexpected_hostname", {
+          hostname: data.hostname,
+        });
         return {
           ok: false,
           error: "การยืนยันความปลอดภัยไม่ถูกต้อง กรุณารีเฟรชแล้วลองใหม่",
@@ -136,7 +137,9 @@ export async function verifyTurnstileToken(
 
     return { ok: true };
   } catch (error) {
-    console.error("Turnstile verification error:", error);
+    logger.error("turnstile.verify.error", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return {
       ok: false,
       error: "ระบบตรวจสอบความปลอดภัยไม่พร้อมใช้งานชั่วคราว",

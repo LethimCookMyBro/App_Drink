@@ -1,23 +1,13 @@
-import { z } from "zod";
+import { toFeedbackResponse } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
-import { sanitizeHtml } from "@/lib/validation";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/lib/apiUtils";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
+import { feedbackSchema } from "@/lib/schemas";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Feedback validation schema
-const feedbackSchema = z.object({
-  type: z.enum(["BUG", "FEATURE"]),
-  title: z
-    .string()
-    .min(3, "หัวข้อต้องมีอย่างน้อย 3 ตัวอักษร")
-    .max(100),
-  details: z.string().max(1000).optional(),
-  contact: z.string().max(100).optional(),
-});
 
 // GET - Get all feedback (for admin)
 export async function GET() {
@@ -32,12 +22,24 @@ export async function GET() {
     const feedbacks = await prisma.feedback.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        details: true,
+        contact: true,
+        status: true,
+        createdAt: true,
+        resolvedAt: true,
+      },
     });
 
-    return jsonOk({ feedbacks });
+    return jsonOk({ feedbacks: feedbacks.map(toFeedbackResponse) });
   } catch (error) {
-    console.error("Error fetching feedback:", error);
-    return jsonError("ไม่สามารถโหลด feedback ได้", 500, { feedbacks: [] });
+    logger.error("feedback.list.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถโหลด feedback ได้");
   }
 }
 
@@ -80,9 +82,18 @@ export async function POST(request: Request) {
     const feedback = await prisma.feedback.create({
       data: {
         type,
-        title: sanitizeHtml(title.trim()),
-        details: details ? sanitizeHtml(details.trim()) : null,
-        contact: contact ? sanitizeHtml(contact.trim()) : null,
+        title,
+        details: details ?? null,
+        contact: contact ?? null,
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        details: true,
+        contact: true,
+        status: true,
+        createdAt: true,
       },
     });
 
@@ -90,12 +101,14 @@ export async function POST(request: Request) {
       {
         success: true,
         message: "ส่ง feedback สำเร็จ",
-        feedback,
+        feedback: toFeedbackResponse(feedback),
       },
       201,
     );
   } catch (error) {
-    console.error("Error creating feedback:", error);
-    return jsonError("ไม่สามารถส่ง feedback ได้", 500);
+    logger.error("feedback.create.failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return mapServerError(error, "ไม่สามารถส่ง feedback ได้");
   }
 }
