@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminGoogleSheetsExportButton } from "@/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { GlassPanel } from "@/components/ui";
@@ -24,14 +25,30 @@ export default function AdminSecurityPage() {
       title="Security"
       description="ติดตามสถานะ lockout, ความเคลื่อนไหวของแอดมิน, และ posture หลักของระบบโดยไม่เปิดเผยข้อมูลดิบเกินจำเป็น"
       actions={
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
-        >
-          <span className="material-symbols-outlined text-lg">refresh</span>
-          รีเฟรช
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+          >
+            <span className="material-symbols-outlined text-lg">refresh</span>
+            รีเฟรช
+          </button>
+          <AdminGoogleSheetsExportButton
+            dataset="security"
+            label="Export Security"
+          />
+          <AdminGoogleSheetsExportButton
+            dataset="audit_logs"
+            label="Export Audit"
+            icon="history"
+          />
+          <AdminGoogleSheetsExportButton
+            dataset="server_logs"
+            label="Export Server Log"
+            icon="dns"
+          />
+        </>
       }
     >
       {error ? (
@@ -235,6 +252,66 @@ export default function AdminSecurityPage() {
                   </div>
                 </div>
               ))}
+        </div>
+      </GlassPanel>
+
+      <GlassPanel className="p-5 md:p-6">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+            Server Logs
+          </p>
+          <h2 className="mt-2 text-2xl font-black text-white">
+            บันทึกล่าสุดจากฝั่งเซิร์ฟเวอร์
+          </h2>
+        </div>
+
+        <div className="space-y-3">
+          {loading
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-24 animate-pulse rounded-2xl bg-white/5"
+                />
+              ))
+            : data?.recentServerLogs.length ? (
+                data.recentServerLogs.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 md:grid-cols-[auto_1fr_auto]"
+                  >
+                    <div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          item.level === "ERROR"
+                            ? "bg-neon-red/15 text-neon-red"
+                            : item.level === "WARN"
+                              ? "bg-neon-yellow/15 text-neon-yellow"
+                              : "bg-neon-blue/15 text-neon-blue"
+                        }`}
+                      >
+                        {item.level}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">
+                        {item.message}
+                      </p>
+                      <p className="mt-1 break-words text-xs text-white/40">
+                        {item.contextPreview || "ไม่มี context เพิ่มเติม"}
+                      </p>
+                    </div>
+                    <div className="text-left md:text-right">
+                      <p className="text-xs text-white/35">
+                        {formatDateTime(item.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-white/5 bg-white/5 p-8 text-center text-white/45">
+                  ยังไม่มี server log ที่บันทึกไว้ในระบบ
+                </div>
+              )}
         </div>
       </GlassPanel>
     </AdminShell>

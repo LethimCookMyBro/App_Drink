@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminGoogleSheetsExportButton } from "@/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { GlassPanel } from "@/components/ui";
@@ -40,14 +41,26 @@ export default function AdminOverviewPage() {
       title="ภาพรวมระบบ"
       description="ศูนย์กลางสำหรับติดตามสุขภาพของเกม, ผู้เล่น, คำถาม, feedback และกิจกรรมของผู้ดูแลระบบ"
       actions={
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
-        >
-          <span className="material-symbols-outlined text-lg">refresh</span>
-          รีเฟรช
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+          >
+            <span className="material-symbols-outlined text-lg">refresh</span>
+            รีเฟรช
+          </button>
+          <AdminGoogleSheetsExportButton
+            dataset="overview"
+            label="Export Overview"
+          />
+          <AdminGoogleSheetsExportButton
+            dataset="all"
+            label="Export All"
+            icon="backup_table"
+            variant="primary"
+          />
+        </>
       }
     >
       {error ? (

@@ -8,7 +8,6 @@ import { createTokenFingerprint } from "@/lib/securityPrimitives";
 export interface AdminTokenPayload {
   adminId: string;
   role: string;
-  username: string;
   iat?: number;
   exp?: number;
 }
@@ -21,7 +20,6 @@ export function signAdminToken(admin: Pick<Admin, "id" | "email" | "role">) {
   return jwt.sign(
     {
       adminId: admin.id,
-      username: admin.email,
       role: admin.role,
       iat: Math.floor(Date.now() / 1000),
     },
@@ -46,7 +44,7 @@ export async function getAdminTokenFromCookies(): Promise<string | null> {
 export function verifyAdminToken(token: string): AdminTokenPayload | null {
   try {
     const decoded = jwt.verify(token, getAdminJwtSecret()) as AdminTokenPayload;
-    if (!decoded?.adminId || !decoded.username) return null;
+    if (!decoded?.adminId) return null;
     return decoded;
   } catch {
     return null;
@@ -59,7 +57,7 @@ export function verifyAdminTokenDetailed(token: string): {
 } {
   try {
     const decoded = jwt.verify(token, getAdminJwtSecret()) as AdminTokenPayload;
-    if (!decoded?.adminId || !decoded.username) {
+    if (!decoded?.adminId) {
       return { payload: null, reason: "invalid" };
     }
 
@@ -98,7 +96,6 @@ export async function getAdminFromCookies(): Promise<Admin | null> {
       },
     });
     if (!admin || !admin.isActive) return null;
-    if (admin.email !== payload.username) return null;
     if (
       admin.activeTokenFingerprint &&
       admin.activeTokenFingerprint !== getAdminTokenFingerprint(token)

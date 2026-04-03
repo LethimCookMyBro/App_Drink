@@ -290,6 +290,17 @@ model AuditLog {
   @@index([action, createdAt])
 }
 
+model ServerLog {
+  id        String   @id @default(cuid())
+  level     String
+  message   String
+  context   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level, createdAt])
+}
+
 model AdminLockout {
   identifier      String   @id
   failedAttempts  Int      @default(0)

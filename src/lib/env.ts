@@ -19,6 +19,9 @@ const rawEnvSchema = z.object({
   NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED: z.enum(["true", "false"]).optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_SHEETS_SPREADSHEET_ID: z.string().optional(),
+  GOOGLE_SHEETS_CLIENT_EMAIL: z.string().optional(),
+  GOOGLE_SHEETS_PRIVATE_KEY: z.string().optional(),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().min(20).max(1000).default(200),
@@ -120,7 +123,10 @@ export const env = {
   roomJwtSecret: resolvedSecrets.room,
   previousRoomJwtSecret: rawEnv.ROOM_JWT_SECRET_PREVIOUS || "",
   nextAuthSecret: resolvedSecrets.nextAuth,
-  apiEncryptionKey: rawEnv.API_ENCRYPTION_KEY || "",
+  apiEncryptionKey:
+    rawEnv.API_ENCRYPTION_KEY && rawEnv.API_ENCRYPTION_KEY.length >= MIN_SECRET_LENGTH
+      ? rawEnv.API_ENCRYPTION_KEY
+      : resolvedSecrets.jwt,
   rateLimitMax: rawEnv.RATE_LIMIT_MAX,
   googleLoginEnabled:
     rawEnv.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "false"
@@ -130,6 +136,16 @@ export const env = {
         : Boolean(rawEnv.GOOGLE_CLIENT_ID && rawEnv.GOOGLE_CLIENT_SECRET),
   googleClientId: rawEnv.GOOGLE_CLIENT_ID || "",
   googleClientSecret: rawEnv.GOOGLE_CLIENT_SECRET || "",
+  googleSheetsSpreadsheetId: rawEnv.GOOGLE_SHEETS_SPREADSHEET_ID || "",
+  googleSheetsClientEmail: rawEnv.GOOGLE_SHEETS_CLIENT_EMAIL || "",
+  googleSheetsPrivateKey: rawEnv.GOOGLE_SHEETS_PRIVATE_KEY
+    ? rawEnv.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, "\n")
+    : "",
+  googleSheetsEnabled: Boolean(
+    rawEnv.GOOGLE_SHEETS_SPREADSHEET_ID &&
+      rawEnv.GOOGLE_SHEETS_CLIENT_EMAIL &&
+      rawEnv.GOOGLE_SHEETS_PRIVATE_KEY,
+  ),
   nextAuthUrl: rawEnv.NEXTAUTH_URL || "",
   turnstileSiteKey: rawEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "",
   turnstileSecretKey: rawEnv.TURNSTILE_SECRET_KEY || "",

@@ -1,3 +1,5 @@
+import { sanitizeLogContext } from "@/lib/dataProtection";
+
 type LogLevel = "info" | "warn" | "error";
 
 interface LogContext {
@@ -9,19 +11,27 @@ function emit(level: LogLevel, message: string, context?: LogContext) {
     return;
   }
 
+  const safeContext = sanitizeLogContext(context);
   const payload = JSON.stringify({
     level,
     message,
     timestamp: new Date().toISOString(),
-    ...(context ? { context } : {}),
+    ...(safeContext ? { context: safeContext } : {}),
   });
 
   if (level === "error") {
     console.error(payload);
-    return;
+  } else {
+    console.log(payload);
   }
 
-  console.log(payload);
+  queueMicrotask(() => {
+    void import("./serverLogs")
+      .then(({ persistServerLog }) =>
+        persistServerLog({ level, message, context: safeContext }),
+      )
+      .catch(() => void 0);
+  });
 }
 
 export const logger = {

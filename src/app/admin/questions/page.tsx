@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AdminGoogleSheetsExportButton } from "@/components/admin/AdminGoogleSheetsExportButton";
 import { Button, GlassPanel } from "@/components/ui";
 import { useRouter } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -354,6 +355,10 @@ export default function AdminQuestionsPage() {
             <span className="material-symbols-outlined text-lg">refresh</span>
             รีเฟรช
           </button>
+          <AdminGoogleSheetsExportButton
+            dataset="questions"
+            label="Export Questions"
+          />
           <Button
             onClick={() => {
               setApiError(null);

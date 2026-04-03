@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import prisma from "@/lib/db";
 import env from "@/lib/env";
+import { decodeStoredFeedback } from "@/lib/feedbackPrivacy";
 import {
   maskContact,
   maskEmail,
@@ -14,6 +15,8 @@ import {
   maskIpAddress,
   shortenText,
 } from "@/lib/privacy";
+import { listServerLogs } from "@/lib/serverLogs";
+import { redactPotentialPII } from "@/lib/dataProtection";
 
 export interface AdminIdentity {
   username: string;
@@ -131,6 +134,15 @@ export interface AdminSecurityData {
     lastIpMasked: string | null;
   }>;
   recentAudit: AdminAuditItem[];
+  recentServerLogs: AdminServerLogItem[];
+}
+
+export interface AdminServerLogItem {
+  id: string;
+  level: string;
+  message: string;
+  contextPreview: string | null;
+  createdAt: string;
 }
 
 const QUESTION_LABELS: Record<QuestionType, string> = {
@@ -153,7 +165,7 @@ function toIsoString(value: Date | null | undefined): string | null {
 
 function toAdminIdentity(admin: Pick<Admin, "email" | "name" | "role" | "lastLoginAt">): AdminIdentity {
   return {
-    username: admin.email,
+    username: maskEmail(admin.email),
     name: admin.name,
     role: admin.role,
     lastLoginAt: toIsoString(admin.lastLoginAt),
@@ -217,16 +229,17 @@ function toFeedbackItem(feedback: {
   createdAt: Date;
   resolvedAt: Date | null;
 }): AdminFeedbackItem {
+  const decoded = decodeStoredFeedback(feedback);
   return {
-    id: feedback.id,
-    type: feedback.type,
-    title: feedback.title,
-    details: feedback.details,
-    contactMasked: maskContact(feedback.contact),
-    hasContact: Boolean(feedback.contact),
-    status: feedback.status,
-    createdAt: feedback.createdAt.toISOString(),
-    resolvedAt: toIsoString(feedback.resolvedAt),
+    id: decoded.id,
+    type: decoded.type,
+    title: redactPotentialPII(decoded.title) || decoded.title,
+    details: redactPotentialPII(decoded.details),
+    contactMasked: maskContact(decoded.contact),
+    hasContact: Boolean(decoded.contact),
+    status: decoded.status,
+    createdAt: decoded.createdAt.toISOString(),
+    resolvedAt: toIsoString(decoded.resolvedAt),
   };
 }
 
@@ -246,6 +259,24 @@ function toAuditItem(log: {
     ipMasked: maskIpAddress(log.ip),
     userAgent: shortenText(log.userAgent, 48),
     adminName: log.admin?.name || maskEmail(log.admin?.email || "") || "System",
+    createdAt: log.createdAt.toISOString(),
+  };
+}
+
+function toServerLogItem(log: {
+  id: string;
+  level: string;
+  message: string;
+  context: string | null;
+  createdAt: Date;
+}): AdminServerLogItem {
+  return {
+    id: log.id,
+    level: log.level.toUpperCase(),
+    message: shortenText(redactPotentialPII(log.message) || log.message, 140),
+    contextPreview: log.context
+      ? shortenText(redactPotentialPII(log.context) || log.context, 140)
+      : null,
     createdAt: log.createdAt.toISOString(),
   };
 }
@@ -481,7 +512,7 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
   const now = new Date();
   const since24HoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const [recentAudit, failedLogins24h, successfulLogins24h, auditEvents24h, questionWrites24h, activeLockouts, lockoutRows] =
+  const [recentAudit, recentServerLogs, failedLogins24h, successfulLogins24h, auditEvents24h, questionWrites24h, activeLockouts, lockoutRows] =
     await Promise.all([
       prisma.auditLog.findMany({
         take: 20,
@@ -501,6 +532,7 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
           },
         },
       }),
+      listServerLogs(20),
       prisma.auditLog.count({
         where: {
           action: "ADMIN_LOGIN_FAILURE",
@@ -571,6 +603,11 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
         tone: env.googleLoginEnabled ? "good" : "default",
       },
       {
+        label: "Google Sheets Export",
+        value: env.googleSheetsEnabled ? "พร้อมใช้งาน" : "ยังไม่ตั้งค่า",
+        tone: env.googleSheetsEnabled ? "good" : "warn",
+      },
+      {
         label: "Allowed Origins",
         value: env.allowedOrigins.length > 0 ? env.allowedOrigins.join(", ") : "ไม่ได้ตั้งค่า",
         tone: env.allowedOrigins.length > 0 ? "good" : "warn",
@@ -601,5 +638,6 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
       lastIpMasked: maskIpAddress(row.lastIp),
     })),
     recentAudit: recentAudit.map(toAuditItem),
+    recentServerLogs: recentServerLogs.map(toServerLogItem),
   };
 }

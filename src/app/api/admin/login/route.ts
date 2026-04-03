@@ -20,6 +20,7 @@ import {
 } from "@/lib/apiUtils";
 import { env } from "@/lib/env";
 import logger from "@/lib/logger";
+import { maskEmail } from "@/lib/privacy";
 import { getClientIP } from "@/lib/rateLimit";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { verifyTurnstileToken } from "@/lib/cloudflare";
@@ -210,7 +211,7 @@ export async function POST(request: Request) {
         success: true,
         message: "เข้าสู่ระบบสำเร็จ",
         admin: {
-          username: admin.email,
+          username: maskEmail(admin.email),
           name: admin.name,
           role: admin.role,
         },

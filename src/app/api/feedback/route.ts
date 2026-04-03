@@ -1,6 +1,6 @@
-import { toFeedbackResponse } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import { encryptFeedbackFields, toFeedbackReceiptResponse, toMaskedFeedbackResponse } from "@/lib/feedbackPrivacy";
 import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { feedbackSchema } from "@/lib/schemas";
@@ -34,7 +34,7 @@ export async function GET() {
       },
     });
 
-    return jsonOk({ feedbacks: feedbacks.map(toFeedbackResponse) });
+    return jsonOk({ feedbacks: feedbacks.map(toMaskedFeedbackResponse) });
   } catch (error) {
     logger.error("feedback.list.failed", {
       message: error instanceof Error ? error.message : "unknown",
@@ -82,16 +82,15 @@ export async function POST(request: Request) {
     const feedback = await prisma.feedback.create({
       data: {
         type,
-        title,
-        details: details ?? null,
-        contact: contact ?? null,
+        ...encryptFeedbackFields({
+          title,
+          details: details ?? null,
+          contact: contact ?? null,
+        }),
       },
       select: {
         id: true,
         type: true,
-        title: true,
-        details: true,
-        contact: true,
         status: true,
         createdAt: true,
       },
@@ -101,7 +100,7 @@ export async function POST(request: Request) {
       {
         success: true,
         message: "ส่ง feedback สำเร็จ",
-        feedback: toFeedbackResponse(feedback),
+        feedback: toFeedbackReceiptResponse(feedback),
       },
       201,
     );

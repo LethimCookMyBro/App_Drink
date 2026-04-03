@@ -82,8 +82,6 @@ export async function POST(request: Request) {
     // Generate token and create session
     const token = generateToken({
       userId: user.id,
-      email: user.email,
-      name: user.name,
     });
 
     await createSession(user.id, token);

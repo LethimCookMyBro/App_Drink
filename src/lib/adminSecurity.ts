@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db";
+import { redactPotentialPII } from "@/lib/dataProtection";
 import logger from "@/lib/logger";
 
 // ─── Security / UX Tunables ───────────────────────────────────────────────────
@@ -23,6 +24,8 @@ const METADATA_MAX_DEPTH = 3;
 const METADATA_MAX_KEYS_PER_OBJECT = 25;
 const METADATA_MAX_ARRAY_ITEMS = 20;
 const METADATA_MAX_STRING_BYTES = 500;
+const SENSITIVE_KEY_PATTERN =
+  /(password|token|secret|cookie|authorization|session|bearer|refresh|access|private[_-]?key)/i;
 
 const SERIALIZABLE_MAX_RETRIES = 4;
 const SERIALIZABLE_BASE_BACKOFF_MS = 15;
@@ -52,6 +55,7 @@ export type AuditAction =
   | "ADMIN_QUESTION_CREATE"
   | "ADMIN_QUESTION_UPDATE"
   | "ADMIN_QUESTION_DELETE"
+  | "ADMIN_EXPORT_GOOGLE_SHEETS"
   | "ADMIN_ACCOUNT_LOCKED"
   | "ADMIN_ACCOUNT_UNLOCKED"
   | "ROOM_CREATED"
@@ -192,7 +196,10 @@ function sanitizeMetadataValue(
 
   switch (typeof value) {
     case "string":
-      return clampStringBytes(value, METADATA_MAX_STRING_BYTES);
+      return clampStringBytes(
+        redactPotentialPII(value) || value,
+        METADATA_MAX_STRING_BYTES,
+      );
 
     case "number":
       return Number.isFinite(value) ? value : String(value);
@@ -220,7 +227,12 @@ function sanitizeMetadataValue(
       if (value instanceof Error) {
         return {
           name: clampStringBytes(value.name || "Error", 100),
-          message: clampStringBytes(value.message || "unknown", 300),
+          message: clampStringBytes(
+            redactPotentialPII(value.message || "unknown") ||
+              value.message ||
+              "unknown",
+            300,
+          ),
         };
       }
 
@@ -247,7 +259,9 @@ function sanitizeMetadataValue(
 
       for (const [rawKey, rawVal] of entries) {
         const safeKey = clampStringBytes(String(rawKey), 64);
-        output[safeKey] = sanitizeMetadataValue(rawVal, depth + 1, seen);
+        output[safeKey] = SENSITIVE_KEY_PATTERN.test(safeKey)
+          ? "[redacted]"
+          : sanitizeMetadataValue(rawVal, depth + 1, seen);
       }
 
       seen.delete(obj);
@@ -274,7 +288,7 @@ function summarizeMetadata(
     } else if (typeof v === "object") {
       summary[safeKey] = "[object]";
     } else if (typeof v === "string") {
-      summary[safeKey] = clampStringBytes(v, 120);
+      summary[safeKey] = clampStringBytes(redactPotentialPII(v) || v, 120);
     } else if (typeof v === "number" && !Number.isFinite(v)) {
       summary[safeKey] = String(v);
     } else {
@@ -455,6 +469,7 @@ export async function writeAdminAuditLog(input: AuditLogInput): Promise<void> {
         action: input.action,
         status: input.status,
         ip: normalizeIpAddress(input.ip),
+        userAgent: input.userAgent ?? null,
         metadata: serializeMetadata(input.metadata),
       },
     });

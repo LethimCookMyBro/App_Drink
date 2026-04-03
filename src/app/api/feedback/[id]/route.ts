@@ -1,6 +1,6 @@
-import { toFeedbackResponse } from "@/lib/apiFilter";
 import { requireAdmin } from "@/lib/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/lib/apiUtils";
+import { toFeedbackReceiptResponse } from "@/lib/feedbackPrivacy";
 import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { feedbackStatusSchema } from "@/lib/schemas";
@@ -45,9 +45,6 @@ export async function PATCH(
       select: {
         id: true,
         type: true,
-        title: true,
-        details: true,
-        contact: true,
         status: true,
         createdAt: true,
         resolvedAt: true,
@@ -56,7 +53,7 @@ export async function PATCH(
 
     return jsonOk({
       success: true,
-      feedback: toFeedbackResponse(updatedFeedback),
+      feedback: toFeedbackReceiptResponse(updatedFeedback),
     });
   } catch (error) {
     logger.error("feedback.update.failed", {

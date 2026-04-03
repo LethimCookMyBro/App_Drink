@@ -30,6 +30,33 @@ function applyRateLimitHeaders(response: NextResponse, limit: ReturnType<typeof 
   response.headers.set("X-RateLimit-Reset", limit.resetAt.toString());
 }
 
+function applySecurityHeaders(response: NextResponse, isApi = false) {
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+
+  if (env.isProduction) {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload",
+    );
+  }
+
+  if (isApi) {
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, private, max-age=0",
+    );
+    response.headers.set("Pragma", "no-cache");
+  }
+
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const isAdminLoginPage = request.nextUrl.pathname === "/admin/login";
   const isAdminLoginApi = request.nextUrl.pathname === "/api/admin/login";
@@ -42,11 +69,11 @@ export async function proxy(request: NextRequest) {
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     });
     if (preflight) {
-      return preflight;
+      return applySecurityHeaders(preflight, true);
     }
 
     if (request.headers.get("origin") && !isCorsOriginAllowed(request)) {
-      return forbiddenCorsResponse();
+      return applySecurityHeaders(forbiddenCorsResponse(), true);
     }
   }
 
@@ -62,9 +89,12 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/admin/") && !isPublicAdminAuthApi) {
     const verification = await verifyAdminRequest(request);
     if (!verification.ok) {
-      return NextResponse.json(
+      return applySecurityHeaders(
+        NextResponse.json(
         { error: "Unauthorized", reason: verification.reason },
         { status: 401 },
+        ),
+        true,
       );
     }
   }
@@ -89,7 +119,7 @@ export async function proxy(request: NextRequest) {
           },
         );
         applyRateLimitHeaders(limitedResponse, limit);
-        return limitedResponse;
+        return applySecurityHeaders(limitedResponse, true);
       }
     }
 
@@ -97,13 +127,16 @@ export async function proxy(request: NextRequest) {
     if (!isUnlimitedQuestionsRoute) {
       applyRateLimitHeaders(response, limit);
     }
-    return applyCorsHeaders(request, response, {
+    return applySecurityHeaders(
+      applyCorsHeaders(request, response, {
       allowCredentials: request.nextUrl.pathname.startsWith("/api/admin/"),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    });
+      }),
+      true,
+    );
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {

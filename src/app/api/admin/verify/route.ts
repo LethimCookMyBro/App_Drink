@@ -5,6 +5,7 @@ import {
 } from "@/lib/adminAuth";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
 import logger from "@/lib/logger";
+import { maskEmail } from "@/lib/privacy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function GET() {
     return jsonOk({
       authenticated: true,
       admin: {
-        username: admin.email,
+        username: maskEmail(admin.email),
         name: admin.name,
         role: admin.role,
         lastLoginAt: admin.lastLoginAt,

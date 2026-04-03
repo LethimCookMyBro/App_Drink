@@ -1,9 +1,11 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { NextResponse } from "next/server";
 import type { NextAuthOptions } from "next-auth";
+import type { AdapterAccount } from "next-auth/adapters";
 import { getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "@/lib/db";
+import { encryptOptionalTextAtRest } from "@/lib/dataProtection";
 import env from "@/lib/env";
 import { normalizeEmail, sanitizeInput } from "@/lib/auth";
 import {
@@ -192,6 +194,17 @@ function createSecureSessionAdapter() {
           sessionToken: {
             in: [hashStoredSessionToken(sessionToken), sessionToken],
           },
+        },
+      });
+    },
+    async linkAccount(account: AdapterAccount) {
+      await prisma.account.create({
+        data: {
+          ...account,
+          access_token: encryptOptionalTextAtRest(account.access_token),
+          refresh_token: encryptOptionalTextAtRest(account.refresh_token),
+          id_token: encryptOptionalTextAtRest(account.id_token),
+          session_state: encryptOptionalTextAtRest(account.session_state),
         },
       });
     },

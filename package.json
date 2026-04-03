@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint src",
     "security:secrets": "node scripts/scan-secrets.mjs",
+    "security:reencrypt-feedback": "npx -y node@20 scripts/reencrypt-feedback.mjs",
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "prisma studio",

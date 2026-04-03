@@ -1,3 +1,6 @@
+import { redactPotentialPII } from "@/lib/dataProtection";
+import { maskContact } from "@/lib/privacy";
+
 const SENSITIVE_RESPONSE_KEYS = new Set([
   "password",
   "token",
@@ -110,9 +113,10 @@ export function toFeedbackResponse(feedback: {
   return {
     id: feedback.id,
     type: feedback.type,
-    title: feedback.title,
-    details: feedback.details,
-    contact: feedback.contact,
+    title: redactPotentialPII(feedback.title) || feedback.title,
+    details: redactPotentialPII(feedback.details),
+    contactMasked: maskContact(feedback.contact),
+    hasContact: Boolean(feedback.contact),
     status: feedback.status,
     createdAt: feedback.createdAt,
     ...(feedback.resolvedAt !== undefined ? { resolvedAt: feedback.resolvedAt } : {}),
