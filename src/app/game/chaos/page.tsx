@@ -9,6 +9,13 @@ import { useGameStore } from "@/store/gameStore";
 import { GamePauseButton, Timer } from "@/components/ui";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 import {
+  buildStoredPlayerStats,
+  getPlayerCount,
+  incrementPlayerCount,
+  type PlayerCountMap,
+  syncPlayerCountMap,
+} from "@/lib/gamePlayerStats";
+import {
   clearActiveGameSession,
   saveGameSummary,
 } from "@/lib/gameSession";
@@ -38,7 +45,7 @@ export default function ChaosModePage() {
     useStoredGamePlayers("/game/chaos");
   const [sequence, setSequence] = useState(1);
   const [currentRule, setCurrentRule] = useState(chaosRules[0]);
-  const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
 
@@ -58,16 +65,7 @@ export default function ChaosModePage() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      if (players.length === 0) {
-        setPlayerDrinks({});
-        return;
-      }
-
-      setPlayerDrinks((current) =>
-        Object.fromEntries(
-          players.map((player) => [player, current[player] ?? 0]),
-        ),
-      );
+      setPlayerDrinks((current) => syncPlayerCountMap(players, current));
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
@@ -78,17 +76,12 @@ export default function ChaosModePage() {
     avoidRepeats: true,
   });
   const activePlayerName = currentPlayer || players[0] || "";
-  const activePlayerDrinks = activePlayerName
-    ? playerDrinks[activePlayerName] || 0
-    : 0;
+  const activePlayerDrinks = getPlayerCount(playerDrinks, activePlayerName);
 
   const handleNext = () => {
     setIsTimerPaused(false);
     // Track drink for current player (chaos mode always drinks)
-    setPlayerDrinks((prev) => ({
-      ...prev,
-      [activePlayerName]: (prev[activePlayerName] || 0) + 1,
-    }));
+    setPlayerDrinks((prev) => incrementPlayerCount(prev, activePlayerName));
     playDrink();
     vibratePattern([50, 30, 100]);
 
@@ -112,12 +105,10 @@ export default function ChaosModePage() {
   };
 
   const handleEndGame = () => {
-    const stats = players.map((name) => ({
-      name,
-      drinkCount: playerDrinks[name] || 0,
-      questionsAnswered: playerTurnCount[name] || 0,
-    }));
-    saveGameSummary(stats, sequence);
+    saveGameSummary(
+      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
+      sequence,
+    );
     clearActiveGameSession();
     router.push("/game/summary");
   };

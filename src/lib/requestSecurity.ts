@@ -1,4 +1,5 @@
 import env from "@/lib/env";
+import { buildContentSecurityPolicy as buildSharedContentSecurityPolicy } from "@/lib/contentSecurityPolicy";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const FORWARDED_IP_HEADERS = [
@@ -104,23 +105,8 @@ export function isUnsafeMethod(method: string): boolean {
 }
 
 export function buildContentSecurityPolicy(options?: { admin?: boolean }): string {
-  const isAdmin = options?.admin === true;
-  const scriptSources = env.isDevelopment
-    ? "'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com"
-    : "'self' 'unsafe-inline' https://challenges.cloudflare.com";
-
-  return [
-    "default-src 'self'",
-    `script-src ${scriptSources}`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "connect-src 'self' https://challenges.cloudflare.com",
-    `frame-src ${isAdmin ? "https://challenges.cloudflare.com" : "'self' https://challenges.cloudflare.com"}`,
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'self'",
-    "upgrade-insecure-requests",
-  ].join("; ");
+  return buildSharedContentSecurityPolicy({
+    admin: options?.admin,
+    isDevelopment: env.isDevelopment,
+  });
 }

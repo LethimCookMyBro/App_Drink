@@ -14,7 +14,6 @@ interface UsePlayerQueueReturn {
   currentPlayerIndex: number;
   currentPlayer: string;
   getNextPlayer: () => number;
-  resetQueue: () => void;
   playerTurnCount: Record<string, number>;
 }
 
@@ -127,22 +126,10 @@ export function usePlayerQueue({
     return nextPlayerIdx;
   }, [players, queue, queuePosition, avoidRepeats]);
 
-  const resetQueue = useCallback(() => {
-    const newQueue = shuffleArray(
-      Array.from({ length: players.length }, (_, i) => i),
-    );
-    setQueue(newQueue);
-    setQueuePosition(0);
-    setCurrentPlayerIndex(newQueue[0] ?? 0);
-    setPlayerTurnCount(Object.fromEntries(players.map((name) => [name, 0])));
-    lastPlayerRef.current = -1;
-  }, [players]);
-
   return {
     currentPlayerIndex,
     currentPlayer: players[currentPlayerIndex] ?? "",
     getNextPlayer,
-    resetQueue,
     playerTurnCount,
   };
 }

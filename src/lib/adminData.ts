@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import prisma from "@/lib/db";
 import env from "@/lib/env";
+import { isVerifiedUser, resolveAuthMethod } from "@/lib/adminUsers";
 import { decodeStoredFeedback } from "@/lib/feedbackPrivacy";
 import {
   maskContact,
@@ -172,21 +173,6 @@ function toAdminIdentity(admin: Pick<Admin, "email" | "name" | "role" | "lastLog
   };
 }
 
-function resolveAuthMethod(user: {
-  password: string | null;
-  accounts: Array<{ provider: string }>;
-}): string {
-  const providers = new Set(user.accounts.map((account) => account.provider));
-  const hasGoogle = providers.has("google");
-  const hasPassword = Boolean(user.password);
-
-  if (hasGoogle && hasPassword) return "Google + Email";
-  if (hasGoogle) return "Google";
-  if (hasPassword) return "Email";
-  if (providers.size > 0) return Array.from(providers).join(", ");
-  return "ไม่ระบุ";
-}
-
 function toUserItem(user: {
   id: string;
   email: string;
@@ -211,7 +197,7 @@ function toUserItem(user: {
     maskedEmail: maskEmail(user.email),
     avatarUrl: user.avatarUrl ?? user.image ?? null,
     authMethod: resolveAuthMethod(user),
-    isVerified: Boolean(user.isVerified || user.emailVerified),
+    isVerified: isVerifiedUser(user),
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: toIsoString(user.lastLoginAt),
     sessions: user._count.sessions + user._count.authSessions,
@@ -284,17 +270,34 @@ function toServerLogItem(log: {
 function buildFeedbackSummary(
   rows: Array<{ status: FeedbackStatus; _count: { _all: number } }>,
 ): Record<"ALL" | FeedbackStatus, number> {
-  const summary: Record<"ALL" | FeedbackStatus, number> = {
+  const summary = createEmptyFeedbackSummary();
+
+  for (const row of rows) {
+    summary[row.status] = row._count._all;
+    summary.ALL += row._count._all;
+  }
+
+  return summary;
+}
+
+function createEmptyFeedbackSummary(): Record<"ALL" | FeedbackStatus, number> {
+  return {
     ALL: 0,
     PENDING: 0,
     IN_PROGRESS: 0,
     RESOLVED: 0,
     REJECTED: 0,
   };
+}
 
-  for (const row of rows) {
-    summary[row.status] = row._count._all;
-    summary.ALL += row._count._all;
+export function buildFeedbackSummaryFromItems(
+  items: Array<{ status: FeedbackStatus }>,
+): Record<"ALL" | FeedbackStatus, number> {
+  const summary = createEmptyFeedbackSummary();
+
+  for (const item of items) {
+    summary[item.status] += 1;
+    summary.ALL += 1;
   }
 
   return summary;

@@ -1,7 +1,7 @@
 import type { Admin } from "@prisma/client";
 import prisma from "@/lib/db";
 import {
-  getAdminFeedbackData,
+  buildFeedbackSummaryFromItems,
   getAdminOverviewData,
   getAdminSecurityData,
   getAdminUsersData,
@@ -26,6 +26,7 @@ import {
   maskIpAddress,
   shortenText,
 } from "@/lib/privacy";
+import { isVerifiedUser, resolveAuthMethod } from "@/lib/adminUsers";
 import { decodeStoredFeedback } from "@/lib/feedbackPrivacy";
 import { listServerLogs } from "@/lib/serverLogs";
 
@@ -56,21 +57,6 @@ function buildTab(
   };
 }
 
-function resolveAuthMethod(user: {
-  password: string | null;
-  accounts: Array<{ provider: string }>;
-}): string {
-  const providers = new Set(user.accounts.map((account) => account.provider));
-  const hasGoogle = providers.has("google");
-  const hasPassword = Boolean(user.password);
-
-  if (hasGoogle && hasPassword) return "Google + Email";
-  if (hasGoogle) return "Google";
-  if (hasPassword) return "Email";
-  if (providers.size > 0) return Array.from(providers).join(", ");
-  return "ไม่ระบุ";
-}
-
 function buildMetaTab(
   dataset: AdminExportDataset,
   admin: Pick<Admin, "email" | "name" | "role">,
@@ -88,6 +74,39 @@ function buildMetaTab(
       ["privacy_mode", "masked-default"],
     ],
   );
+}
+
+function summarizeQuestions(
+  questions: Array<{
+    type: string;
+    level: number;
+    isActive: boolean;
+    isPublic: boolean;
+    is18Plus: boolean;
+  }>,
+) {
+  const typeCounts = new Map<string, number>();
+  const levelCounts = new Map<number, number>();
+  let activeQuestions = 0;
+  let publicQuestions = 0;
+  let adultQuestions = 0;
+
+  for (const question of questions) {
+    if (question.isActive) activeQuestions += 1;
+    if (question.isPublic) publicQuestions += 1;
+    if (question.is18Plus) adultQuestions += 1;
+    typeCounts.set(question.type, (typeCounts.get(question.type) ?? 0) + 1);
+    levelCounts.set(question.level, (levelCounts.get(question.level) ?? 0) + 1);
+  }
+
+  return {
+    totalQuestions: questions.length,
+    activeQuestions,
+    publicQuestions,
+    adultQuestions,
+    typeCounts: Array.from(typeCounts).sort((a, b) => a[0].localeCompare(b[0])),
+    levelCounts: Array.from(levelCounts).sort((a, b) => a[0] - b[0]),
+  };
 }
 
 async function buildOverviewTabs(
@@ -240,7 +259,7 @@ async function buildUsersTabs(
         user.name,
         maskEmail(user.email),
         resolveAuthMethod(user),
-        Boolean(user.isVerified || user.emailVerified),
+        isVerifiedUser(user),
         user.createdAt.toISOString(),
         user.lastLoginAt?.toISOString() ?? "",
         user._count.sessions + user._count.authSessions,
@@ -269,24 +288,14 @@ async function buildQuestionsTabs(): Promise<GoogleSheetTab[]> {
     },
   });
 
-  const totalQuestions = questions.length;
-  const activeQuestions = questions.filter((item) => item.isActive).length;
-  const publicQuestions = questions.filter((item) => item.isPublic).length;
-  const adultQuestions = questions.filter((item) => item.is18Plus).length;
-
-  const typeCounts = Array.from(
-    questions.reduce<Map<string, number>>((acc, item) => {
-      acc.set(item.type, (acc.get(item.type) || 0) + 1);
-      return acc;
-    }, new Map()),
-  ).sort((a, b) => a[0].localeCompare(b[0]));
-
-  const levelCounts = Array.from(
-    questions.reduce<Map<number, number>>((acc, item) => {
-      acc.set(item.level, (acc.get(item.level) || 0) + 1);
-      return acc;
-    }, new Map()),
-  ).sort((a, b) => a[0] - b[0]);
+  const {
+    totalQuestions,
+    activeQuestions,
+    publicQuestions,
+    adultQuestions,
+    typeCounts,
+    levelCounts,
+  } = summarizeQuestions(questions);
 
   return [
     buildTab(
@@ -341,10 +350,7 @@ async function buildQuestionsTabs(): Promise<GoogleSheetTab[]> {
   ];
 }
 
-async function buildFeedbackTabs(
-  admin: Pick<Admin, "email" | "name" | "role" | "lastLoginAt">,
-): Promise<GoogleSheetTab[]> {
-  const summaryData = await getAdminFeedbackData(admin);
+async function buildFeedbackTabs(): Promise<GoogleSheetTab[]> {
   const feedbackRows = await prisma.feedback.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -363,7 +369,7 @@ async function buildFeedbackTabs(
     buildTab(
       "admin_feedback_summary",
       ["metric", "value"],
-      Object.entries(summaryData.summary),
+      Object.entries(buildFeedbackSummaryFromItems(feedbackRows)),
     ),
     buildTab(
       "admin_feedback_all",
@@ -519,7 +525,7 @@ async function buildDatasetTabs(
     case "questions":
       return buildQuestionsTabs();
     case "feedback":
-      return buildFeedbackTabs(admin);
+      return buildFeedbackTabs();
     case "security":
       return buildSecurityTabs(admin);
     case "audit_logs":
@@ -531,7 +537,7 @@ async function buildDatasetTabs(
         ...(await buildOverviewTabs(admin)),
         ...(await buildUsersTabs(admin)),
         ...(await buildQuestionsTabs()),
-        ...(await buildFeedbackTabs(admin)),
+        ...(await buildFeedbackTabs()),
         ...(await buildSecurityTabs(admin)),
         ...(await buildAuditLogTabs()),
         ...(await buildServerLogTabs()),

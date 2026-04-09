@@ -9,6 +9,15 @@ import { useAdminRouteData } from "@/hooks/useAdminRouteData";
 import type { AdminFeedbackData } from "@/lib/adminData";
 
 type FeedbackStatus = "ALL" | "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
+type FeedbackSummary = Record<FeedbackStatus, number>;
+
+const EMPTY_FEEDBACK_SUMMARY: FeedbackSummary = {
+  ALL: 0,
+  PENDING: 0,
+  IN_PROGRESS: 0,
+  RESOLVED: 0,
+  REJECTED: 0,
+};
 
 function formatDateTime(value: string | null): string {
   if (!value) return "-";
@@ -41,6 +50,34 @@ function getStatusClass(status: string) {
   }
 }
 
+function buildFeedbackSummary(
+  feedbacks: AdminFeedbackData["feedbacks"],
+): FeedbackSummary {
+  const summary = { ...EMPTY_FEEDBACK_SUMMARY };
+
+  for (const item of feedbacks) {
+    summary[item.status] += 1;
+    summary.ALL += 1;
+  }
+
+  return summary;
+}
+
+function withUpdatedFeedbacks(
+  current: AdminFeedbackData | null,
+  feedbacks: AdminFeedbackData["feedbacks"],
+) {
+  if (!current) {
+    return current;
+  }
+
+  return {
+    ...current,
+    feedbacks,
+    summary: buildFeedbackSummary(feedbacks),
+  };
+}
+
 export default function AdminFeedbackPage() {
   const { data, loading, error, refresh, setData } = useAdminRouteData<AdminFeedbackData>(
     "/api/admin/feedback",
@@ -53,13 +90,7 @@ export default function AdminFeedbackPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const feedbacks = data?.feedbacks ?? [];
-  const summary = data?.summary ?? {
-    ALL: 0,
-    PENDING: 0,
-    IN_PROGRESS: 0,
-    RESOLVED: 0,
-    REJECTED: 0,
-  };
+  const summary = data?.summary ?? EMPTY_FEEDBACK_SUMMARY;
 
   const filteredFeedbacks =
     activeFilter === "ALL"
@@ -92,38 +123,19 @@ export default function AdminFeedbackPage() {
       }
 
       setData((current) =>
-        current
-          ? {
-              ...current,
-              feedbacks: current.feedbacks.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      status: status as Exclude<FeedbackStatus, "ALL">,
-                      resolvedAt:
-                        status === "RESOLVED" ? new Date().toISOString() : null,
-                    }
-                  : item,
-              ),
-              summary: {
-                ALL: current.summary.ALL,
-                PENDING: current.feedbacks.filter((item) =>
-                  item.id === id ? status === "PENDING" : item.status === "PENDING",
-                ).length,
-                IN_PROGRESS: current.feedbacks.filter((item) =>
-                  item.id === id
-                    ? status === "IN_PROGRESS"
-                    : item.status === "IN_PROGRESS",
-                ).length,
-                RESOLVED: current.feedbacks.filter((item) =>
-                  item.id === id ? status === "RESOLVED" : item.status === "RESOLVED",
-                ).length,
-                REJECTED: current.feedbacks.filter((item) =>
-                  item.id === id ? status === "REJECTED" : item.status === "REJECTED",
-                ).length,
-              },
-            }
-          : current,
+        withUpdatedFeedbacks(
+          current,
+          current?.feedbacks.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status: status as Exclude<FeedbackStatus, "ALL">,
+                  resolvedAt:
+                    status === "RESOLVED" ? new Date().toISOString() : null,
+                }
+              : item,
+          ) ?? [],
+        ),
       );
       setNotice("อัปเดตสถานะ feedback แล้ว");
     } catch {
@@ -154,27 +166,10 @@ export default function AdminFeedbackPage() {
       }
 
       setData((current) =>
-        current
-          ? {
-              ...current,
-              feedbacks: current.feedbacks.filter((item) => item.id !== id),
-              summary: {
-                ALL: Math.max(0, current.summary.ALL - 1),
-                PENDING: current.feedbacks.filter(
-                  (item) => item.id !== id && item.status === "PENDING",
-                ).length,
-                IN_PROGRESS: current.feedbacks.filter(
-                  (item) => item.id !== id && item.status === "IN_PROGRESS",
-                ).length,
-                RESOLVED: current.feedbacks.filter(
-                  (item) => item.id !== id && item.status === "RESOLVED",
-                ).length,
-                REJECTED: current.feedbacks.filter(
-                  (item) => item.id !== id && item.status === "REJECTED",
-                ).length,
-              },
-            }
-          : current,
+        withUpdatedFeedbacks(
+          current,
+          current?.feedbacks.filter((item) => item.id !== id) ?? [],
+        ),
       );
       setExpandedId((current) => (current === id ? null : current));
       setNotice("ลบ feedback สำเร็จ");

@@ -2,11 +2,10 @@ import { NextRequest } from "next/server";
 import { toPublicQuestion } from "@/lib/apiFilter";
 import { jsonError, jsonOk } from "@/lib/apiUtils";
 import logger from "@/lib/logger";
+import { GAME_QUESTION_TYPE_SET } from "@/config/gameConstants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const QUESTION_TYPES = new Set(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]);
 
 function shuffleArray<T>(items: T[]): T[] {
   const shuffled = [...items];
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
       .map((value) => value.trim())
       .filter(Boolean) ?? [];
 
-  if (type && !QUESTION_TYPES.has(type)) {
+  if (type && !GAME_QUESTION_TYPE_SET.has(type)) {
     return jsonError("ประเภทคำถามไม่ถูกต้อง", 400);
   }
 

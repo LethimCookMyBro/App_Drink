@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -17,7 +17,14 @@ import {
   useSoundEffects,
   type GameQuestion,
 } from "@/hooks";
-import { GAME_SETTINGS } from "@/config/gameConstants";
+import { GAME_SETTINGS, getQuestionLevelForVibe } from "@/config/gameConstants";
+import {
+  buildStoredPlayerStats,
+  getPlayerCount,
+  incrementPlayerCount,
+  type PlayerCountMap,
+  syncPlayerCountMap,
+} from "@/lib/gamePlayerStats";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +158,10 @@ function getSkipPenalty(type: GameCardType): number {
   return 1;
 }
 
+function pickRandomType(): GameCardType {
+  return RANDOM_TYPES[Math.floor(Math.random() * RANDOM_TYPES.length)];
+}
+
 function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -175,19 +186,11 @@ function GamePlayContent() {
   );
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      if (players.length === 0) {
-        setPlayerDrinks({});
-      } else {
-        setPlayerDrinks((current) =>
-          Object.fromEntries(
-            players.map((player) => [player, current[player] ?? 0]),
-          ),
-        );
-      }
+      setPlayerDrinks((current) => syncPlayerCountMap(players, current));
 
       const savedCustom = localStorage.getItem("wongtaek-custom-questions");
       if (!savedCustom) {
@@ -215,7 +218,7 @@ function GamePlayContent() {
   const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
     useQuestionPool({
       mode: normalizedMode,
-      level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
+      level: getQuestionLevelForVibe(vibeLevel),
       is18PlusEnabled,
       players: isReady ? players : ["Loading"],
       customQuestions,
@@ -229,11 +232,6 @@ function GamePlayContent() {
     vibrateShort,
     vibrateLong,
   } = useSoundEffects();
-
-  const pickRandomType = useCallback(
-    () => RANDOM_TYPES[Math.floor(Math.random() * RANDOM_TYPES.length)],
-    [],
-  );
 
   useEffect(() => {
     if (!currentQuestion && !isLoading && isReady && players.length > 0) {
@@ -254,15 +252,12 @@ function GamePlayContent() {
     isLoading,
     isReady,
     normalizedMode,
-    pickRandomType,
     playNewQuestion,
     players.length,
   ]);
 
   const activePlayerName = currentPlayer || players[0] || "";
-  const activePlayerDrinks = activePlayerName
-    ? playerDrinks[activePlayerName] || 0
-    : 0;
+  const activePlayerDrinks = getPlayerCount(playerDrinks, activePlayerName);
   const questionType = getQuestionType(currentQuestion);
   const theme = QUESTION_THEMES[questionType];
   const skipPenalty = getSkipPenalty(questionType);
@@ -270,10 +265,9 @@ function GamePlayContent() {
   const handleSkip = () => {
     if (!activePlayerName) return;
 
-    setPlayerDrinks((prev) => ({
-      ...prev,
-      [activePlayerName]: (prev[activePlayerName] || 0) + skipPenalty,
-    }));
+    setPlayerDrinks((prev) =>
+      incrementPlayerCount(prev, activePlayerName, skipPenalty),
+    );
     playDrink();
     vibrateLong();
     nextRound();
@@ -313,12 +307,10 @@ function GamePlayContent() {
   };
 
   const handleEndGame = () => {
-    const stats = players.map((name) => ({
-      name,
-      drinkCount: playerDrinks[name] || 0,
-      questionsAnswered: playerTurnCount[name] || 0,
-    }));
-    saveGameSummary(stats, roundNumber);
+    saveGameSummary(
+      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
+      roundNumber,
+    );
     clearActiveGameSession();
     router.push("/game/summary");
   };

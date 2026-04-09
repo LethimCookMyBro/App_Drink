@@ -32,6 +32,7 @@ export function TurnstileWidget({
   theme = "dark",
 }: TurnstileWidgetProps) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const isDevelopment = process.env.NODE_ENV !== "production";
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | number | null>(null);
   const lastResetKeyRef = useRef(resetKey);
@@ -96,7 +97,48 @@ export function TurnstileWidget({
   }, [resetKey]);
 
   if (!siteKey) {
-    return null;
+    if (!isDevelopment) {
+      return null;
+    }
+
+    return (
+      <div
+        className={[
+          "rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100",
+          className,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <p className="font-semibold">Turnstile ยังไม่ถูกเปิดใช้</p>
+        <p className="mt-1 text-amber-50/80">
+          ตั้งค่า <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> และรีสตาร์ต dev
+          server แล้ว widget ของ Cloudflare จะขึ้นในฟอร์มนี้
+        </p>
+      </div>
+    );
+  }
+
+  const showLoadingState = !isReady;
+
+  if (showLoadingState) {
+    return (
+      <>
+        <Script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+          strategy="afterInteractive"
+          onReady={() => setIsReady(true)}
+        />
+        <div className={className}>
+          <div className="flex min-h-24 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">
+            <div className="flex items-center gap-3">
+              <div className="size-4 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />
+              <span>กำลังโหลด Cloudflare Turnstile...</span>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
 
   return (

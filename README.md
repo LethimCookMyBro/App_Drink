@@ -84,7 +84,9 @@ TURNSTILE_SECRET_KEY=""
 ## Security Notes
 
 - ตั้งค่า `JWT_SECRET`, `ADMIN_JWT_SECRET`, และ `ROOM_JWT_SECRET` เป็นค่าสุ่มจริงก่อน deploy
-- ถ้าเปิดใช้ Cloudflare ให้ใส่ Turnstile ทั้ง `NEXT_PUBLIC_TURNSTILE_SITE_KEY` และ `TURNSTILE_SECRET_KEY`
+- ถ้าเปิดใช้ Cloudflare Turnstile ให้ใส่ทั้ง `NEXT_PUBLIC_TURNSTILE_SITE_KEY` และ `TURNSTILE_SECRET_KEY`
+- ตั้งค่า `NEXT_PUBLIC_APP_URL` และ Turnstile hostname ให้ตรงกับโดเมนที่ใช้จริง เพราะฝั่ง server ตรวจทั้ง action และ hostname
+- ใน codebase นี้ Cloudflare ถูกใช้ระดับ Turnstile/CSP เท่านั้น ส่วน DNS, WAF, CDN, Pages, Workers, หรือ R2 ต้องตั้งค่าที่ Cloudflare dashboard แยกจาก repo
 - อย่าใช้ `ADMIN_SEED_PASSWORD="change-me-please"` หรือ credential เริ่มต้นใน production
 
 ## Screenshots

@@ -13,13 +13,18 @@ import {
   type GameQuestion,
 } from "@/hooks";
 import { useGameStore } from "@/store/gameStore";
-import { GAME_SETTINGS } from "@/config/gameConstants";
+import { GAME_SETTINGS, getQuestionLevelForVibe } from "@/config/gameConstants";
+import {
+  buildStoredPlayerStats,
+  getPlayerCount,
+  incrementPlayerCount,
+  type PlayerCountMap,
+  syncPlayerCountMap,
+} from "@/lib/gamePlayerStats";
 import {
   clearActiveGameSession,
   saveGameSummary,
 } from "@/lib/gameSession";
-
-type CardType = "truth" | "dare";
 
 export default function TruthOrDarePage() {
   const router = useRouter();
@@ -27,28 +32,17 @@ export default function TruthOrDarePage() {
   const is18PlusEnabled = vibeLevel === "chaos";
   const { hasStartedGame, players, isReady } =
     useStoredGamePlayers("/game/truth-or-dare");
-  const [cardType, setCardType] = useState<CardType>("dare");
-  const [currentContent, setCurrentContent] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
     null,
   );
   const [roundNumber, setRoundNumber] = useState(1);
-  const [playerDrinks, setPlayerDrinks] = useState<Record<string, number>>({});
+  const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      if (players.length === 0) {
-        setPlayerDrinks({});
-        return;
-      }
-
-      setPlayerDrinks((current) =>
-        Object.fromEntries(
-          players.map((player) => [player, current[player] ?? 0]),
-        ),
-      );
+      setPlayerDrinks((current) => syncPlayerCountMap(players, current));
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
@@ -59,14 +53,12 @@ export default function TruthOrDarePage() {
     avoidRepeats: true,
   });
   const activePlayerName = currentPlayer || players[0] || "";
-  const activePlayerDrinks = activePlayerName
-    ? playerDrinks[activePlayerName] || 0
-    : 0;
+  const activePlayerDrinks = getPlayerCount(playerDrinks, activePlayerName);
 
   const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
     useQuestionPool({
       mode: "truth-or-dare",
-      level: vibeLevel === "chaos" ? 3 : vibeLevel === "tipsy" ? 2 : 1,
+      level: getQuestionLevelForVibe(vibeLevel),
       is18PlusEnabled,
       players: isReady ? players : ["Loading"],
     });
@@ -81,12 +73,10 @@ export default function TruthOrDarePage() {
   } = useSoundEffects();
 
   useEffect(() => {
-    if (!currentContent && !isLoading && isReady && players.length > 0) {
+    if (!currentQuestion && !isLoading && isReady && players.length > 0) {
       const q = getQuestionForPlayer(currentPlayer);
       if (q) {
         const timeoutId = window.setTimeout(() => {
-          setCardType(q.type === "TRUTH" ? "truth" : "dare");
-          setCurrentContent(q.text);
           setCurrentQuestion(q);
           playNewQuestion();
         }, 0);
@@ -95,7 +85,7 @@ export default function TruthOrDarePage() {
       }
     }
   }, [
-    currentContent,
+    currentQuestion,
     isLoading,
     isReady,
     players,
@@ -117,10 +107,7 @@ export default function TruthOrDarePage() {
       markQuestionAnswered(currentPlayer, currentQuestion.id);
     }
     // Player drinks x2
-    setPlayerDrinks((prev) => ({
-      ...prev,
-      [activePlayerName]: (prev[activePlayerName] || 0) + 2,
-    }));
+    setPlayerDrinks((prev) => incrementPlayerCount(prev, activePlayerName, 2));
     playDrink();
     vibrateLong();
     nextCard();
@@ -133,8 +120,6 @@ export default function TruthOrDarePage() {
       const nextPlayer = players[nextIdx] || currentPlayer;
       const q = getQuestionForPlayer(nextPlayer);
       if (q) {
-        setCardType(q.type === "TRUTH" ? "truth" : "dare");
-        setCurrentContent(q.text);
         setCurrentQuestion(q);
       }
       setRoundNumber((prev) => prev + 1);
@@ -153,12 +138,10 @@ export default function TruthOrDarePage() {
   };
 
   const handleEndGame = () => {
-    const stats = players.map((name) => ({
-      name,
-      drinkCount: playerDrinks[name] || 0,
-      questionsAnswered: playerTurnCount[name] || 0,
-    }));
-    saveGameSummary(stats, roundNumber);
+    saveGameSummary(
+      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
+      roundNumber,
+    );
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -208,7 +191,7 @@ export default function TruthOrDarePage() {
     );
   }
 
-  const isTruth = cardType === "truth";
+  const isTruth = currentQuestion?.type === "TRUTH";
 
   return (
     <main className="container-mobile min-h-[100dvh] flex flex-col overflow-hidden bg-surface">
@@ -297,7 +280,7 @@ export default function TruthOrDarePage() {
         <div className="w-full relative flex flex-col lg:max-w-3xl">
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentContent}
+              key={currentQuestion?.id ?? "pending-question"}
               className={`
                 relative flex-1 w-full min-h-[24rem] max-h-[66dvh] lg:min-h-[31rem] rounded-3xl border
                 ${isTruth ? "border-neon-blue shadow-neon-blue" : "border-neon-red shadow-neon-red"}
@@ -358,7 +341,7 @@ export default function TruthOrDarePage() {
                   transition={{ duration: 2, repeat: Infinity }}
                 />
                 <p className="relative max-w-[24ch] text-xl sm:text-2xl lg:text-[2rem] font-bold leading-relaxed text-white drop-shadow-md tracking-tight">
-                  {currentContent}
+                  {currentQuestion?.text ?? ""}
                 </p>
                 <div className="mt-6">
                   <Timer

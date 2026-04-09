@@ -11,11 +11,10 @@ import {
 import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
 import { questionSchema } from "@/lib/schemas";
+import { GAME_QUESTION_TYPE_SET } from "@/config/gameConstants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const QUESTION_TYPES = new Set(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]);
 
 function parseBoundedInt(
   value: string | null,
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type");
     const is18Plus = parseBooleanFlag(searchParams.get("is18Plus"));
 
-    if (type && !QUESTION_TYPES.has(type)) {
+    if (type && !GAME_QUESTION_TYPE_SET.has(type)) {
       return jsonError("ประเภทคำถามไม่ถูกต้อง", 400);
     }
 

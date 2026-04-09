@@ -13,13 +13,11 @@ interface UseSoundEffectsOptions {
 }
 
 interface UseSoundEffectsReturn {
-  playTick: () => void;
   playCountdown: () => void;
   playTimeUp: () => void;
   playNewQuestion: () => void;
   playDrink: () => void;
   playCelebration: () => void;
-  playCustom: (url: string) => void;
   vibrate: (pattern?: number | number[]) => void;
   vibrateShort: () => void;
   vibrateLong: () => void;
@@ -178,12 +176,6 @@ export function useSoundEffects({
     [vibrate],
   );
 
-  // Nice tick sound
-  const playTick = useCallback(() => {
-    playNote(1200, 0.05, "sine");
-    vibrateShort();
-  }, [playNote, vibrateShort]);
-
   // Warning countdown - descending notes
   const playCountdown = useCallback(() => {
     playNote(880, 0.15, "sine");
@@ -222,29 +214,12 @@ export function useSoundEffects({
     vibratePattern([50, 30, 50, 30, 100, 50, 150]);
   }, [playNote, vibratePattern]);
 
-  // Play custom audio file
-  const playCustom = useCallback(
-    (url: string) => {
-      if (!soundEnabled) return;
-      try {
-        const audio = new Audio(url);
-        audio.volume = effectiveVolume;
-        audio.play().catch(() => {});
-      } catch {
-        // Ignore errors
-      }
-    },
-    [soundEnabled, effectiveVolume],
-  );
-
   return {
-    playTick,
     playCountdown,
     playTimeUp,
     playNewQuestion,
     playDrink,
     playCelebration,
-    playCustom,
     vibrate,
     vibrateShort,
     vibrateLong,

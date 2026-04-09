@@ -4,7 +4,7 @@
  * Custom questions แทรกสุ่มบ้าง (ไม่ใช่ทุกรอบ)
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { GAME_SETTINGS } from "@/config/gameConstants";
 
 export interface GameQuestion {
@@ -33,9 +33,6 @@ interface UseQuestionPoolReturn {
     preferredType?: string,
   ) => GameQuestion | null;
   markQuestionAnswered: (playerName: string, questionId: string) => void;
-  resetPlayerQuestions: (playerName: string) => void;
-  resetAllQuestions: () => void;
-  answeredCount: Record<string, number>;
 }
 
 function createAnsweredState(players: string[]): Record<string, Set<string>> {
@@ -284,8 +281,7 @@ export function useQuestionPool({
 
       if (
         preferredCustomQuestions.length > 0 &&
-        Math.random() < customQuestionChance &&
-        (!preferredType || preferredCustomQuestions.length > 0)
+        Math.random() < customQuestionChance
       ) {
         const customQ = pickRandomItem(preferredCustomQuestions);
         if (!customQ) {
@@ -352,39 +348,11 @@ export function useQuestionPool({
     [],
   );
 
-  // Reset a player's answered questions
-  const resetPlayerQuestions = useCallback((playerName: string) => {
-    setPlayerAnswered((prev) => ({
-      ...prev,
-      [playerName]: new Set<string>(),
-    }));
-  }, []);
-
-  // Reset all players' answered questions
-  const resetAllQuestions = useCallback(() => {
-    setPlayerAnswered(createAnsweredState(players));
-    usedCustomQuestionsRef.current.clear();
-  }, [players]);
-
-  const answeredCount = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(playerAnswered).map(([name, answered]) => [
-          name,
-          answered.size,
-        ]),
-      ),
-    [playerAnswered],
-  );
-
   return {
     questions,
     isLoading,
     getQuestionForPlayer,
     markQuestionAnswered,
-    resetPlayerQuestions,
-    resetAllQuestions,
-    answeredCount,
   };
 }
 
