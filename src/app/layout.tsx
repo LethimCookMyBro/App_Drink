@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-page-custom-font */
 import type { Metadata, Viewport } from "next";
 import { Kanit, Space_Grotesk } from "next/font/google";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import "./globals.css";
 
 const kanit = Kanit({

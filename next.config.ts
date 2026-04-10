@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { buildContentSecurityPolicy } from "./src/lib/contentSecurityPolicy";
+import { buildContentSecurityPolicy } from "./src/backend/contentSecurityPolicy";
 
 const isProd = process.env.NODE_ENV === "production";
 

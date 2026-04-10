@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import env from "@/lib/env";
-import verifyHs256Jwt from "@/lib/jwtEdge";
-import { checkRateLimit, getClientIP, rateLimitConfigs } from "@/lib/rateLimit";
+import env from "@/backend/env";
+import verifyHs256Jwt from "@/backend/jwtEdge";
+import { checkRateLimit, getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
 import {
   applyCorsHeaders,
   forbiddenCorsResponse,
   handleCorsPreflight,
   isCorsOriginAllowed,
-} from "@/lib/withCors";
+} from "@/backend/withCors";
 
 function getCookieValue(request: NextRequest, name: string): string | null {
   return request.cookies.get(name)?.value ?? null;

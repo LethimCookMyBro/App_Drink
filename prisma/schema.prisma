@@ -88,6 +88,7 @@ model Room {
 model Player {
   id          String   @id @default(cuid())
   name        String
+  nameKey     String   @default("")
   roomId      String
   isHost      Boolean  @default(false)
   isReady     Boolean  @default(false)
@@ -102,6 +103,7 @@ model Player {
 
   @@index([roomId, joinedAt])
   @@index([roomId, isOnline])
+  @@index([roomId, nameKey])
 }
 
 // ==========================================
@@ -126,6 +128,7 @@ model Question {
   @@index([is18Plus, isActive, isPublic])
   @@index([usageCount])
   @@index([createdAt])
+  @@index([isActive, isPublic, is18Plus, type, level, usageCount, updatedAt])
 }
 
 // ==========================================
@@ -220,6 +223,7 @@ model GameSession {
   mode        GameMode
   roundCount  Int      @default(0)
   totalDrinks Int      @default(0)
+  durationMs  Int      @default(0)
   status      GameSessionStatus @default(ACTIVE)
   startedAt   DateTime @default(now())
   endedAt     DateTime?
