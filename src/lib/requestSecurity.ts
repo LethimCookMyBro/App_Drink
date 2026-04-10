@@ -2,12 +2,12 @@ import env from "@/lib/env";
 import { buildContentSecurityPolicy as buildSharedContentSecurityPolicy } from "@/lib/contentSecurityPolicy";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const FORWARDED_IP_HEADERS = [
+const DIRECT_PROXY_IP_HEADERS = [
   "cf-connecting-ip",
   "true-client-ip",
-  "x-forwarded-for",
-  "x-real-ip",
 ] as const;
+const FORWARDED_CHAIN_HEADER = "x-forwarded-for";
+const REAL_IP_HEADER = "x-real-ip";
 const IPV4_PATTERN =
   /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const IPV6_PATTERN = /^[a-f0-9:]+$/i;
@@ -25,24 +25,72 @@ function parseOrigin(value: string | null): string | null {
 function normalizeIp(rawValue: string | null): string | null {
   if (!rawValue) return null;
 
-  const firstValue = rawValue.split(",")[0]?.trim();
-  if (!firstValue) return null;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
 
-  const normalized = firstValue.replace(/^\[|\]$/g, "");
+  const bracketMatch = trimmed.match(/^\[([a-f0-9:]+)\](?::\d+)?$/i);
+  if (bracketMatch?.[1] && IPV6_PATTERN.test(bracketMatch[1])) {
+    return bracketMatch[1];
+  }
 
-  if (IPV4_PATTERN.test(normalized) || IPV6_PATTERN.test(normalized)) {
+  const ipv4WithPort = trimmed.match(
+    /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?::\d+)?$/,
+  );
+  const normalized = (ipv4WithPort?.[1] ?? trimmed).replace(/^\[|\]$/g, "");
+
+  if (
+    IPV4_PATTERN.test(normalized) ||
+    (normalized.includes(":") &&
+      normalized.length <= 45 &&
+      IPV6_PATTERN.test(normalized))
+  ) {
     return normalized;
   }
 
   return null;
 }
 
-export function getClientIPFromHeaders(headers: Headers): string {
-  for (const header of FORWARDED_IP_HEADERS) {
+function getForwardedChainIp(headers: Headers): string | null {
+  const forwardedFor = headers.get(FORWARDED_CHAIN_HEADER);
+  if (!forwardedFor) {
+    return null;
+  }
+
+  for (const hop of forwardedFor.split(",")) {
+    const candidate = normalizeIp(hop);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export function getClientIPFromHeaders(
+  headers: Headers,
+  options?: { trustProxyHeaders?: boolean },
+): string {
+  const trustProxyHeaders =
+    options?.trustProxyHeaders ?? env.trustProxyIpHeaders;
+  if (!trustProxyHeaders) {
+    return "unknown";
+  }
+
+  for (const header of DIRECT_PROXY_IP_HEADERS) {
     const candidate = normalizeIp(headers.get(header));
     if (candidate) {
       return candidate;
     }
+  }
+
+  const forwardedChainIp = getForwardedChainIp(headers);
+  if (forwardedChainIp) {
+    return forwardedChainIp;
+  }
+
+  const realIp = normalizeIp(headers.get(REAL_IP_HEADER));
+  if (realIp) {
+    return realIp;
   }
 
   return "unknown";

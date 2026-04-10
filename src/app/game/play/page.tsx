@@ -8,6 +8,8 @@ import { Button, GamePauseButton, Timer } from "@/components/ui";
 import { useGameStore } from "@/store/gameStore";
 import {
   clearActiveGameSession,
+  completeStoredGameSession,
+  recordCompletedGameRound,
   saveGameSummary,
 } from "@/lib/gameSession";
 import {
@@ -187,6 +189,8 @@ function GamePlayContent() {
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
+  const [isRoundSyncing, setIsRoundSyncing] = useState(false);
+  const [isEndingGame, setIsEndingGame] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -262,8 +266,23 @@ function GamePlayContent() {
   const theme = QUESTION_THEMES[questionType];
   const skipPenalty = getSkipPenalty(questionType);
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     if (!activePlayerName) return;
+    if (isRoundSyncing || isEndingGame) return;
+
+    setIsRoundSyncing(true);
+
+    try {
+      await recordCompletedGameRound(roundNumber, skipPenalty);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกรอบเกมลงเซิร์ฟเวอร์ได้",
+      );
+      setIsRoundSyncing(false);
+      return;
+    }
 
     setPlayerDrinks((prev) =>
       incrementPlayerCount(prev, activePlayerName, skipPenalty),
@@ -273,7 +292,24 @@ function GamePlayContent() {
     nextRound();
   };
 
-  const handleDone = () => {
+  const handleDone = async () => {
+    if (!activePlayerName) return;
+    if (isRoundSyncing || isEndingGame) return;
+
+    setIsRoundSyncing(true);
+
+    try {
+      await recordCompletedGameRound(roundNumber, 0);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกรอบเกมลงเซิร์ฟเวอร์ได้",
+      );
+      setIsRoundSyncing(false);
+      return;
+    }
+
     if (currentQuestion && activePlayerName) {
       markQuestionAnswered(activePlayerName, currentQuestion.id);
     }
@@ -294,23 +330,37 @@ function GamePlayContent() {
       setRoundNumber((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
       playNewQuestion();
+      setIsRoundSyncing(false);
     }, 280);
   };
 
   const handleTimerComplete = () => {
     playTimeUp();
-    handleSkip();
+    void handleSkip();
   };
 
   const handleTimerWarning = () => {
     playCountdown();
   };
 
-  const handleEndGame = () => {
-    saveGameSummary(
-      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
-      roundNumber,
+  const handleEndGame = async () => {
+    if (isEndingGame || isRoundSyncing) return;
+
+    setIsEndingGame(true);
+
+    const summaryStats = buildStoredPlayerStats(
+      players,
+      playerDrinks,
+      playerTurnCount,
     );
+    const completion = await completeStoredGameSession();
+    if (!completion.ok) {
+      window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
+      setIsEndingGame(false);
+      return;
+    }
+
+    saveGameSummary(summaryStats, completion.roundCount);
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -396,6 +446,7 @@ function GamePlayContent() {
             />
             <button
               onClick={handleEndGame}
+              disabled={isEndingGame || isRoundSyncing}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
               <span className="material-symbols-outlined text-lg">stop</span>
@@ -568,10 +619,11 @@ function GamePlayContent() {
         <footer className="pt-4">
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Button
-              onClick={handleSkip}
+              onClick={() => void handleSkip()}
               variant="neon-red"
               size="xl"
               className="flex min-h-[5.6rem] flex-col items-center justify-center"
+              disabled={isRoundSyncing || isEndingGame}
             >
               <span className="material-symbols-outlined mb-1 text-3xl text-white">
                 local_bar
@@ -587,10 +639,11 @@ function GamePlayContent() {
             </Button>
 
             <Button
-              onClick={handleDone}
+              onClick={() => void handleDone()}
               variant={questionType === "CHAOS" ? "primary" : "neon-green"}
               size="xl"
               className="flex min-h-[5.6rem] flex-col items-center justify-center"
+              disabled={isRoundSyncing || isEndingGame}
             >
               <span
                 className={`material-symbols-outlined mb-1 text-3xl ${

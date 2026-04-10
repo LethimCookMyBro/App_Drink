@@ -219,6 +219,7 @@ model GameSession {
   userId      String?  // Link to user who created session
   mode        GameMode
   roundCount  Int      @default(0)
+  totalDrinks Int      @default(0)
   status      GameSessionStatus @default(ACTIVE)
   startedAt   DateTime @default(now())
   endedAt     DateTime?

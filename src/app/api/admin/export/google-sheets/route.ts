@@ -13,8 +13,7 @@ import {
   GoogleSheetsConfigurationError,
   GoogleSheetsRequestError,
 } from "@/lib/googleSheets";
-import { rateLimitConfigs } from "@/lib/rateLimit";
-import { getClientIPFromHeaders } from "@/lib/requestSecurity";
+import { getClientIP, rateLimitConfigs } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,7 +62,7 @@ export async function POST(request: Request) {
   }
 
   const { dataset } = validation.data;
-  const ip = getClientIPFromHeaders(request.headers);
+  const ip = getClientIP(request);
   const userAgent = request.headers.get("user-agent") ?? undefined;
 
   try {

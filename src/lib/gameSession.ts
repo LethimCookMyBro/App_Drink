@@ -3,6 +3,7 @@
 export const GAME_SESSION_KEYS = {
   started: "wongtaek-game-started",
   roomCode: "wongtaek-room-code",
+  sessionId: "wongtaek-game-session-id",
   players: "wongtaek-players",
   customQuestions: "wongtaek-custom-questions",
   stats: "wongtaek-game-stats",
@@ -19,18 +20,28 @@ export interface StoredPlayerStat {
 export interface ActiveGameSessionSnapshot {
   isActive: boolean;
   roomCode: string;
+  sessionId: string;
   players: string[];
   playerCount: number;
   resumePath: string;
 }
 
+export type PersistedGameMode =
+  | "QUESTION"
+  | "VOTE"
+  | "TRUTH_OR_DARE"
+  | "CHAOS"
+  | "MIXED";
+
 const MAX_REASONABLE_DRINKS = 99;
+const MAX_REASONABLE_DRINK_DELTA = 10;
 const MAX_REASONABLE_QUESTIONS = 999;
 const MAX_REASONABLE_ROUNDS = 999;
 
 export const EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT: ActiveGameSessionSnapshot = {
   isActive: false,
   roomCode: "",
+  sessionId: "",
   players: [],
   playerCount: 0,
   resumePath: "/create",
@@ -72,6 +83,13 @@ function getStoredRoomCode(): string {
   return typeof storedRoomCode === "string" ? storedRoomCode : "";
 }
 
+export function getStoredGameSessionId(): string {
+  if (typeof window === "undefined") return "";
+
+  const storedSessionId = window.localStorage.getItem(GAME_SESSION_KEYS.sessionId);
+  return typeof storedSessionId === "string" ? storedSessionId : "";
+}
+
 export function hasActiveGameSession(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -102,6 +120,7 @@ export function getActiveGameSessionSnapshot(): ActiveGameSessionSnapshot {
   return {
     isActive: true,
     roomCode: getStoredRoomCode(),
+    sessionId: getStoredGameSessionId(),
     players,
     playerCount: players.length,
     resumePath: getStoredResumePath(),
@@ -111,6 +130,7 @@ export function getActiveGameSessionSnapshot(): ActiveGameSessionSnapshot {
 export function markGameSessionStarted(
   roomCode?: string,
   resumePath = "/game/modes",
+  sessionId?: string,
 ): void {
   if (typeof window === "undefined") return;
 
@@ -121,6 +141,11 @@ export function markGameSessionStarted(
   if (roomCode) {
     window.localStorage.setItem(GAME_SESSION_KEYS.roomCode, roomCode);
   }
+  if (sessionId) {
+    window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, sessionId);
+  } else {
+    window.localStorage.removeItem(GAME_SESSION_KEYS.sessionId);
+  }
 }
 
 export function clearActiveGameSession(): void {
@@ -128,6 +153,7 @@ export function clearActiveGameSession(): void {
 
   window.localStorage.removeItem(GAME_SESSION_KEYS.started);
   window.localStorage.removeItem(GAME_SESSION_KEYS.roomCode);
+  window.localStorage.removeItem(GAME_SESSION_KEYS.sessionId);
   window.localStorage.removeItem(GAME_SESSION_KEYS.players);
   window.localStorage.removeItem(GAME_SESSION_KEYS.customQuestions);
   window.localStorage.removeItem(GAME_SESSION_KEYS.resumePath);
@@ -214,4 +240,183 @@ export function saveGameSummary(
     GAME_SESSION_KEYS.rounds,
     normalizedRounds.toString(),
   );
+}
+
+function normalizeApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+async function postRoomSessionRequest<T>(
+  roomCode: string,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetch(
+    `/api/rooms/${encodeURIComponent(roomCode)}/${path}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  const data = (await response.json().catch(() => null)) as
+    | (T & { error?: string })
+    | null;
+
+  if (!response.ok) {
+    throw new Error(data?.error || "เกิดข้อผิดพลาดในการบันทึกสถานะเกม");
+  }
+
+  if (!data) {
+    throw new Error("เซิร์ฟเวอร์ไม่ส่งข้อมูลกลับมา");
+  }
+
+  return data;
+}
+
+function getPersistedGameModeForRoute(route: string): PersistedGameMode {
+  if (route === "/game/truth-or-dare") {
+    return "TRUTH_OR_DARE";
+  }
+
+  if (route === "/game/chaos") {
+    return "CHAOS";
+  }
+
+  if (route.startsWith("/game/play")) {
+    const [, queryString = ""] = route.split("?");
+    const params = new URLSearchParams(queryString);
+    const mode = params.get("mode");
+
+    if (mode === "question") {
+      return "QUESTION";
+    }
+
+    if (mode === "vote") {
+      return "VOTE";
+    }
+  }
+
+  return "MIXED";
+}
+
+export async function startRoomGameSession(
+  roomCode: string,
+  mode: PersistedGameMode = "MIXED",
+  existingSessionId?: string,
+): Promise<string> {
+  const data = await postRoomSessionRequest<{
+    sessionId: string;
+  }>(roomCode, "start", {
+    mode,
+    ...(existingSessionId ? { sessionId: existingSessionId } : {}),
+  });
+
+  if (!data.sessionId) {
+    throw new Error("ไม่พบ session ที่สร้างสำเร็จ");
+  }
+
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, data.sessionId);
+  }
+
+  return data.sessionId;
+}
+
+export async function syncStoredGameSessionMode(route: string): Promise<void> {
+  const roomCode = getStoredRoomCode();
+  if (!roomCode) {
+    return;
+  }
+
+  await startRoomGameSession(
+    roomCode,
+    getPersistedGameModeForRoute(route),
+    getStoredGameSessionId() || undefined,
+  );
+}
+
+export interface StoredGameSessionMetrics {
+  roundCount: number;
+  totalDrinks: number;
+}
+
+export async function recordCompletedGameRound(
+  roundNumber: number,
+  drinkDelta = 0,
+): Promise<StoredGameSessionMetrics> {
+  const roomCode = getStoredRoomCode();
+  const sessionId = getStoredGameSessionId();
+
+  if (!roomCode || !sessionId) {
+    throw new Error("ไม่พบ session เกมที่กำลังเล่น");
+  }
+
+  const data = await postRoomSessionRequest<{
+    success: boolean;
+    session: StoredGameSessionMetrics;
+  }>(roomCode, "progress", {
+    sessionId,
+    roundNumber: sanitizeCount(roundNumber, MAX_REASONABLE_ROUNDS),
+    drinkDelta: sanitizeCount(drinkDelta, MAX_REASONABLE_DRINK_DELTA),
+  });
+
+  return {
+    roundCount: sanitizeCount(
+      data.session?.roundCount,
+      MAX_REASONABLE_ROUNDS,
+    ),
+    totalDrinks: sanitizeCount(
+      data.session?.totalDrinks,
+      MAX_REASONABLE_DRINKS * 20,
+    ),
+  };
+}
+
+export async function completeStoredGameSession(
+): Promise<
+  | ({ ok: true } & StoredGameSessionMetrics)
+  | { ok: false; error?: string }
+> {
+  const roomCode = getStoredRoomCode();
+  const sessionId = getStoredGameSessionId();
+
+  if (!roomCode || !sessionId) {
+    return { ok: true, roundCount: 0, totalDrinks: 0 };
+  }
+
+  try {
+    const data = await postRoomSessionRequest<{
+      success: boolean;
+      session: StoredGameSessionMetrics;
+    }>(roomCode, "complete", {
+      sessionId,
+    });
+    return {
+      ok: true,
+      roundCount: sanitizeCount(
+        data.session?.roundCount,
+        MAX_REASONABLE_ROUNDS,
+      ),
+      totalDrinks: sanitizeCount(
+        data.session?.totalDrinks,
+        MAX_REASONABLE_DRINKS * 20,
+      ),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: normalizeApiErrorMessage(
+        error,
+        "ไม่สามารถบันทึกผลเกมลงเซิร์ฟเวอร์ได้",
+      ),
+    };
+  }
 }

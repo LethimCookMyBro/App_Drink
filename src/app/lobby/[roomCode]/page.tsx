@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/components/ui";
-import { markGameSessionStarted } from "@/lib/gameSession";
+import {
+  markGameSessionStarted,
+  startRoomGameSession,
+} from "@/lib/gameSession";
 
 interface LocalPlayer {
   id: string;
@@ -34,10 +37,13 @@ export default function LobbyPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(8);
-  const [currentPlayerName, setCurrentPlayerName] = useState("");
-  const [isHost, setIsHost] = useState(false);
+  const [canManageLobby, setCanManageLobby] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [playerMutationError, setPlayerMutationError] = useState("");
+  const [startError, setStartError] = useState("");
+  const [isStartingGame, setIsStartingGame] = useState(false);
+  const [isMutatingPlayers, setIsMutatingPlayers] = useState(false);
 
   // Custom questions state
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
@@ -45,16 +51,33 @@ export default function LobbyPage() {
   const [newQuestion, setNewQuestion] = useState("");
 
   const canAddMore = players.length < maxPlayers;
-  const canManageLobby = isHost;
   const displayRoomName = roomName || "วงของคุณ";
 
-  useEffect(() => {
-    const savedPlayerName =
-      localStorage.getItem("wongtaek-player-name")?.trim() || "";
-    if (savedPlayerName) {
-      setCurrentPlayerName(savedPlayerName);
-    }
+  const applyRoomSnapshot = useCallback(
+    (
+      room: {
+        name: string;
+        maxPlayers: number;
+        players: LocalPlayer[];
+      },
+      nextCanManageLobby: boolean,
+    ) => {
+      setRoomName(room.name);
+      setMaxPlayers(room.maxPlayers);
+      setPlayers(
+        room.players.map((player) => ({
+          id: player.id,
+          name: player.name,
+          isHost: player.isHost,
+          isReady: player.isReady,
+        })),
+      );
+      setCanManageLobby(nextCanManageLobby);
+    },
+    [],
+  );
 
+  useEffect(() => {
     const savedCustomQuestions = localStorage.getItem(
       "wongtaek-custom-questions",
     );
@@ -79,12 +102,16 @@ export default function LobbyPage() {
 
     let isCancelled = false;
 
-    const loadRoom = async () => {
-      setIsLoading(true);
-      setLoadError("");
+    const loadRoom = async (showSpinner: boolean) => {
+      if (showSpinner) {
+        setIsLoading(true);
+        setLoadError("");
+      }
 
       try {
-        const response = await fetch(`/api/rooms/${roomCode}`);
+        const response = await fetch(`/api/rooms/${roomCode}`, {
+          cache: "no-store",
+        });
         const data = await response.json();
 
         if (!response.ok) {
@@ -99,49 +126,42 @@ export default function LobbyPage() {
           players: LocalPlayer[];
         };
 
-        setRoomName(room.name);
-        setMaxPlayers(room.maxPlayers);
-        setPlayers(
-          room.players.map((player) => ({
-            id: player.id,
-            name: player.name,
-            isHost: player.isHost,
-            isReady: player.isReady,
-          })),
-        );
-        setIsHost(
-          !!currentPlayerName &&
-            room.players.some(
-              (player) => player.isHost && player.name === currentPlayerName,
-            ),
-        );
+        applyRoomSnapshot(room, Boolean(data.canManageLobby));
       } catch (error) {
         if (isCancelled) return;
-        setLoadError(
-          error instanceof Error ? error.message : "ไม่สามารถโหลดข้อมูลห้องได้",
-        );
+        if (showSpinner) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "ไม่สามารถโหลดข้อมูลห้องได้",
+          );
+        }
       } finally {
-        if (!isCancelled) {
+        if (!isCancelled && showSpinner) {
           setIsLoading(false);
         }
       }
     };
 
-    loadRoom();
+    void loadRoom(true);
+    const pollId = window.setInterval(() => {
+      void loadRoom(false);
+    }, 5000);
 
     return () => {
       isCancelled = true;
+      window.clearInterval(pollId);
     };
-  }, [roomCode, currentPlayerName]);
+  }, [applyRoomSnapshot, roomCode]);
 
   const [duplicateError, setDuplicateError] = useState("");
 
-  const handleAddPlayer = () => {
+  const handleAddPlayer = async () => {
     if (!canManageLobby) return;
     if (!newPlayerName.trim()) return;
     if (!canAddMore) return;
+    if (isMutatingPlayers) return;
 
-    // Check for duplicate names (case-insensitive)
     const nameLower = newPlayerName.trim().toLowerCase();
     const isDuplicate = players.some((p) => p.name.toLowerCase() === nameLower);
 
@@ -150,22 +170,87 @@ export default function LobbyPage() {
       return;
     }
 
-    const newPlayer: LocalPlayer = {
-      id: Date.now().toString(),
-      name: newPlayerName.trim(),
-      isHost: false,
-      isReady: true,
-    };
-
-    setPlayers([...players, newPlayer]);
-    setNewPlayerName("");
     setDuplicateError("");
-    setShowAddModal(false);
+    setPlayerMutationError("");
+    setIsMutatingPlayers(true);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/players`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playerName: newPlayerName.trim(),
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            room?: {
+              name: string;
+              maxPlayers: number;
+              players: LocalPlayer[];
+            };
+            canManageLobby?: boolean;
+          }
+        | null;
+
+      if (!response.ok || !data?.room) {
+        const message = data?.error || "ไม่สามารถเพิ่มผู้เล่นได้";
+        if (message.includes("ชื่อ")) {
+          setDuplicateError(message);
+        } else {
+          setPlayerMutationError(message);
+        }
+        return;
+      }
+
+      applyRoomSnapshot(data.room, Boolean(data.canManageLobby));
+      setNewPlayerName("");
+      setShowAddModal(false);
+    } catch {
+      setPlayerMutationError("ไม่สามารถเพิ่มผู้เล่นได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setIsMutatingPlayers(false);
+    }
   };
 
-  const handleRemovePlayer = (id: string) => {
+  const handleRemovePlayer = async (id: string) => {
     if (!canManageLobby) return;
-    setPlayers(players.filter((p) => p.id !== id));
+    if (isMutatingPlayers) return;
+
+    setDuplicateError("");
+    setPlayerMutationError("");
+    setIsMutatingPlayers(true);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/players/${id}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            room?: {
+              name: string;
+              maxPlayers: number;
+              players: LocalPlayer[];
+            };
+            canManageLobby?: boolean;
+          }
+        | null;
+
+      if (!response.ok || !data?.room) {
+        setPlayerMutationError(data?.error || "ไม่สามารถลบผู้เล่นได้");
+        return;
+      }
+
+      applyRoomSnapshot(data.room, Boolean(data.canManageLobby));
+    } catch {
+      setPlayerMutationError("ไม่สามารถลบผู้เล่นได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setIsMutatingPlayers(false);
+    }
   };
 
   const handleAddQuestion = () => {
@@ -190,9 +275,13 @@ export default function LobbyPage() {
     setCustomQuestions(customQuestions.filter((q) => q.id !== id));
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (!canManageLobby) return;
     if (players.length < 2) return;
+    if (isStartingGame) return;
+
+    setStartError("");
+    setIsStartingGame(true);
 
     // Save players to localStorage
     localStorage.setItem(
@@ -210,10 +299,21 @@ export default function LobbyPage() {
       localStorage.removeItem("wongtaek-custom-questions");
     }
 
-    // Set game started flag
-    markGameSessionStarted(roomCode, "/game/modes");
+    try {
+      const sessionId = await startRoomGameSession(roomCode, "MIXED");
 
-    router.push("/game/modes");
+      // Set game started flag only after the session is persisted.
+      markGameSessionStarted(roomCode, "/game/modes", sessionId);
+      router.push("/game/modes");
+    } catch (error) {
+      setStartError(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถเริ่มเกมบนเซิร์ฟเวอร์ได้",
+      );
+    } finally {
+      setIsStartingGame(false);
+    }
   };
 
   if (isLoading) {
@@ -293,6 +393,11 @@ export default function LobbyPage() {
           {/* Player List */}
           <section className="flex min-h-0 flex-col gap-3 lg:overflow-hidden">
             <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto no-scrollbar">
+              {playerMutationError && (
+                <div className="rounded-xl border border-neon-red/30 bg-neon-red/10 px-4 py-3 text-sm text-neon-red">
+                  {playerMutationError}
+                </div>
+              )}
               <AnimatePresence>
                 {players.map((player, index) => (
                   <motion.div
@@ -331,6 +436,7 @@ export default function LobbyPage() {
                     {canManageLobby && !player.isHost && (
                       <button
                         onClick={() => handleRemovePlayer(player.id)}
+                        disabled={isMutatingPlayers}
                         className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white/40 transition-all hover:bg-neon-red/20 hover:text-neon-red"
                       >
                         <span className="material-symbols-outlined">close</span>
@@ -344,9 +450,14 @@ export default function LobbyPage() {
               {canManageLobby ? (
                 canAddMore ? (
                   <motion.button
-                    onClick={() => setShowAddModal(true)}
+                    onClick={() => {
+                      setDuplicateError("");
+                      setPlayerMutationError("");
+                      setShowAddModal(true);
+                    }}
                     className="flex h-[76px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 p-4 text-white/40 transition-all hover:border-primary/50 hover:text-primary"
                     whileTap={{ scale: 0.98 }}
+                    disabled={isMutatingPlayers}
                   >
                     <span className="material-symbols-outlined text-2xl">
                       person_add
@@ -493,17 +604,23 @@ export default function LobbyPage() {
             </div>
           )}
 
+          {startError && (
+            <div className="mb-4 rounded-2xl border border-neon-red/30 bg-neon-red/10 px-4 py-3 text-center text-sm text-neon-red">
+              {startError}
+            </div>
+          )}
+
           {canManageLobby ? (
             <Button
               onClick={handleStartGame}
               variant="primary"
               size="xl"
               fullWidth
-              disabled={players.length < 2}
+              disabled={players.length < 2 || isStartingGame}
               icon="play_arrow"
               iconPosition="right"
             >
-              เริ่มเกมเลย
+              {isStartingGame ? "กำลังเริ่มเกม..." : "เริ่มเกมเลย"}
             </Button>
           ) : (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-center text-sm text-white/50">
@@ -545,7 +662,7 @@ export default function LobbyPage() {
                     setNewPlayerName(e.target.value);
                     setDuplicateError("");
                   }}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddPlayer()}
+                  onKeyDown={(e) => e.key === "Enter" && void handleAddPlayer()}
                   placeholder="พิมพ์ชื่อ..."
                   className={`w-full bg-white/5 border rounded-xl p-4 text-white text-xl font-bold placeholder-white/30 focus:outline-none ${
                     duplicateError
@@ -563,6 +680,14 @@ export default function LobbyPage() {
                     {duplicateError}
                   </p>
                 )}
+                {!duplicateError && playerMutationError && (
+                  <p className="text-neon-red text-sm mt-2 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">
+                      error
+                    </span>
+                    {playerMutationError}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3">
@@ -575,13 +700,13 @@ export default function LobbyPage() {
                   ยกเลิก
                 </Button>
                 <Button
-                  onClick={handleAddPlayer}
+                  onClick={() => void handleAddPlayer()}
                   variant="primary"
                   size="lg"
                   fullWidth
-                  disabled={!newPlayerName.trim()}
+                  disabled={!newPlayerName.trim() || isMutatingPlayers}
                 >
-                  เพิ่ม
+                  {isMutatingPlayers ? "กำลังเพิ่ม..." : "เพิ่ม"}
                 </Button>
               </div>
             </motion.div>

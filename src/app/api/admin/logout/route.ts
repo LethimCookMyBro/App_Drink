@@ -4,6 +4,10 @@ import {
   jsonOk,
   mapServerError,
 } from "@/lib/apiUtils";
+import {
+  getAdminTokenFromCookies,
+  invalidateAdminSession,
+} from "@/lib/adminAuth";
 import logger from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -13,6 +17,11 @@ export async function POST(request: Request) {
   try {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
+
+    const token = await getAdminTokenFromCookies();
+    if (token) {
+      await invalidateAdminSession(token);
+    }
 
     const response = jsonOk({ success: true, message: "ออกจากระบบสำเร็จ" });
     response.cookies.set("admin-token", "", buildSessionCookieOptions(0));

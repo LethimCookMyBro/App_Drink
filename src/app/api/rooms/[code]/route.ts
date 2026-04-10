@@ -79,7 +79,10 @@ export async function GET(
       return jsonError("กรุณาเข้าร่วมห้องก่อนดูข้อมูลห้อง", 403);
     }
 
-    return jsonOk({ room: toRoomSummary(room) });
+    return jsonOk({
+      room: toRoomSummary(room),
+      canManageLobby: hostAuthorized,
+    });
   } catch (error) {
     logger.error("rooms.get.failed", {
       message: error instanceof Error ? error.message : "unknown",

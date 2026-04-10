@@ -9,6 +9,7 @@ import { GAME_MODES } from "@/config/gameConstants";
 import { useActiveGameSession, useSoundEffects } from "@/hooks";
 import {
   setGameResumePath,
+  syncStoredGameSessionMode,
 } from "@/lib/gameSession";
 
 export default function GameModesPage() {
@@ -85,8 +86,17 @@ export default function GameModesPage() {
     vibrateShort();
   };
 
-  const handleSelectMode = (route: string) => {
-    router.push(route);
+  const handleSelectMode = async (route: string) => {
+    try {
+      await syncStoredGameSessionMode(route);
+      router.push(route);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถยืนยัน session เกมกับเซิร์ฟเวอร์ได้";
+      window.alert(message);
+    }
   };
 
   // Show loading state

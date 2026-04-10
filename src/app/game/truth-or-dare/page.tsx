@@ -23,6 +23,8 @@ import {
 } from "@/lib/gamePlayerStats";
 import {
   clearActiveGameSession,
+  completeStoredGameSession,
+  recordCompletedGameRound,
   saveGameSummary,
 } from "@/lib/gameSession";
 
@@ -39,6 +41,8 @@ export default function TruthOrDarePage() {
   const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [isRoundSyncing, setIsRoundSyncing] = useState(false);
+  const [isEndingGame, setIsEndingGame] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -94,7 +98,24 @@ export default function TruthOrDarePage() {
     playNewQuestion,
   ]);
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    if (!currentPlayer) return;
+    if (isRoundSyncing || isEndingGame) return;
+
+    setIsRoundSyncing(true);
+
+    try {
+      await recordCompletedGameRound(roundNumber, 0);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกรอบเกมลงเซิร์ฟเวอร์ได้",
+      );
+      setIsRoundSyncing(false);
+      return;
+    }
+
     if (currentQuestion) {
       markQuestionAnswered(currentPlayer, currentQuestion.id);
     }
@@ -102,11 +123,27 @@ export default function TruthOrDarePage() {
     nextCard();
   };
 
-  const handleGiveUp = () => {
+  const handleGiveUp = async () => {
+    if (!activePlayerName) return;
+    if (isRoundSyncing || isEndingGame) return;
+
+    setIsRoundSyncing(true);
+
+    try {
+      await recordCompletedGameRound(roundNumber, 2);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกรอบเกมลงเซิร์ฟเวอร์ได้",
+      );
+      setIsRoundSyncing(false);
+      return;
+    }
+
     if (currentQuestion) {
       markQuestionAnswered(currentPlayer, currentQuestion.id);
     }
-    // Player drinks x2
     setPlayerDrinks((prev) => incrementPlayerCount(prev, activePlayerName, 2));
     playDrink();
     vibrateLong();
@@ -125,23 +162,37 @@ export default function TruthOrDarePage() {
       setRoundNumber((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
       playNewQuestion();
+      setIsRoundSyncing(false);
     }, 300);
   };
 
   const handleTimerComplete = () => {
     playTimeUp();
-    handleGiveUp();
+    void handleGiveUp();
   };
 
   const handleTimerWarning = () => {
     playCountdown();
   };
 
-  const handleEndGame = () => {
-    saveGameSummary(
-      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
-      roundNumber,
+  const handleEndGame = async () => {
+    if (isEndingGame || isRoundSyncing) return;
+
+    setIsEndingGame(true);
+
+    const summaryStats = buildStoredPlayerStats(
+      players,
+      playerDrinks,
+      playerTurnCount,
     );
+    const completion = await completeStoredGameSession();
+    if (!completion.ok) {
+      window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
+      setIsEndingGame(false);
+      return;
+    }
+
+    saveGameSummary(summaryStats, completion.roundCount);
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -222,6 +273,7 @@ export default function TruthOrDarePage() {
             />
             <button
               onClick={handleEndGame}
+              disabled={isEndingGame || isRoundSyncing}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
               <span className="material-symbols-outlined text-lg">stop</span>
@@ -388,18 +440,20 @@ export default function TruthOrDarePage() {
       <footer className="relative z-20 w-full bg-gradient-to-t from-background via-background/95 to-transparent">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-5 pb-6 pt-4 sm:px-5 lg:flex-row lg:px-8">
           <Button
-            onClick={handleComplete}
+            onClick={() => void handleComplete()}
             variant="primary"
             size="xl"
             fullWidth
             icon="check_circle"
             className="lg:flex-1"
+            disabled={isRoundSyncing || isEndingGame}
           >
             ทำเสร็จแล้ว
           </Button>
 
           <button
-            onClick={handleGiveUp}
+            onClick={() => void handleGiveUp()}
+            disabled={isRoundSyncing || isEndingGame}
             className="group relative w-full h-14 rounded-xl border border-white/10 bg-white/5 text-white/60 font-medium text-base tracking-wide overflow-hidden active:scale-[0.98] transition-all hover:bg-white/10 hover:border-white/20 hover:text-white lg:flex-1"
           >
             <span className="relative flex items-center justify-between px-5 w-full h-full">

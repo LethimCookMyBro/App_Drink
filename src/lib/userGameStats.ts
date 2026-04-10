@@ -34,18 +34,14 @@ export async function getUserStatsAndRecentSessions(
     status: "COMPLETED" as const,
   };
 
-  const [totalGames, totalDrinks, sessions] = await Promise.all([
+  const [totalGames, totalDrinkAggregate, historySessions, lifetimeSessions] = await Promise.all([
     prisma.gameSession.count({
       where: completedSessionWhere,
     }),
-    prisma.gameEvent.count({
-      where: {
-        type: {
-          in: ["DRANK", "SKIPPED"],
-        },
-        session: {
-          is: completedSessionWhere,
-        },
+    prisma.gameSession.aggregate({
+      where: completedSessionWhere,
+      _sum: {
+        totalDrinks: true,
       },
     }),
     prisma.gameSession.findMany({
@@ -68,9 +64,17 @@ export async function getUserStatsAndRecentSessions(
       },
       take: historyLimit,
     }),
+    prisma.gameSession.findMany({
+      where: completedSessionWhere,
+      select: {
+        startedAt: true,
+        endedAt: true,
+      },
+    }),
   ]);
+  const totalDrinks = totalDrinkAggregate._sum?.totalDrinks ?? 0;
 
-  const totalPlayTimeMs = sessions.reduce((sum, session) => {
+  const totalPlayTimeMs = lifetimeSessions.reduce((sum, session) => {
     if (!session.endedAt) {
       return sum;
     }
@@ -85,6 +89,6 @@ export async function getUserStatsAndRecentSessions(
       totalPlayTime:
         Math.round((totalPlayTimeMs / (1000 * 60 * 60)) * 10) / 10,
     },
-    sessions,
+    sessions: historySessions,
   };
 }

@@ -97,7 +97,7 @@ export async function getAdminFromCookies(): Promise<Admin | null> {
     });
     if (!admin || !admin.isActive) return null;
     if (
-      admin.activeTokenFingerprint &&
+      !admin.activeTokenFingerprint ||
       admin.activeTokenFingerprint !== getAdminTokenFingerprint(token)
     ) {
       return null;
@@ -113,4 +113,29 @@ export async function getAdminFromCookies(): Promise<Admin | null> {
 
 export async function requireAdmin(): Promise<Admin | null> {
   return getAdminFromCookies();
+}
+
+export async function invalidateAdminSession(token: string): Promise<void> {
+  const payload = verifyAdminToken(token);
+  if (!payload?.adminId) {
+    return;
+  }
+
+  try {
+    const { default: prisma } = await import("./db");
+    await prisma.admin.updateMany({
+      where: {
+        id: payload.adminId,
+        activeTokenFingerprint: getAdminTokenFingerprint(token),
+      },
+      data: {
+        activeTokenFingerprint: null,
+        activeTokenIssuedAt: null,
+      },
+    });
+  } catch (error) {
+    logger.error("admin.session.invalidate_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
 }

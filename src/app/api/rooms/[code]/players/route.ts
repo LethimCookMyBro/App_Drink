@@ -1,8 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { toRoomPlayer, toRoomSummary } from "@/lib/apiFilter";
+import { toRoomSummary } from "@/lib/apiFilter";
 import {
-  buildSessionCookieOptions,
   enforceRateLimit,
   enforceSameOrigin,
   jsonError,
@@ -11,9 +10,8 @@ import {
 } from "@/lib/apiUtils";
 import logger from "@/lib/logger";
 import { rateLimitConfigs } from "@/lib/rateLimit";
-import { roomCodeSchema, roomJoinSchema } from "@/lib/schemas";
-import { getRoomPlayerCookieName, signRoomPlayerToken } from "@/lib/roomAuth";
-import { verifyTurnstileToken } from "@/lib/cloudflare";
+import { getRoomHostPayloadFromCookies } from "@/lib/roomAuth";
+import { roomCodeSchema, roomHostPlayerSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,10 +39,9 @@ async function withSerializableRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 
-  throw new Error("Could not join room");
+  throw new Error("Could not add player");
 }
 
-// POST /api/rooms/[code]/join - Join a room
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> },
@@ -58,38 +55,31 @@ export async function POST(
 
     const { code } = await params;
     const roomCode = code.toUpperCase();
-
     const codeValidation = roomCodeSchema.safeParse(roomCode);
     if (!codeValidation.success) {
       return jsonError("รหัสห้องไม่ถูกต้อง", 400);
     }
 
-    const body = await request.json();
-    const nameValidation = roomJoinSchema.safeParse({ playerName: body.playerName });
-    if (!nameValidation.success) {
+    const payload = await getRoomHostPayloadFromCookies(roomCode);
+    if (!payload || payload.code !== roomCode) {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const validation = roomHostPlayerSchema.safeParse({
+      playerName: body?.playerName,
+    });
+    if (!validation.success) {
       return jsonError(
-        nameValidation.error.issues[0]?.message || "ชื่อผู้เล่นไม่ถูกต้อง",
+        validation.error.issues[0]?.message || "ชื่อผู้เล่นไม่ถูกต้อง",
         400,
       );
     }
 
-    const turnstileCheck = await verifyTurnstileToken(
-      request,
-      body?.turnstileToken,
-      "room_join",
-    );
-    if (!turnstileCheck.ok) {
-      return jsonError(
-        turnstileCheck.error || "การยืนยันความปลอดภัยไม่ผ่าน",
-        turnstileCheck.status || 400,
-      );
-    }
-
-    const playerName = nameValidation.data.playerName;
-
+    const { playerName } = validation.data;
     const { default: prisma } = await import("@/lib/db");
-    const joinResult = await withSerializableRetry(async () => {
-      return prisma.$transaction(
+    const result = await withSerializableRetry(async () =>
+      prisma.$transaction(
         async (tx) => {
           const room = await tx.room.findUnique({
             where: { code: roomCode },
@@ -97,6 +87,7 @@ export async function POST(
               id: true,
               code: true,
               name: true,
+              hostId: true,
               maxPlayers: true,
               isActive: true,
             },
@@ -108,6 +99,10 @@ export async function POST(
 
           if (!room.isActive) {
             return { kind: "inactive" as const };
+          }
+
+          if (room.id !== payload.roomId || room.hostId !== payload.hostId) {
+            return { kind: "forbidden" as const };
           }
 
           const [playerCount, duplicatePlayer] = await Promise.all([
@@ -134,17 +129,11 @@ export async function POST(
             return { kind: "name_taken" as const };
           }
 
-          const player = await tx.player.create({
+          await tx.player.create({
             data: {
               name: playerName,
               roomId: room.id,
               isHost: false,
-              isReady: false,
-            },
-            select: {
-              id: true,
-              name: true,
-              isHost: true,
               isReady: true,
             },
           });
@@ -169,59 +158,51 @@ export async function POST(
           });
 
           return {
-            kind: "joined" as const,
-            roomId: room.id,
-            player,
-            updatedRoom,
+            kind: "created" as const,
+            room: updatedRoom,
           };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
-      );
-    });
+      ),
+    );
 
-    if (joinResult.kind === "not_found") {
+    if (result.kind === "not_found") {
       return jsonError("ไม่พบห้อง", 404);
     }
 
-    if (joinResult.kind === "inactive") {
+    if (result.kind === "inactive") {
       return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
     }
 
-    if (joinResult.kind === "full") {
+    if (result.kind === "forbidden") {
+      return jsonError("ไม่มีสิทธิ์เข้าถึง", 403);
+    }
+
+    if (result.kind === "full") {
       return jsonError("ห้องเต็มแล้ว", 409);
     }
 
-    if (joinResult.kind === "name_taken") {
+    if (result.kind === "name_taken") {
       return jsonError("ชื่อนี้ถูกใช้แล้วในห้องนี้", 409);
     }
 
-    const response = jsonOk(
+    if (!result.room) {
+      return jsonError("ไม่สามารถอัปเดตรายชื่อผู้เล่นได้", 500);
+    }
+
+    return jsonOk(
       {
-        room: joinResult.updatedRoom ? toRoomSummary(joinResult.updatedRoom) : null,
-        player: toRoomPlayer(joinResult.player),
+        room: toRoomSummary(result.room),
+        canManageLobby: true,
       },
       201,
     );
-
-    const playerToken = signRoomPlayerToken({
-      roomId: joinResult.roomId,
-      playerId: joinResult.player.id,
-      code: roomCode,
-    });
-
-    response.cookies.set(
-      getRoomPlayerCookieName(roomCode),
-      playerToken,
-      buildSessionCookieOptions(60 * 60 * 4, "/api/rooms"),
-    );
-
-    return response;
   } catch (error) {
-    logger.error("rooms.join.failed", {
+    logger.error("rooms.players.create.failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return mapServerError(error, "ไม่สามารถเข้าร่วมห้องได้ในขณะนี้");
+    return mapServerError(error, "ไม่สามารถเพิ่มผู้เล่นได้ในขณะนี้");
   }
 }

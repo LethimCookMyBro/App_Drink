@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import env from "@/lib/env";
 import verifyHs256Jwt from "@/lib/jwtEdge";
-import { checkRateLimit, rateLimitConfigs } from "@/lib/rateLimit";
-import { getClientIPFromHeaders } from "@/lib/requestSecurity";
+import { checkRateLimit, getClientIP, rateLimitConfigs } from "@/lib/rateLimit";
 import {
   applyCorsHeaders,
   forbiddenCorsResponse,
@@ -104,7 +103,7 @@ export async function proxy(request: NextRequest) {
       request.nextUrl.pathname === "/api/questions/random" &&
       request.method === "GET";
 
-    const ip = getClientIPFromHeaders(request.headers);
+    const ip = getClientIP(request);
     const key = `${rateLimitConfigs.global.scope}:${ip}`;
     const limit = checkRateLimit(key, rateLimitConfigs.global);
     if (!isUnlimitedQuestionsRoute) {

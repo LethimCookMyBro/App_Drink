@@ -17,6 +17,8 @@ import {
 } from "@/lib/gamePlayerStats";
 import {
   clearActiveGameSession,
+  completeStoredGameSession,
+  recordCompletedGameRound,
   saveGameSummary,
 } from "@/lib/gameSession";
 
@@ -48,6 +50,8 @@ export default function ChaosModePage() {
   const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [isRoundSyncing, setIsRoundSyncing] = useState(false);
+  const [isEndingGame, setIsEndingGame] = useState(false);
 
   const availableRules = useMemo(
     () =>
@@ -78,9 +82,25 @@ export default function ChaosModePage() {
   const activePlayerName = currentPlayer || players[0] || "";
   const activePlayerDrinks = getPlayerCount(playerDrinks, activePlayerName);
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if (!activePlayerName) return;
+    if (isRoundSyncing || isEndingGame) return;
+
+    setIsRoundSyncing(true);
+
+    try {
+      await recordCompletedGameRound(sequence, 1);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "ไม่สามารถบันทึกรอบเกมลงเซิร์ฟเวอร์ได้",
+      );
+      setIsRoundSyncing(false);
+      return;
+    }
+
     setIsTimerPaused(false);
-    // Track drink for current player (chaos mode always drinks)
     setPlayerDrinks((prev) => incrementPlayerCount(prev, activePlayerName));
     playDrink();
     vibratePattern([50, 30, 100]);
@@ -92,23 +112,37 @@ export default function ChaosModePage() {
       setSequence((prev) => prev + 1);
       setTimerKey((prev) => prev + 1);
       playNewQuestion();
+      setIsRoundSyncing(false);
     }, 300);
   };
 
   const handleTimerComplete = () => {
     playTimeUp();
-    handleNext();
+    void handleNext();
   };
 
   const handleTimerWarning = () => {
     playCountdown();
   };
 
-  const handleEndGame = () => {
-    saveGameSummary(
-      buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
-      sequence,
+  const handleEndGame = async () => {
+    if (isEndingGame || isRoundSyncing) return;
+
+    setIsEndingGame(true);
+
+    const summaryStats = buildStoredPlayerStats(
+      players,
+      playerDrinks,
+      playerTurnCount,
     );
+    const completion = await completeStoredGameSession();
+    if (!completion.ok) {
+      window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
+      setIsEndingGame(false);
+      return;
+    }
+
+    saveGameSummary(summaryStats, completion.roundCount);
     clearActiveGameSession();
     router.push("/game/summary");
   };
@@ -186,6 +220,7 @@ export default function ChaosModePage() {
               />
               <button
                 onClick={handleEndGame}
+                disabled={isEndingGame || isRoundSyncing}
                 className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
               >
                 <span className="material-symbols-outlined text-lg">stop</span>
@@ -310,9 +345,10 @@ export default function ChaosModePage() {
         {/* Bottom Section */}
         <div className="w-full pb-4 pt-4 flex flex-col items-center gap-4 sm:pb-6">
           <motion.button
-            onClick={handleNext}
+            onClick={() => void handleNext()}
             className="relative w-full max-w-3xl group overflow-hidden rounded-xl shadow-[0_0_40px_rgba(255,0,64,0.3)] active:scale-[0.98] transition-transform duration-100"
             whileTap={{ scale: 0.98 }}
+            disabled={isRoundSyncing || isEndingGame}
           >
             <div className="absolute inset-0 bg-neon-red" />
             <div className="absolute inset-0 hazard-stripe opacity-10" />

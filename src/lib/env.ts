@@ -25,6 +25,7 @@ const rawEnvSchema = z.object({
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().min(20).max(1000).default(200),
+  TRUST_PROXY_IP_HEADERS: z.enum(["true", "false"]).optional(),
   API_ENCRYPTION_KEY: z.string().optional(),
   ADMIN_SEED_USERNAME: z.string().optional(),
   ADMIN_SEED_EMAIL: z.string().optional(),
@@ -128,6 +129,7 @@ export const env = {
       ? rawEnv.API_ENCRYPTION_KEY
       : resolvedSecrets.jwt,
   rateLimitMax: rawEnv.RATE_LIMIT_MAX,
+  trustProxyIpHeaders: rawEnv.TRUST_PROXY_IP_HEADERS === "true",
   googleLoginEnabled:
     rawEnv.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === "false"
       ? false

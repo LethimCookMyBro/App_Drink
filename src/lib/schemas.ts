@@ -53,6 +53,10 @@ export const roomJoinSchema = z.object({
   playerName: playerSchema.shape.name,
 });
 
+export const roomHostPlayerSchema = z.object({
+  playerName: playerSchema.shape.name,
+});
+
 export const roomCodeSchema = z
   .string()
   .transform((value) => value.trim().toUpperCase())
@@ -60,6 +64,16 @@ export const roomCodeSchema = z
 
 export const roomStartSchema = z.object({
   mode: z.enum(["QUESTION", "VOTE", "TRUTH_OR_DARE", "CHAOS", "MIXED"]).default("QUESTION"),
+});
+
+export const roomProgressSchema = z.object({
+  sessionId: z.string().trim().min(10).max(100),
+  roundNumber: z.coerce.number().int().min(1).max(999),
+  drinkDelta: z.coerce.number().int().min(0).max(10).default(0),
+});
+
+export const roomCompleteSchema = z.object({
+  sessionId: z.string().trim().min(10).max(100),
 });
 
 export const adminLoginSchema = z.object({
@@ -120,7 +134,10 @@ const schemas = {
   questionSchema,
   questionUpdateSchema,
   roomCodeSchema,
+  roomCompleteSchema,
+  roomHostPlayerSchema,
   roomJoinSchema,
+  roomProgressSchema,
   roomSchema,
   roomStartSchema,
   userLoginSchema,
