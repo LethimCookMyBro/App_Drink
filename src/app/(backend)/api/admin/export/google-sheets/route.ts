@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { exportAdminDatasetToGoogleSheets } from "@/backend/adminExport";
 import { ADMIN_EXPORT_DATASETS } from "@/backend/adminExportTypes";
-import { requireAdmin } from "@/backend/adminAuth";
+import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import { writeAdminAuditLog } from "@/backend/adminSecurity";
 import {
   enforceRateLimit,
@@ -50,10 +50,12 @@ export async function POST(request: Request) {
   const rateLimited = enforceRateLimit(request, rateLimitConfigs.admin);
   if (rateLimited) return rateLimited;
 
-  const admin = await requireAdmin();
-  if (!admin) {
-    return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+  const access = await requireAdminRole("ADMIN");
+  if (access.kind !== "ok") {
+    const { message, status } = getAdminAccessError(access);
+    return jsonError(message, status);
   }
+  const { admin } = access;
 
   const rawBody = await request.json().catch(() => null);
   const validation = exportSchema.safeParse(rawBody);

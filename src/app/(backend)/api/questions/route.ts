@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
-import { requireAdmin } from "@/backend/adminAuth";
+import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import {
   enforceRateLimit,
   enforceSameOrigin,
@@ -47,9 +47,10 @@ function parseBooleanFlag(value: string | null): boolean | null | "invalid" {
 // GET /api/questions - List questions for admin management
 export async function GET(request: NextRequest) {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("MODERATOR");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const { searchParams } = new URL(request.url);
@@ -130,10 +131,12 @@ export async function POST(request: NextRequest) {
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("ADMIN");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
+    const { admin } = access;
 
     const body = await request.json();
     const validation = questionSchema.safeParse(body);

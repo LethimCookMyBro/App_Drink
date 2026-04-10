@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/frontend/components/ui";
 import {
+  GAME_SESSION_KEYS,
+  getStoredGameSessionId,
+  hasActiveGameSession,
   markGameSessionStarted,
   startRoomGameSession,
 } from "@/frontend/game/gameSession";
@@ -23,6 +26,15 @@ interface CustomQuestion {
   type: string;
   level: number;
   is18Plus: boolean;
+}
+
+interface ActiveSessionSummary {
+  id: string;
+  mode: string;
+  status: string;
+  roundCount: number;
+  totalDrinks: number;
+  startedAt: string;
 }
 
 export default function LobbyPage() {
@@ -44,6 +56,7 @@ export default function LobbyPage() {
   const [startError, setStartError] = useState("");
   const [isStartingGame, setIsStartingGame] = useState(false);
   const [isMutatingPlayers, setIsMutatingPlayers] = useState(false);
+  const [activeSession, setActiveSession] = useState<ActiveSessionSummary | null>(null);
 
   // Custom questions state
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
@@ -59,22 +72,37 @@ export default function LobbyPage() {
         name: string;
         maxPlayers: number;
         players: LocalPlayer[];
+        activeSession?: ActiveSessionSummary | null;
       },
       nextCanManageLobby: boolean,
+      nextActiveSession?: ActiveSessionSummary | null,
     ) => {
+      const normalizedPlayers = room.players.map((player) => ({
+        id: player.id,
+        name: player.name,
+        isHost: player.isHost,
+        isReady: player.isReady,
+      }));
+      const session = nextActiveSession ?? room.activeSession ?? null;
+
       setRoomName(room.name);
       setMaxPlayers(room.maxPlayers);
-      setPlayers(
-        room.players.map((player) => ({
-          id: player.id,
-          name: player.name,
-          isHost: player.isHost,
-          isReady: player.isReady,
-        })),
-      );
+      setPlayers(normalizedPlayers);
       setCanManageLobby(nextCanManageLobby);
+      setActiveSession(session);
+
+      if (session?.status === "ACTIVE" && typeof window !== "undefined") {
+        window.localStorage.setItem(
+          GAME_SESSION_KEYS.players,
+          JSON.stringify(normalizedPlayers.map((player) => player.name)),
+        );
+
+        if (!hasActiveGameSession() || getStoredGameSessionId() !== session.id) {
+          markGameSessionStarted(roomCode, "/game/modes", session.id);
+        }
+      }
     },
-    [],
+    [roomCode],
   );
 
   useEffect(() => {
@@ -124,9 +152,14 @@ export default function LobbyPage() {
           name: string;
           maxPlayers: number;
           players: LocalPlayer[];
+          activeSession?: ActiveSessionSummary | null;
         };
 
-        applyRoomSnapshot(room, Boolean(data.canManageLobby));
+        applyRoomSnapshot(
+          room,
+          Boolean(data.canManageLobby),
+          (data.activeSession as ActiveSessionSummary | null | undefined) ?? null,
+        );
       } catch (error) {
         if (isCancelled) return;
         if (showSpinner) {
@@ -275,6 +308,17 @@ export default function LobbyPage() {
     setCustomQuestions(customQuestions.filter((q) => q.id !== id));
   };
 
+  const handleEnterActiveGame = () => {
+    if (!activeSession) return;
+
+    localStorage.setItem(
+      GAME_SESSION_KEYS.players,
+      JSON.stringify(players.map((player) => player.name)),
+    );
+    markGameSessionStarted(roomCode, "/game/modes", activeSession.id);
+    router.push("/game/modes");
+  };
+
   const handleStartGame = async () => {
     if (!canManageLobby) return;
     if (players.length < 2) return;
@@ -370,7 +414,11 @@ export default function LobbyPage() {
 
           <div className="flex flex-col items-center gap-2 mt-4">
             <span className="text-primary font-bold tracking-[0.1em] text-xs uppercase drop-shadow-[0_0_5px_rgba(199,61,245,0.8)]">
-              {canManageLobby ? "เพิ่มเพื่อนเข้าวง" : "รอเจ้าของวงเริ่มเกม"}
+              {activeSession
+                ? "เกมเริ่มแล้ว"
+                : canManageLobby
+                  ? "เพิ่มเพื่อนเข้าวง"
+                  : "รอเจ้าของวงเริ่มเกม"}
             </span>
             <p className="text-white/70 text-sm font-medium">
               {displayRoomName}
@@ -508,7 +556,11 @@ export default function LobbyPage() {
                 <div className="rounded-2xl bg-black/20 p-3">
                   <p className="text-white/40">สถานะ</p>
                   <p className="mt-1 text-lg font-bold text-white">
-                    {canManageLobby ? "เจ้าของวง" : "ผู้ร่วมวง"}
+                    {activeSession
+                      ? "กำลังเล่น"
+                      : canManageLobby
+                        ? "เจ้าของวง"
+                        : "ผู้ร่วมวง"}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-black/20 p-3">
@@ -610,7 +662,18 @@ export default function LobbyPage() {
             </div>
           )}
 
-          {canManageLobby ? (
+          {activeSession ? (
+            <Button
+              onClick={handleEnterActiveGame}
+              variant="primary"
+              size="xl"
+              fullWidth
+              icon="sports_esports"
+              iconPosition="right"
+            >
+              เข้าสู่เกมที่เริ่มแล้ว
+            </Button>
+          ) : canManageLobby ? (
             <Button
               onClick={handleStartGame}
               variant="primary"

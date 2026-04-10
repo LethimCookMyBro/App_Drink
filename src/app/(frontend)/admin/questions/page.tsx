@@ -7,6 +7,7 @@ import { Button, GlassPanel } from "@/frontend/components/ui";
 import { useRouter } from "next/navigation";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import type { AdminIdentity } from "@/backend/adminData";
+import { hasAdminRole } from "@/shared/adminRoles";
 
 // Local question type for admin
 interface AdminQuestion {
@@ -163,6 +164,7 @@ export default function AdminQuestionsPage() {
   const editingQuestionTextError = editingQuestion
     ? getQuestionTextError(editingQuestion.text)
     : null;
+  const canManageQuestions = hasAdminRole(adminUser?.role, "ADMIN");
 
   // Filter mock data locally
   const filteredQuestions = questions.filter((q) => {
@@ -174,6 +176,7 @@ export default function AdminQuestionsPage() {
   });
 
   const handleAddQuestion = async () => {
+    if (!canManageQuestions) return;
     if (newQuestionTextError) return;
 
     try {
@@ -206,6 +209,7 @@ export default function AdminQuestionsPage() {
   };
 
   const handleEditQuestion = async () => {
+    if (!canManageQuestions) return;
     if (!editingQuestion || editingQuestionTextError) return;
 
     try {
@@ -241,6 +245,8 @@ export default function AdminQuestionsPage() {
   };
 
   const handleDeleteQuestion = async (id: string) => {
+    if (!canManageQuestions) return;
+
     try {
       setApiError(null);
       const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
@@ -355,21 +361,25 @@ export default function AdminQuestionsPage() {
             <span className="material-symbols-outlined text-lg">refresh</span>
             รีเฟรช
           </button>
-          <AdminGoogleSheetsExportButton
-            dataset="questions"
-            label="Export Questions"
-          />
-          <Button
-            onClick={() => {
-              setApiError(null);
-              setShowAddModal(true);
-            }}
-            variant="primary"
-            size="sm"
-            icon="add"
-          >
-            เพิ่มคำถาม
-          </Button>
+          {canManageQuestions && (
+            <>
+              <AdminGoogleSheetsExportButton
+                dataset="questions"
+                label="Export Questions"
+              />
+              <Button
+                onClick={() => {
+                  setApiError(null);
+                  setShowAddModal(true);
+                }}
+                variant="primary"
+                size="sm"
+                icon="add"
+              >
+                เพิ่มคำถาม
+              </Button>
+            </>
+          )}
         </>
       }
     >
@@ -468,6 +478,7 @@ export default function AdminQuestionsPage() {
                           </span>
                         )}
                       </div>
+                      {canManageQuestions && (
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => {
@@ -490,6 +501,7 @@ export default function AdminQuestionsPage() {
                           </span>
                         </button>
                       </div>
+                      )}
                     </div>
                   </GlassPanel>
                 </motion.div>

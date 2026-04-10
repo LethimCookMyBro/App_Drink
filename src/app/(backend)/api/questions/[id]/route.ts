@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
-import { requireAdmin } from "@/backend/adminAuth";
+import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/backend/apiUtils";
 import { mapServerError } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
@@ -16,9 +16,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("MODERATOR");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const { id } = await params;
@@ -72,9 +73,10 @@ export async function PUT(
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("ADMIN");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const body = await request.json();
@@ -156,9 +158,10 @@ export async function DELETE(
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.questionMutations);
     if (rateLimited) return rateLimited;
 
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("ADMIN");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const { default: prisma } = await import("@/backend/db");

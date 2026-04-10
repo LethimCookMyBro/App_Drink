@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { toPublicQuestion } from "@/backend/apiFilter";
-import { jsonError, jsonOk } from "@/backend/apiUtils";
+import { enforceRateLimit, jsonError, jsonOk } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
+import { rateLimitConfigs } from "@/backend/rateLimit";
 import { GAME_QUESTION_TYPE_SET } from "@/shared/config/gameConstants";
 
 export const runtime = "nodejs";
@@ -47,6 +48,9 @@ function parseOptionalLevel(value: string | null): number | null {
 
 // GET /api/questions/random - Get random question(s) for gameplay
 export async function GET(request: NextRequest) {
+  const rateLimited = enforceRateLimit(request, rateLimitConfigs.randomQuestion);
+  if (rateLimited) return rateLimited;
+
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
   const is18Plus = searchParams.get("is18Plus") === "true";

@@ -10,11 +10,8 @@ import {
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
-import {
-  getRoomHostPayloadFromCookies,
-  getRoomPlayerPayloadFromCookies,
-} from "@/backend/roomAuth";
-import { requireRoomParticipant } from "@/backend/roomService";
+import { getRoomHostPayloadFromCookies } from "@/backend/roomAuth";
+import { requireRoomHost } from "@/backend/roomService";
 import { roomCodeSchema, roomProgressSchema } from "@/shared/schemas";
 
 export const runtime = "nodejs";
@@ -54,18 +51,12 @@ export async function POST(
     const { sessionId, roundNumber, drinkDelta } = bodyValidation.data;
 
     const hostPayload = await getRoomHostPayloadFromCookies(roomCode);
-    const playerPayload = await getRoomPlayerPayloadFromCookies(roomCode);
-    if (!hostPayload && !playerPayload) {
+    if (!hostPayload) {
       return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
     }
 
     const { default: prisma } = await import("@/backend/db");
-    const access = await requireRoomParticipant(
-      prisma,
-      roomCode,
-      hostPayload,
-      playerPayload,
-    );
+    const access = await requireRoomHost(prisma, roomCode, hostPayload);
     if (access.kind === "not_found") {
       return jsonError("ไม่พบห้อง", 404);
     }

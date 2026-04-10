@@ -4,6 +4,10 @@ import { cookies } from "next/headers";
 import env from "@/backend/env";
 import logger from "@/backend/logger";
 import { createTokenFingerprint } from "@/backend/securityPrimitives";
+import {
+  hasAdminRole,
+  type AdminRoleName,
+} from "@/shared/adminRoles";
 
 export interface AdminTokenPayload {
   adminId: string;
@@ -113,6 +117,36 @@ export async function getAdminFromCookies(): Promise<Admin | null> {
 
 export async function requireAdmin(): Promise<Admin | null> {
   return getAdminFromCookies();
+}
+
+export type AdminAccessResult =
+  | { kind: "ok"; admin: Admin }
+  | { kind: "unauthorized" }
+  | { kind: "forbidden"; admin: Admin };
+
+export async function requireAdminRole(
+  minimumRole: AdminRoleName,
+): Promise<AdminAccessResult> {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return { kind: "unauthorized" };
+  }
+
+  if (!hasAdminRole(admin.role, minimumRole)) {
+    return { kind: "forbidden", admin };
+  }
+
+  return { kind: "ok", admin };
+}
+
+export function getAdminAccessError(
+  access: Exclude<AdminAccessResult, { kind: "ok" }>,
+): { message: string; status: number } {
+  if (access.kind === "unauthorized") {
+    return { message: "ไม่มีสิทธิ์เข้าถึง", status: 401 };
+  }
+
+  return { message: "สิทธิ์ผู้ดูแลระบบไม่เพียงพอ", status: 403 };
 }
 
 export async function invalidateAdminSession(token: string): Promise<void> {

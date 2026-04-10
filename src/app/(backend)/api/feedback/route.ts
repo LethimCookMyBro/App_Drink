@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/backend/adminAuth";
+import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/backend/apiUtils";
 import { encryptFeedbackFields, toFeedbackReceiptResponse, toMaskedFeedbackResponse } from "@/backend/feedbackPrivacy";
 import logger from "@/backend/logger";
@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic";
 // GET - Get all feedback (for admin)
 export async function GET() {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("MODERATOR");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const { default: prisma } = await import("@/backend/db");

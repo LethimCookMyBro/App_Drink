@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { toRoomPlayer, toRoomSummary } from "@/backend/apiFilter";
-import { requireAdmin } from "@/backend/adminAuth";
+import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import {
   buildSessionCookieOptions,
   enforceRateLimit,
@@ -34,9 +34,10 @@ const MAX_ROOM_CODE_ATTEMPTS = 10;
 // GET /api/rooms - List active rooms (for admin)
 export async function GET() {
   try {
-    const admin = await requireAdmin();
-    if (!admin) {
-      return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
+    const access = await requireAdminRole("ADMIN");
+    if (access.kind !== "ok") {
+      const { message, status } = getAdminAccessError(access);
+      return jsonError(message, status);
     }
 
     const { default: prisma } = await import("@/backend/db");

@@ -79,6 +79,26 @@ export function toRoomPlayer(player: {
   };
 }
 
+export function toGameSessionSummary(session: {
+  id: string;
+  mode: string;
+  status: string;
+  roundCount: number;
+  totalDrinks: number;
+  startedAt: Date;
+  endedAt?: Date | null;
+}) {
+  return {
+    id: session.id,
+    mode: session.mode,
+    status: session.status,
+    roundCount: session.roundCount,
+    totalDrinks: session.totalDrinks,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt ?? null,
+  };
+}
+
 export function toRoomSummary(room: {
   code: string;
   name: string;
@@ -90,13 +110,19 @@ export function toRoomSummary(room: {
     isHost: boolean;
     isReady: boolean;
   }>;
+  sessions?: Array<Parameters<typeof toGameSessionSummary>[0]>;
 }) {
+  const activeSession = room.sessions?.[0]
+    ? toGameSessionSummary(room.sessions[0])
+    : null;
+
   return {
     code: room.code,
     name: room.name,
     maxPlayers: room.maxPlayers,
     ...(typeof room.isActive === "boolean" ? { isActive: room.isActive } : {}),
     players: room.players.map(toRoomPlayer),
+    ...(room.sessions ? { activeSession } : {}),
   };
 }
 

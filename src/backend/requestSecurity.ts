@@ -66,14 +66,14 @@ function getForwardedChainIp(headers: Headers): string | null {
   return null;
 }
 
-export function getClientIPFromHeaders(
+export function getTrustedClientIPFromHeaders(
   headers: Headers,
   options?: { trustProxyHeaders?: boolean },
-): string {
+): string | null {
   const trustProxyHeaders =
     options?.trustProxyHeaders ?? env.trustProxyIpHeaders;
   if (!trustProxyHeaders) {
-    return "unknown";
+    return null;
   }
 
   for (const header of DIRECT_PROXY_IP_HEADERS) {
@@ -93,7 +93,14 @@ export function getClientIPFromHeaders(
     return realIp;
   }
 
-  return "unknown";
+  return null;
+}
+
+export function getClientIPFromHeaders(
+  headers: Headers,
+  options?: { trustProxyHeaders?: boolean },
+): string {
+  return getTrustedClientIPFromHeaders(headers, options) ?? "unknown";
 }
 
 export function getRequestOrigin(request: Pick<Request, "headers">): string | null {

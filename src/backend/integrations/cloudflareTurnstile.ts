@@ -1,4 +1,4 @@
-import { getClientIP } from "@/backend/rateLimit";
+import { getTrustedClientIP } from "@/backend/rateLimit";
 import env from "@/backend/env";
 import logger from "@/backend/logger";
 import {
@@ -72,8 +72,8 @@ export async function verifyTurnstileToken(
       response: token.trim(),
     });
 
-    const clientIP = getClientIP(request);
-    if (clientIP !== "unknown") {
+    const clientIP = getTrustedClientIP(request);
+    if (clientIP) {
       body.set("remoteip", clientIP);
     }
 

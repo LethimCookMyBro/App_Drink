@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type QuestionType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
@@ -212,19 +212,63 @@ const questions = [
 async function main() {
   console.log("🌱 Starting seed...");
 
-  // Clear existing questions
-  await prisma.question.deleteMany();
-  console.log("🗑️  Cleared existing questions");
+  const shouldResetQuestions = process.env.SEED_RESET_QUESTIONS === "true";
+  const canResetInProduction =
+    process.env.NODE_ENV !== "production" ||
+    process.env.ALLOW_PRODUCTION_SEED_RESET === "true";
 
-  // Insert questions
-  const created = await prisma.question.createMany({
-    data: questions.map((q) => ({
-      ...q,
-      isPublic: true,
-      isActive: true,
-    })),
-  });
-  console.log(`✅ Created ${created.count} questions`);
+  if (shouldResetQuestions) {
+    if (!canResetInProduction) {
+      throw new Error(
+        "Refusing to reset questions in production without ALLOW_PRODUCTION_SEED_RESET=true",
+      );
+    }
+
+    await prisma.question.deleteMany();
+    console.log("🗑️  Cleared existing questions by explicit reset request");
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const question of questions) {
+    const existing = await prisma.question.findFirst({
+      where: {
+        text: question.text,
+        type: question.type as QuestionType,
+        level: question.level,
+        is18Plus: question.is18Plus,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.question.update({
+        where: { id: existing.id },
+        data: {
+          type: question.type as QuestionType,
+          level: question.level,
+          is18Plus: question.is18Plus,
+          isPublic: true,
+          isActive: true,
+        },
+      });
+      updatedCount += 1;
+      continue;
+    }
+
+    await prisma.question.create({
+      data: {
+        ...question,
+        type: question.type as QuestionType,
+        isPublic: true,
+        isActive: true,
+      },
+    });
+    createdCount += 1;
+  }
+
+  console.log(`✅ Seeded questions: ${createdCount} created, ${updatedCount} updated`);
 
   // Create default app settings
   await prisma.appSettings.upsert({

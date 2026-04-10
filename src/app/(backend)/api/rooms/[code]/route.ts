@@ -67,8 +67,11 @@ export async function GET(
       return jsonError("ไม่พบห้อง", 404);
     }
 
+    const roomSummary = toRoomSummary(room);
+
     return jsonOk({
-      room: toRoomSummary(room),
+      room: roomSummary,
+      activeSession: roomSummary.activeSession ?? null,
       canManageLobby: access.canManageLobby,
     });
   } catch (error) {

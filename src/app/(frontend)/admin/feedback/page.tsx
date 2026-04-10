@@ -7,6 +7,7 @@ import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
 import { GlassPanel } from "@/frontend/components/ui";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminFeedbackData } from "@/backend/adminData";
+import { hasAdminRole } from "@/shared/adminRoles";
 
 type FeedbackStatus = "ALL" | "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
 type FeedbackSummary = Record<FeedbackStatus, number>;
@@ -91,6 +92,7 @@ export default function AdminFeedbackPage() {
 
   const feedbacks = data?.feedbacks ?? [];
   const summary = data?.summary ?? EMPTY_FEEDBACK_SUMMARY;
+  const canDeleteFeedback = hasAdminRole(data?.admin.role, "ADMIN");
 
   const filteredFeedbacks =
     activeFilter === "ALL"
@@ -146,6 +148,7 @@ export default function AdminFeedbackPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDeleteFeedback) return;
     if (!window.confirm("ต้องการลบ feedback นี้ใช่ไหม")) return;
 
     try {
@@ -195,10 +198,12 @@ export default function AdminFeedbackPage() {
             <span className="material-symbols-outlined text-lg">refresh</span>
             รีเฟรช
           </button>
-          <AdminGoogleSheetsExportButton
-            dataset="feedback"
-            label="Export Feedback"
-          />
+          {canDeleteFeedback && (
+            <AdminGoogleSheetsExportButton
+              dataset="feedback"
+              label="Export Feedback"
+            />
+          )}
         </>
       }
     >
@@ -373,14 +378,16 @@ export default function AdminFeedbackPage() {
                           <option value="RESOLVED">แก้ไขแล้ว</option>
                           <option value="REJECTED">ปฏิเสธ</option>
                         </select>
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => void handleDelete(feedback.id)}
-                          className="rounded-full border border-neon-red/20 bg-neon-red/10 px-3 py-2 text-xs font-semibold text-neon-red transition-colors hover:bg-neon-red/20 disabled:opacity-60"
-                        >
-                          ลบ feedback
-                        </button>
+                        {canDeleteFeedback && (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleDelete(feedback.id)}
+                            className="rounded-full border border-neon-red/20 bg-neon-red/10 px-3 py-2 text-xs font-semibold text-neon-red transition-colors hover:bg-neon-red/20 disabled:opacity-60"
+                          >
+                            ลบ feedback
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

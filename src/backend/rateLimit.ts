@@ -1,5 +1,5 @@
 import { createTokenFingerprint } from "@/backend/securityPrimitives";
-import { getClientIPFromHeaders } from "@/backend/requestSecurity";
+import { getTrustedClientIPFromHeaders } from "@/backend/requestSecurity";
 
 interface RateLimitEntry {
   hits: number[];
@@ -13,6 +13,13 @@ export interface RateLimitConfig {
 }
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_COOKIE_NAMES = new Set([
+  "admin-token",
+  "auth-token",
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "wongtaek-rate-id",
+]);
 
 export function checkRateLimit(
   identifier: string,
@@ -68,8 +75,14 @@ function cleanupExpiredEntries(): void {
   }
 }
 
-export function getClientIP(request: Request): string {
-  return getClientIPFromHeaders(request.headers);
+function getCookieValue(cookieEntry: string): { name: string; value: string } | null {
+  const separatorIndex = cookieEntry.indexOf("=");
+  if (separatorIndex <= 0) return null;
+
+  return {
+    name: cookieEntry.slice(0, separatorIndex),
+    value: cookieEntry.slice(separatorIndex + 1),
+  };
 }
 
 function getTokenCandidate(request: Request): string | null {
@@ -86,14 +99,44 @@ function getTokenCandidate(request: Request): string | null {
   const matched = cookieHeader
     .split(";")
     .map((entry) => entry.trim())
-    .find((entry) =>
-      entry.startsWith("admin-token=") ||
-      entry.startsWith("auth-token=") ||
-      entry.startsWith("next-auth.session-token=") ||
-      entry.startsWith("__Secure-next-auth.session-token="),
-    );
+    .map(getCookieValue)
+    .find((entry) => {
+      if (!entry) return false;
+      return (
+        RATE_LIMIT_COOKIE_NAMES.has(entry.name) ||
+        entry.name.startsWith("room-host-") ||
+        entry.name.startsWith("room-player-")
+      );
+    });
 
-  return matched?.split("=")[1] ?? null;
+  return matched?.value ?? null;
+}
+
+function getUntrustedRequestSubject(request: Request): string {
+  const token = getTokenCandidate(request);
+  if (token) {
+    return `token:${token}`;
+  }
+
+  return [
+    request.headers.get("user-agent") ?? "",
+    request.headers.get("accept-language") ?? "",
+    request.headers.get("sec-ch-ua") ?? "",
+    request.headers.get("host") ?? "",
+  ].join("|");
+}
+
+export function getTrustedClientIP(request: Request): string | null {
+  return getTrustedClientIPFromHeaders(request.headers);
+}
+
+export function getClientIP(request: Request): string {
+  const trustedIp = getTrustedClientIP(request);
+  if (trustedIp) {
+    return trustedIp;
+  }
+
+  return `untrusted:${createTokenFingerprint(getUntrustedRequestSubject(request))}`;
 }
 
 export function buildRateLimitKey(
@@ -122,6 +165,7 @@ export const rateLimitConfigs = {
   auth: { scope: "auth", windowMs: 60 * 1000, maxRequests: 5, keyStrategy: "ip+subject" } as RateLimitConfig,
   admin: { scope: "admin", windowMs: 60 * 1000, maxRequests: 10, keyStrategy: "ip+token" } as RateLimitConfig,
   questionMutations: { scope: "question-mutations", windowMs: 60 * 1000, maxRequests: 20, keyStrategy: "ip" } as RateLimitConfig,
+  randomQuestion: { scope: "random-question", windowMs: 60 * 1000, maxRequests: 80, keyStrategy: "ip" } as RateLimitConfig,
   roomCreate: { scope: "room-create", windowMs: 10 * 60 * 1000, maxRequests: 10, keyStrategy: "ip" } as RateLimitConfig,
   roomMutation: { scope: "room-mutation", windowMs: 60 * 1000, maxRequests: 30, keyStrategy: "ip" } as RateLimitConfig,
   roomLookup: { scope: "room-lookup", windowMs: 60 * 1000, maxRequests: 60, keyStrategy: "ip" } as RateLimitConfig,
@@ -133,6 +177,7 @@ const rateLimitModule = {
   buildRateLimitKey,
   checkRateLimit,
   getClientIP,
+  getTrustedClientIP,
   rateLimitConfigs,
 };
 

@@ -5,6 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
 import { Button, GlassPanel } from "@/frontend/components/ui";
 import type { AdminIdentity } from "@/backend/adminData";
+import {
+  hasAdminRole,
+  type AdminRoleName,
+} from "@/shared/adminRoles";
 
 interface AdminShellProps {
   admin: AdminIdentity | null;
@@ -15,12 +19,19 @@ interface AdminShellProps {
 }
 
 const NAV_ITEMS = [
-  { href: "/admin", label: "Overview", icon: "dashboard" },
-  { href: "/admin/users", label: "Users", icon: "group" },
-  { href: "/admin/questions", label: "Questions", icon: "quiz" },
-  { href: "/admin/feedback", label: "Feedback", icon: "chat_bubble" },
-  { href: "/admin/security", label: "Security", icon: "shield" },
+  { href: "/admin", label: "Overview", icon: "dashboard", minRole: "MODERATOR" },
+  { href: "/admin/users", label: "Users", icon: "group", minRole: "ADMIN" },
+  { href: "/admin/questions", label: "Questions", icon: "quiz", minRole: "MODERATOR" },
+  { href: "/admin/feedback", label: "Feedback", icon: "chat_bubble", minRole: "MODERATOR" },
+  { href: "/admin/security", label: "Security", icon: "shield", minRole: "ADMIN" },
 ] as const;
+
+function canSeeAdminNavItem(
+  admin: AdminIdentity | null,
+  minimumRole: AdminRoleName,
+): boolean {
+  return !admin || hasAdminRole(admin.role, minimumRole);
+}
 
 function formatAdminMeta(admin: AdminIdentity | null): string {
   if (!admin) return "กำลังโหลดเซสชันผู้ดูแล";
@@ -96,7 +107,9 @@ export function AdminShell({
           </div>
 
           <nav className="flex flex-wrap gap-2">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) =>
+              canSeeAdminNavItem(admin, item.minRole),
+            ).map((item) => {
               const active =
                 pathname === item.href ||
                 (item.href !== "/admin" && pathname.startsWith(item.href));

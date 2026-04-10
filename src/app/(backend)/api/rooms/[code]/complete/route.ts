@@ -7,12 +7,10 @@ import {
   mapServerError,
 } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
+import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
-import {
-  getRoomHostPayloadFromCookies,
-  getRoomPlayerPayloadFromCookies,
-} from "@/backend/roomAuth";
-import { requireRoomParticipant } from "@/backend/roomService";
+import { getRoomHostPayloadFromCookies } from "@/backend/roomAuth";
+import { requireRoomHost } from "@/backend/roomService";
 import { roomCodeSchema, roomCompleteSchema } from "@/shared/schemas";
 
 export const runtime = "nodejs";
@@ -49,18 +47,12 @@ export async function POST(
     const { sessionId } = bodyValidation.data;
 
     const hostPayload = await getRoomHostPayloadFromCookies(roomCode);
-    const playerPayload = await getRoomPlayerPayloadFromCookies(roomCode);
-    if (!hostPayload && !playerPayload) {
+    if (!hostPayload) {
       return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
     }
 
     const { default: prisma } = await import("@/backend/db");
-    const access = await requireRoomParticipant(
-      prisma,
-      roomCode,
-      hostPayload,
-      playerPayload,
-    );
+    const access = await requireRoomHost(prisma, roomCode, hostPayload);
     if (access.kind === "not_found") {
       return jsonError("ไม่พบห้อง", 404);
     }
@@ -73,61 +65,76 @@ export async function POST(
       return jsonError("ไม่มีสิทธิ์เข้าถึง", 403);
     }
 
-    const existingSession = await prisma.gameSession.findFirst({
-      where: {
-        id: sessionId,
-        roomId: access.room.id,
-      },
-      select: {
-        id: true,
-        status: true,
-        roundCount: true,
-        totalDrinks: true,
-        durationMs: true,
-        mode: true,
-        startedAt: true,
-        endedAt: true,
-      },
-    });
+    const result = await withSerializableRetry(async () =>
+      prisma.$transaction(async (tx) => {
+        const existingSession = await tx.gameSession.findFirst({
+          where: {
+            id: sessionId,
+            roomId: access.room.id,
+          },
+          select: {
+            id: true,
+            status: true,
+            roundCount: true,
+            totalDrinks: true,
+            durationMs: true,
+            mode: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        });
 
-    if (!existingSession) {
+        if (!existingSession) {
+          return { kind: "not_found" as const };
+        }
+
+        if (existingSession.status === "COMPLETED") {
+          return { kind: "completed" as const, session: existingSession };
+        }
+
+        const completedSession = await tx.gameSession.update({
+          where: { id: existingSession.id },
+          data: {
+            status: "COMPLETED",
+            endedAt: new Date(),
+            durationMs: Math.max(
+              existingSession.durationMs,
+              Date.now() - existingSession.startedAt.getTime(),
+            ),
+          },
+          select: {
+            id: true,
+            status: true,
+            roundCount: true,
+            totalDrinks: true,
+            durationMs: true,
+            mode: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        });
+
+        return { kind: "updated" as const, session: completedSession };
+      }),
+      "Could not complete room session",
+    );
+
+    if (result.kind === "not_found") {
       return jsonError("ไม่พบ session ที่กำลังเล่นอยู่", 404);
     }
 
-    if (existingSession.status === "COMPLETED") {
+    if (result.kind === "completed") {
       return jsonOk({
         success: true,
-        sessionId: existingSession.id,
-        session: existingSession,
+        sessionId: result.session.id,
+        session: result.session,
       });
     }
 
-    const completedSession = await prisma.gameSession.update({
-      where: { id: existingSession.id },
-      data: {
-        status: "COMPLETED",
-        endedAt: new Date(),
-        durationMs: Math.max(
-          existingSession.durationMs,
-          Date.now() - existingSession.startedAt.getTime(),
-        ),
-      },
-      select: {
-        id: true,
-        status: true,
-        roundCount: true,
-        totalDrinks: true,
-        durationMs: true,
-        mode: true,
-        startedAt: true,
-        endedAt: true,
-      },
-    });
-
     return jsonOk({
       success: true,
-      sessionId: completedSession.id,
-      session: completedSession,
+      sessionId: result.session.id,
+      session: result.session,
     });
   } catch (error) {
     logger.error("rooms.complete.failed", {

@@ -22,6 +22,20 @@ export const ROOM_SUMMARY_SELECT = {
     orderBy: { joinedAt: "asc" },
     select: ROOM_PLAYER_SELECT,
   },
+  sessions: {
+    where: { status: "ACTIVE" },
+    orderBy: { startedAt: "desc" },
+    take: 1,
+    select: {
+      id: true,
+      mode: true,
+      status: true,
+      roundCount: true,
+      totalDrinks: true,
+      startedAt: true,
+      endedAt: true,
+    },
+  },
 } satisfies Prisma.RoomSelect;
 
 export const ROOM_HOST_ACCESS_SELECT = {
