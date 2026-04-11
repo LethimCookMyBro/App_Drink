@@ -11,16 +11,35 @@ export const ROOM_PLAYER_SELECT = {
   name: true,
   isHost: true,
   isReady: true,
+  drinkCount: true,
+  skipCount: true,
 } satisfies Prisma.PlayerSelect;
 
+export const ROOM_QUESTION_SELECT = {
+  id: true,
+  sessionId: true,
+  text: true,
+  type: true,
+  level: true,
+  is18Plus: true,
+  createdAt: true,
+} satisfies Prisma.RoomQuestionSelect;
+
 export const ROOM_SUMMARY_SELECT = {
+  id: true,
   code: true,
   name: true,
   maxPlayers: true,
+  difficulty: true,
+  is18Plus: true,
   isActive: true,
   players: {
     orderBy: { joinedAt: "asc" },
     select: ROOM_PLAYER_SELECT,
+  },
+  questions: {
+    orderBy: { createdAt: "asc" },
+    select: ROOM_QUESTION_SELECT,
   },
   sessions: {
     where: { status: "ACTIVE" },
@@ -30,8 +49,16 @@ export const ROOM_SUMMARY_SELECT = {
       id: true,
       mode: true,
       status: true,
+      resumePath: true,
       roundCount: true,
       totalDrinks: true,
+      currentPlayerId: true,
+      currentQuestionId: true,
+      currentQuestionText: true,
+      currentQuestionType: true,
+      currentQuestionLevel: true,
+      currentQuestionIs18Plus: true,
+      currentQuestionIsCustom: true,
       startedAt: true,
       endedAt: true,
     },

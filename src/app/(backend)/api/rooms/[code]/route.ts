@@ -1,9 +1,17 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
+import {
+  attachPendingRoomQuestionsToSession,
+  chooseNextSessionState,
+  sessionNeedsCurrentTurnHydration,
+} from "@/backend/gameSessionState";
 import { toRoomSummary } from "@/backend/apiFilter";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
+import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
 import {
+  getRoomSummaryById,
   getRoomSummaryByCode,
   ROOM_SUMMARY_SELECT,
   requireRoomHost,
@@ -62,7 +70,39 @@ export async function GET(
       return jsonError("กรุณาเข้าร่วมห้องก่อนดูข้อมูลห้อง", 403);
     }
 
-    const room = await getRoomSummaryByCode(prisma, roomCode);
+    const room = await withSerializableRetry(async () =>
+      prisma.$transaction(
+        async (tx) => {
+          const currentRoom = await getRoomSummaryByCode(tx, roomCode);
+          if (!currentRoom) {
+            return null;
+          }
+
+          const activeSession = currentRoom.sessions[0] ?? null;
+          if (!sessionNeedsCurrentTurnHydration(activeSession)) {
+            return currentRoom;
+          }
+
+          await attachPendingRoomQuestionsToSession(
+            tx,
+            currentRoom.id,
+            activeSession.id,
+          );
+
+          const nextState = await chooseNextSessionState(tx, activeSession.id);
+          await tx.gameSession.update({
+            where: { id: activeSession.id },
+            data: nextState,
+          });
+
+          return (await getRoomSummaryById(tx, currentRoom.id)) ?? currentRoom;
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
+      ),
+      "Could not refresh room session state",
+    );
     if (!room) {
       return jsonError("ไม่พบห้อง", 404);
     }

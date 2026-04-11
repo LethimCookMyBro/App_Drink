@@ -5,37 +5,19 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, GamePauseButton, Timer } from "@/frontend/components/ui";
-import { useGameStore } from "@/frontend/store/gameStore";
 import {
   finalizeStoredGameSummary,
   tryRecordCompletedGameRound,
 } from "@/frontend/game/gameSession";
 import {
   useStoredGamePlayers,
-  usePlayerQueue,
-  useQuestionPool,
   useSoundEffects,
-  type GameQuestion,
 } from "@/frontend/hooks";
-import { GAME_SETTINGS, getQuestionLevelForVibe } from "@/shared/config/gameConstants";
-import {
-  buildStoredPlayerStats,
-  getPlayerCount,
-  incrementPlayerCount,
-  type PlayerCountMap,
-  syncPlayerCountMap,
-} from "@/frontend/game/gamePlayerStats";
+import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 
 export const dynamic = "force-dynamic";
 
 type GameCardType = "QUESTION" | "TRUTH" | "DARE" | "CHAOS" | "VOTE";
-const RANDOM_TYPES: readonly GameCardType[] = [
-  "QUESTION",
-  "VOTE",
-  "TRUTH",
-  "DARE",
-  "CHAOS",
-];
 
 interface QuestionVisualTheme {
   eyebrow: string;
@@ -141,12 +123,11 @@ const QUESTION_THEMES: Record<GameCardType, QuestionVisualTheme> = {
   },
 };
 
-function getQuestionType(question: GameQuestion | null): GameCardType {
-  if (!question) return "QUESTION";
-  if (question.type === "TRUTH") return "TRUTH";
-  if (question.type === "DARE") return "DARE";
-  if (question.type === "CHAOS") return "CHAOS";
-  if (question.type === "VOTE") return "VOTE";
+function getQuestionType(questionType: string | null | undefined): GameCardType {
+  if (questionType === "TRUTH") return "TRUTH";
+  if (questionType === "DARE") return "DARE";
+  if (questionType === "CHAOS") return "CHAOS";
+  if (questionType === "VOTE") return "VOTE";
   return "QUESTION";
 }
 
@@ -158,10 +139,6 @@ function getSkipPenalty(type: GameCardType): number {
   return 1;
 }
 
-function pickRandomType(): GameCardType {
-  return RANDOM_TYPES[Math.floor(Math.random() * RANDOM_TYPES.length)];
-}
-
 function GamePlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -170,57 +147,18 @@ function GamePlayContent() {
     mode === "random" || mode === "vote" || mode === "question"
       ? mode
       : "question";
-  const { vibeLevel } = useGameStore();
-  const is18PlusEnabled = vibeLevel === "chaos";
   const resumePath = `/game/play?mode=${normalizedMode}`;
   const {
     hasStartedGame,
     players,
     isReady,
+    room,
   } = useStoredGamePlayers(resumePath);
 
-  const [customQuestions, setCustomQuestions] = useState<GameQuestion[]>([]);
-  const [roundNumber, setRoundNumber] = useState(1);
-  const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(
-    null,
-  );
   const [timerKey, setTimerKey] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [playerDrinks, setPlayerDrinks] = useState<PlayerCountMap>({});
   const [isRoundSyncing, setIsRoundSyncing] = useState(false);
   const [isEndingGame, setIsEndingGame] = useState(false);
-
-  useEffect(() => {
-    setPlayerDrinks((current) => syncPlayerCountMap(players, current));
-
-    const savedCustom = localStorage.getItem("wongtaek-custom-questions");
-    if (!savedCustom) {
-      setCustomQuestions([]);
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(savedCustom);
-      setCustomQuestions(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setCustomQuestions([]);
-    }
-  }, [players]);
-
-  const { currentPlayerIndex, currentPlayer, getNextPlayer, playerTurnCount } =
-    usePlayerQueue({
-      players: isReady ? players : ["Loading"],
-      avoidRepeats: true,
-    });
-
-  const { getQuestionForPlayer, markQuestionAnswered, isLoading } =
-    useQuestionPool({
-      mode: normalizedMode,
-      level: getQuestionLevelForVibe(vibeLevel),
-      is18PlusEnabled,
-      players: isReady ? players : ["Loading"],
-      customQuestions,
-    });
 
   const {
     playNewQuestion,
@@ -230,31 +168,22 @@ function GamePlayContent() {
     vibrateShort,
     vibrateLong,
   } = useSoundEffects();
-
-  useEffect(() => {
-    if (!currentQuestion && !isLoading && isReady && players.length > 0) {
-      const preferredType =
-        normalizedMode === "random" ? pickRandomType() : undefined;
-      const question = getQuestionForPlayer(currentPlayer, preferredType);
-      setCurrentQuestion(question);
-      playNewQuestion();
-    }
-  }, [
-    currentQuestion,
-    currentPlayer,
-    getQuestionForPlayer,
-    isLoading,
-    isReady,
-    normalizedMode,
-    playNewQuestion,
-    players.length,
-  ]);
-
-  const activePlayerName = currentPlayer || players[0] || "";
-  const activePlayerDrinks = getPlayerCount(playerDrinks, activePlayerName);
-  const questionType = getQuestionType(currentQuestion);
+  const activeSession = room?.activeSession ?? null;
+  const activePlayer =
+    room?.players.find((player) => player.id === activeSession?.currentPlayerId) ??
+    null;
+  const activePlayerName = activePlayer?.name ?? players[0] ?? "";
+  const activePlayerDrinks = activePlayer?.drinkCount ?? 0;
+  const roundNumber = (activeSession?.roundCount ?? 0) + 1;
+  const questionType = getQuestionType(activeSession?.currentQuestionType);
   const theme = QUESTION_THEMES[questionType];
   const skipPenalty = getSkipPenalty(questionType);
+
+  useEffect(() => {
+    if (activeSession?.currentQuestionText) {
+      playNewQuestion();
+    }
+  }, [activeSession?.currentQuestionId, activeSession?.currentQuestionText, playNewQuestion]);
 
   const handleSkip = async () => {
     if (!activePlayerName) return;
@@ -262,22 +191,18 @@ function GamePlayContent() {
 
     setIsRoundSyncing(true);
 
-    const syncResult = await tryRecordCompletedGameRound(
-      roundNumber,
-      skipPenalty,
-    );
+    const syncResult = await tryRecordCompletedGameRound("SKIPPED", skipPenalty);
     if (!syncResult.ok) {
       window.alert(syncResult.error);
       setIsRoundSyncing(false);
       return;
     }
 
-    setPlayerDrinks((prev) =>
-      incrementPlayerCount(prev, activePlayerName, skipPenalty),
-    );
     playDrink();
     vibrateLong();
-    nextRound();
+    setIsTimerPaused(false);
+    setTimerKey((prev) => prev + 1);
+    setIsRoundSyncing(false);
   };
 
   const handleDone = async () => {
@@ -286,35 +211,17 @@ function GamePlayContent() {
 
     setIsRoundSyncing(true);
 
-    const syncResult = await tryRecordCompletedGameRound(roundNumber, 0);
+    const syncResult = await tryRecordCompletedGameRound("ANSWERED", 0);
     if (!syncResult.ok) {
       window.alert(syncResult.error);
       setIsRoundSyncing(false);
       return;
     }
 
-    if (currentQuestion && activePlayerName) {
-      markQuestionAnswered(activePlayerName, currentQuestion.id);
-    }
     vibrateShort();
-    nextRound();
-  };
-
-  const nextRound = () => {
     setIsTimerPaused(false);
-    setTimeout(() => {
-      const nextIndex = getNextPlayer();
-      const nextPlayer = players[nextIndex] || players[0] || "";
-      const preferredType =
-        normalizedMode === "random" ? pickRandomType() : undefined;
-      const nextQuestion = getQuestionForPlayer(nextPlayer, preferredType);
-
-      setCurrentQuestion(nextQuestion);
-      setRoundNumber((prev) => prev + 1);
-      setTimerKey((prev) => prev + 1);
-      playNewQuestion();
-      setIsRoundSyncing(false);
-    }, 280);
+    setTimerKey((prev) => prev + 1);
+    setIsRoundSyncing(false);
   };
 
   const handleTimerComplete = () => {
@@ -330,11 +237,7 @@ function GamePlayContent() {
     if (isEndingGame || isRoundSyncing) return;
 
     setIsEndingGame(true);
-    const completion = await finalizeStoredGameSummary(
-      players,
-      playerDrinks,
-      playerTurnCount,
-    );
+    const completion = await finalizeStoredGameSummary();
     if (!completion.ok) {
       window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
       setIsEndingGame(false);
@@ -387,6 +290,16 @@ function GamePlayContent() {
               เริ่มเกมเลย
             </Button>
           </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!activeSession || !activeSession.currentQuestionText) {
+    return (
+      <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
+        <div className="animate-pulse text-center text-white/40">
+          กำลังซิงก์สถานะเกม...
         </div>
       </main>
     );
@@ -448,7 +361,7 @@ function GamePlayContent() {
         <div className="flex flex-col items-center gap-4 pt-3">
           <AnimatePresence mode="wait">
             <motion.div
-              key={`player-${currentPlayerIndex}-${questionType}`}
+              key={`player-${activeSession.currentPlayerId}-${activeSession.roundCount}`}
               initial={{ opacity: 0, y: -12, scale: 0.92 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.92 }}
@@ -478,9 +391,9 @@ function GamePlayContent() {
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {currentQuestion && (
+            {activeSession.currentQuestionText && (
               <motion.div
-                key={`${currentQuestion.id}-${questionType}`}
+                key={`${activeSession.currentQuestionId}-${activeSession.roundCount}`}
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -16, scale: 0.96 }}
@@ -502,7 +415,7 @@ function GamePlayContent() {
                           {theme.icon}
                         </span>
                         <span>{theme.title}</span>
-                        {currentQuestion.is18Plus && (
+                        {activeSession.currentQuestionIs18Plus && (
                           <span className="rounded-full bg-neon-red px-2 py-0.5 text-[10px] font-black text-white">
                             18+
                           </span>
@@ -534,7 +447,7 @@ function GamePlayContent() {
                     {showHazardStyle ? (
                       <>
                         <p className="mb-4 max-w-2xl text-2xl font-black leading-tight text-white sm:text-3xl">
-                          {currentQuestion.text.split("\n")[0]}
+                          {activeSession.currentQuestionText.split("\n")[0]}
                         </p>
                         <div className="relative w-full max-w-[30rem] px-4 py-4">
                           <div className="absolute left-0 top-0 h-8 w-8 border-l-4 border-t-4 border-neon-red" />
@@ -554,7 +467,7 @@ function GamePlayContent() {
                       </>
                     ) : (
                       <h1 className="max-w-[22ch] text-[2rem] font-black leading-tight tracking-tight text-white sm:text-[2.45rem]">
-                        {currentQuestion.text}
+                        {activeSession.currentQuestionText}
                       </h1>
                     )}
 
@@ -587,12 +500,6 @@ function GamePlayContent() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {isLoading && (
-            <div className="pt-2 text-center text-sm text-white/60 animate-pulse">
-              กำลังโหลดคำถาม...
-            </div>
-          )}
         </div>
 
         <footer className="pt-4">

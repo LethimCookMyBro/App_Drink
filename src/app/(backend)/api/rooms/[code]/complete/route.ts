@@ -6,6 +6,7 @@ import {
   jsonOk,
   mapServerError,
 } from "@/backend/apiUtils";
+import { buildCompletedSessionSummary } from "@/backend/gameSessionState";
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
@@ -79,6 +80,14 @@ export async function POST(
             totalDrinks: true,
             durationMs: true,
             mode: true,
+            resumePath: true,
+            currentPlayerId: true,
+            currentQuestionId: true,
+            currentQuestionText: true,
+            currentQuestionType: true,
+            currentQuestionLevel: true,
+            currentQuestionIs18Plus: true,
+            currentQuestionIsCustom: true,
             startedAt: true,
             endedAt: true,
           },
@@ -89,8 +98,25 @@ export async function POST(
         }
 
         if (existingSession.status === "COMPLETED") {
-          return { kind: "completed" as const, session: existingSession };
+          const summary = await buildCompletedSessionSummary(tx, existingSession.id);
+          return { kind: "completed" as const, session: existingSession, summary };
         }
+
+        await tx.gameEvent.create({
+          data: {
+            sessionId: existingSession.id,
+            playerId: existingSession.currentPlayerId ?? access.room.hostId,
+            questionId:
+              existingSession.currentQuestionIsCustom || !existingSession.currentQuestionId
+                ? null
+                : existingSession.currentQuestionId,
+            type: "COMPLETED",
+            data: JSON.stringify({
+              roundCount: existingSession.roundCount,
+              totalDrinks: existingSession.totalDrinks,
+            }),
+          },
+        });
 
         const completedSession = await tx.gameSession.update({
           where: { id: existingSession.id },
@@ -101,6 +127,13 @@ export async function POST(
               existingSession.durationMs,
               Date.now() - existingSession.startedAt.getTime(),
             ),
+            currentPlayerId: null,
+            currentQuestionId: null,
+            currentQuestionText: null,
+            currentQuestionType: null,
+            currentQuestionLevel: null,
+            currentQuestionIs18Plus: false,
+            currentQuestionIsCustom: false,
           },
           select: {
             id: true,
@@ -109,12 +142,22 @@ export async function POST(
             totalDrinks: true,
             durationMs: true,
             mode: true,
+            resumePath: true,
+            currentPlayerId: true,
+            currentQuestionId: true,
+            currentQuestionText: true,
+            currentQuestionType: true,
+            currentQuestionLevel: true,
+            currentQuestionIs18Plus: true,
+            currentQuestionIsCustom: true,
             startedAt: true,
             endedAt: true,
           },
         });
 
-        return { kind: "updated" as const, session: completedSession };
+        const summary = await buildCompletedSessionSummary(tx, completedSession.id);
+
+        return { kind: "updated" as const, session: completedSession, summary };
       }),
       "Could not complete room session",
     );
@@ -128,6 +171,7 @@ export async function POST(
         success: true,
         sessionId: result.session.id,
         session: result.session,
+        summary: result.summary,
       });
     }
 
@@ -135,6 +179,7 @@ export async function POST(
       success: true,
       sessionId: result.session.id,
       session: result.session,
+      summary: result.summary,
     });
   } catch (error) {
     logger.error("rooms.complete.failed", {

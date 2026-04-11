@@ -7,6 +7,10 @@ import {
   jsonOk,
   mapServerError,
 } from "@/backend/apiUtils";
+import {
+  buildProgressEventData,
+  chooseNextSessionState,
+} from "@/backend/gameSessionState";
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
@@ -38,7 +42,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const bodyValidation = roomProgressSchema.safeParse({
       sessionId: body?.sessionId,
-      roundNumber: body?.roundNumber,
+      action: body?.action,
       drinkDelta: body?.drinkDelta,
     });
     if (!bodyValidation.success) {
@@ -48,7 +52,7 @@ export async function POST(
       );
     }
 
-    const { sessionId, roundNumber, drinkDelta } = bodyValidation.data;
+    const { sessionId, action, drinkDelta } = bodyValidation.data;
 
     const hostPayload = await getRoomHostPayloadFromCookies(roomCode);
     if (!hostPayload) {
@@ -80,9 +84,18 @@ export async function POST(
             select: {
               id: true,
               status: true,
+              resumePath: true,
               roundCount: true,
               totalDrinks: true,
+              durationMs: true,
               mode: true,
+              currentPlayerId: true,
+              currentQuestionId: true,
+              currentQuestionText: true,
+              currentQuestionType: true,
+              currentQuestionLevel: true,
+              currentQuestionIs18Plus: true,
+              currentQuestionIsCustom: true,
               startedAt: true,
               endedAt: true,
             },
@@ -93,33 +106,86 @@ export async function POST(
           }
 
           if (session.status !== "ACTIVE") {
-            if (roundNumber <= session.roundCount) {
-              return { kind: "noop" as const, session };
-            }
-
             return { kind: "closed" as const, session };
           }
 
-          if (roundNumber <= session.roundCount) {
-            return { kind: "noop" as const, session };
+          if (!session.currentPlayerId) {
+            return { kind: "invalid_state" as const, session };
           }
 
-          if (roundNumber !== session.roundCount + 1) {
-            return { kind: "out_of_sequence" as const, session };
+          const nextRoundNumber = session.roundCount + 1;
+          const eventData = buildProgressEventData({
+            customQuestionId: session.currentQuestionIsCustom
+              ? session.currentQuestionId
+              : null,
+            roundNumber: nextRoundNumber,
+            drinkDelta,
+          });
+
+          await tx.gameEvent.create({
+            data: {
+              sessionId: session.id,
+              playerId: session.currentPlayerId,
+              questionId: session.currentQuestionIsCustom
+                ? null
+                : session.currentQuestionId ?? null,
+              type: action,
+              data: eventData,
+            },
+          });
+
+          if (!session.currentQuestionIsCustom && session.currentQuestionId) {
+            await tx.question.update({
+              where: { id: session.currentQuestionId },
+              data: {
+                usageCount: {
+                  increment: 1,
+                },
+              },
+            });
           }
 
+          if (drinkDelta > 0) {
+            await tx.player.update({
+              where: { id: session.currentPlayerId },
+              data: {
+                drinkCount: {
+                  increment: drinkDelta,
+                },
+                skipCount: {
+                  increment: 1,
+                },
+              },
+            });
+          }
+
+          const nextState = await chooseNextSessionState(tx, session.id);
           const updatedSession = await tx.gameSession.update({
             where: { id: session.id },
             data: {
               roundCount: { increment: 1 },
               totalDrinks: { increment: drinkDelta },
+              durationMs: Math.max(
+                session.durationMs,
+                Date.now() - session.startedAt.getTime(),
+              ),
+              ...nextState,
             },
             select: {
               id: true,
               status: true,
+              resumePath: true,
               roundCount: true,
               totalDrinks: true,
+              durationMs: true,
               mode: true,
+              currentPlayerId: true,
+              currentQuestionId: true,
+              currentQuestionText: true,
+              currentQuestionType: true,
+              currentQuestionLevel: true,
+              currentQuestionIs18Plus: true,
+              currentQuestionIsCustom: true,
               startedAt: true,
               endedAt: true,
             },
@@ -139,15 +205,11 @@ export async function POST(
     }
 
     if (result.kind === "closed") {
-      return jsonError("session นี้จบแล้ว", 409, {
-        currentRoundCount: result.session.roundCount,
-      });
+      return jsonError("session นี้จบแล้ว", 409);
     }
 
-    if (result.kind === "out_of_sequence") {
-      return jsonError("ลำดับรอบเกมไม่ถูกต้อง", 409, {
-        currentRoundCount: result.session.roundCount,
-      });
+    if (result.kind === "invalid_state") {
+      return jsonError("สถานะเกมปัจจุบันไม่พร้อมใช้งาน", 409);
     }
 
     return jsonOk({

@@ -2,61 +2,97 @@
 
 import { useEffect, useState } from "react";
 import {
+  fetchRoomGameSnapshot,
   GAME_SESSION_CHANGED_EVENT,
-  getStoredPlayerNames,
-  hasActiveGameSession,
-  setGameResumePath,
+  getActiveGameSessionSnapshot,
+  getStoredGameSessionId,
+  type RoomGameSnapshot,
 } from "@/frontend/game/gameSession";
 
 interface UseStoredGamePlayersResult {
   hasStartedGame: boolean | null;
   players: string[];
   isReady: boolean;
+  room: RoomGameSnapshot | null;
 }
 
-function readStoredGamePlayers() {
-  const isSessionActive = hasActiveGameSession();
-  const players = isSessionActive ? getStoredPlayerNames() : [];
-  const hasStartedGame = isSessionActive && players.length > 0;
-
-  return {
-    hasStartedGame,
-    players,
-  };
-}
-
-export function useStoredGamePlayers(resumePath?: string): UseStoredGamePlayersResult {
-  const [state, setState] = useState(() =>
-    typeof window === "undefined"
-      ? { hasStartedGame: null as boolean | null, players: [] as string[] }
-      : readStoredGamePlayers(),
-  );
+export function useStoredGamePlayers(
+  resumePath?: string,
+): UseStoredGamePlayersResult {
+  const [state, setState] = useState<UseStoredGamePlayersResult>({
+    hasStartedGame: null,
+    players: [],
+    isReady: false,
+    room: null,
+  });
 
   useEffect(() => {
-    const syncStoredPlayers = () => {
-      const nextState = readStoredGamePlayers();
-      setState(nextState);
+    let isCancelled = false;
 
-      if (nextState.hasStartedGame && resumePath) {
-        setGameResumePath(resumePath);
+    const syncStoredPlayers = async () => {
+      const activeGame = getActiveGameSessionSnapshot();
+      if (!activeGame.roomCode || !activeGame.sessionId) {
+        if (!isCancelled) {
+          setState({
+            hasStartedGame: false,
+            players: [],
+            isReady: false,
+            room: null,
+          });
+        }
+        return;
       }
+
+      const room = await fetchRoomGameSnapshot(
+        activeGame.roomCode,
+        getStoredGameSessionId() || undefined,
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const hasActiveSession =
+        !!room?.activeSession && room.activeSession.status === "ACTIVE";
+      const nextResumePath = room?.activeSession?.resumePath;
+      const players = room?.players.map((player) => player.name) ?? [];
+
+      if (resumePath && nextResumePath && nextResumePath !== resumePath) {
+        setState({
+          hasStartedGame: hasActiveSession,
+          players,
+          isReady: players.length > 0,
+          room,
+        });
+        return;
+      }
+
+      setState({
+        hasStartedGame: hasActiveSession,
+        players,
+        isReady: players.length > 0,
+        room,
+      });
     };
 
-    syncStoredPlayers();
-    window.addEventListener("storage", syncStoredPlayers);
-    window.addEventListener(GAME_SESSION_CHANGED_EVENT, syncStoredPlayers);
+    const handleSync = () => {
+      void syncStoredPlayers();
+    };
+
+    void syncStoredPlayers();
+    window.addEventListener("storage", handleSync);
+    window.addEventListener(GAME_SESSION_CHANGED_EVENT, handleSync);
+    const pollId = window.setInterval(handleSync, 3000);
 
     return () => {
-      window.removeEventListener("storage", syncStoredPlayers);
-      window.removeEventListener(GAME_SESSION_CHANGED_EVENT, syncStoredPlayers);
+      isCancelled = true;
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener(GAME_SESSION_CHANGED_EVENT, handleSync);
+      window.clearInterval(pollId);
     };
   }, [resumePath]);
 
-  return {
-    hasStartedGame: state.hasStartedGame,
-    players: state.players,
-    isReady: state.players.length > 0,
-  };
+  return state;
 }
 
 export default useStoredGamePlayers;

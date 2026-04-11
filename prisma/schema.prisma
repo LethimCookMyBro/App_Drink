@@ -78,6 +78,7 @@ model Room {
   
   players     Player[]
   sessions    GameSession[]
+  questions   RoomQuestion[]
 
   @@index([isActive, createdAt])
 }
@@ -221,20 +222,47 @@ model GameSession {
   roomId      String
   userId      String?  // Link to user who created session
   mode        GameMode
+  resumePath  String?
   roundCount  Int      @default(0)
   totalDrinks Int      @default(0)
   durationMs  Int      @default(0)
   status      GameSessionStatus @default(ACTIVE)
+  currentPlayerId String?
+  currentQuestionId String?
+  currentQuestionText String?
+  currentQuestionType QuestionType?
+  currentQuestionLevel Int?
+  currentQuestionIs18Plus Boolean @default(false)
+  currentQuestionIsCustom Boolean @default(false)
   startedAt   DateTime @default(now())
   endedAt     DateTime?
   
   room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user        User?    @relation(fields: [userId], references: [id])
   events      GameEvent[]
+  roomQuestions RoomQuestion[]
 
   @@index([roomId, status])
   @@index([userId, status, startedAt])
   @@index([startedAt])
+}
+
+model RoomQuestion {
+  id          String   @id @default(cuid())
+  roomId      String
+  sessionId   String?
+  text        String
+  type        QuestionType @default(QUESTION)
+  level       Int      @default(2)
+  is18Plus    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  room        Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  session     GameSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@index([sessionId, createdAt])
 }
 
 // ==========================================

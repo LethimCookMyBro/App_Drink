@@ -8,8 +8,7 @@ import { Button } from "@/frontend/components/ui";
 import { useSoundEffects } from "@/frontend/hooks";
 import {
   clearGameSummary,
-  getStoredPlayerNames,
-  normalizeStoredPlayerStats,
+  getStoredGameSummary,
 } from "@/frontend/game/gameSession";
 
 interface PlayerStats {
@@ -25,30 +24,11 @@ export default function GameSummaryPage() {
   const [totalRounds, setTotalRounds] = useState(0);
 
   useEffect(() => {
-    const savedStats = localStorage.getItem("wongtaek-game-stats");
-    const savedRounds = localStorage.getItem("wongtaek-rounds");
-    const fallbackPlayers = getStoredPlayerNames();
+    const savedSummary = getStoredGameSummary();
 
     const initTimeoutId = window.setTimeout(() => {
-      if (savedStats) {
-        try {
-          const stats = JSON.parse(savedStats);
-          setPlayerStats(normalizeStoredPlayerStats(stats, fallbackPlayers));
-        } catch {
-          setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
-        }
-      } else {
-        setPlayerStats(normalizeStoredPlayerStats([], fallbackPlayers));
-      }
-
-      if (savedRounds) {
-        const parsedRounds = Number.parseInt(savedRounds, 10);
-        setTotalRounds(
-          Number.isFinite(parsedRounds) && parsedRounds > 0 ? parsedRounds : 0,
-        );
-      } else {
-        setTotalRounds(0);
-      }
+      setPlayerStats(savedSummary?.players ?? []);
+      setTotalRounds(savedSummary?.totalRounds ?? 0);
     }, 0);
 
     const runCelebration = async () => {

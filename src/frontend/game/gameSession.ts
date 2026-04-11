@@ -1,28 +1,14 @@
 "use client";
 
-import {
-  buildStoredPlayerStats,
-  type PlayerCountMap,
-} from "@/frontend/game/gamePlayerStats";
-
 export const GAME_SESSION_KEYS = {
   started: "wongtaek-game-started",
   roomCode: "wongtaek-room-code",
   sessionId: "wongtaek-game-session-id",
-  players: "wongtaek-players",
-  customQuestions: "wongtaek-custom-questions",
-  stats: "wongtaek-game-stats",
-  rounds: "wongtaek-rounds",
   resumePath: "wongtaek-game-resume-path",
+  summary: "wongtaek-game-summary",
 } as const;
 
 export const GAME_SESSION_CHANGED_EVENT = "wongtaek-game-session-changed";
-
-export interface StoredPlayerStat {
-  name: string;
-  drinkCount: number;
-  questionsAnswered: number;
-}
 
 export interface ActiveGameSessionSnapshot {
   isActive: boolean;
@@ -33,6 +19,74 @@ export interface ActiveGameSessionSnapshot {
   resumePath: string;
 }
 
+export interface RoomPlayerSnapshot {
+  id: string;
+  name: string;
+  isHost: boolean;
+  isReady: boolean;
+  drinkCount: number;
+  skipCount: number;
+}
+
+export interface RoomQuestionSnapshot {
+  id: string;
+  sessionId: string | null;
+  text: string;
+  type: string;
+  level: number;
+  is18Plus: boolean;
+}
+
+export interface SessionSummarySnapshot {
+  id: string;
+  mode: string;
+  status: string;
+  resumePath: string | null;
+  roundCount: number;
+  totalDrinks: number;
+  currentPlayerId: string | null;
+  currentQuestionId: string | null;
+  currentQuestionText: string | null;
+  currentQuestionType: string | null;
+  currentQuestionLevel: number | null;
+  currentQuestionIs18Plus: boolean;
+  currentQuestionIsCustom: boolean;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+export interface RoomGameSnapshot {
+  code: string;
+  name: string;
+  maxPlayers: number;
+  difficulty: number;
+  is18Plus: boolean;
+  players: RoomPlayerSnapshot[];
+  customQuestions: RoomQuestionSnapshot[];
+  activeSession: SessionSummarySnapshot | null;
+}
+
+export interface PersistedSummaryPlayer {
+  id: string;
+  name: string;
+  drinkCount: number;
+  questionsAnswered: number;
+}
+
+export interface StoredPlayerStat {
+  name: string;
+  drinkCount: number;
+  questionsAnswered: number;
+}
+
+export interface PersistedGameSummary {
+  sessionId: string;
+  roomCode: string;
+  totalRounds: number;
+  totalDrinks: number;
+  players: PersistedSummaryPlayer[];
+}
+
 export type PersistedGameMode =
   | "QUESTION"
   | "VOTE"
@@ -40,10 +94,13 @@ export type PersistedGameMode =
   | "CHAOS"
   | "MIXED";
 
-const MAX_REASONABLE_DRINKS = 99;
-const MAX_REASONABLE_DRINK_DELTA = 10;
-const MAX_REASONABLE_QUESTIONS = 999;
-const MAX_REASONABLE_ROUNDS = 999;
+export type ProgressAction =
+  | "ANSWERED"
+  | "SKIPPED"
+  | "DRANK"
+  | "GAVE_UP"
+  | "TIMEOUT"
+  | "VOTED";
 
 export const EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT: ActiveGameSessionSnapshot = {
   isActive: false,
@@ -59,56 +116,42 @@ function dispatchGameSessionChanged(): void {
   window.dispatchEvent(new Event(GAME_SESSION_CHANGED_EVENT));
 }
 
-export function getStoredPlayerNames(): string[] {
-  if (typeof window === "undefined") return [];
-
-  const rawPlayers = window.localStorage.getItem(GAME_SESSION_KEYS.players);
-  if (!rawPlayers) return [];
-
-  try {
-    const parsed = JSON.parse(rawPlayers);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 function isGameRoute(path: string): boolean {
   return path.startsWith("/game");
 }
 
-function getStoredResumePath(): string {
-  if (typeof window === "undefined") return "/game/modes";
-
-  const storedPath = window.localStorage.getItem(GAME_SESSION_KEYS.resumePath);
-  if (!storedPath || !isGameRoute(storedPath)) {
-    return "/game/modes";
+function getStringStorageValue(key: string): string {
+  if (typeof window === "undefined") {
+    return "";
   }
 
-  return storedPath;
+  const value = window.localStorage.getItem(key);
+  return typeof value === "string" ? value : "";
+}
+
+function getStoredResumePath(): string {
+  const storedPath = getStringStorageValue(GAME_SESSION_KEYS.resumePath);
+  return isGameRoute(storedPath) ? storedPath : "/game/modes";
 }
 
 function getStoredRoomCode(): string {
-  if (typeof window === "undefined") return "";
-
-  const storedRoomCode = window.localStorage.getItem(GAME_SESSION_KEYS.roomCode);
-  return typeof storedRoomCode === "string" ? storedRoomCode : "";
+  return getStringStorageValue(GAME_SESSION_KEYS.roomCode);
 }
 
 export function getStoredGameSessionId(): string {
-  if (typeof window === "undefined") return "";
-
-  const storedSessionId = window.localStorage.getItem(GAME_SESSION_KEYS.sessionId);
-  return typeof storedSessionId === "string" ? storedSessionId : "";
+  return getStringStorageValue(GAME_SESSION_KEYS.sessionId);
 }
 
 export function hasActiveGameSession(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") {
+    return false;
+  }
 
-  const gameStarted =
-    window.localStorage.getItem(GAME_SESSION_KEYS.started) === "true";
-
-  return gameStarted && getStoredPlayerNames().length > 0;
+  return (
+    window.localStorage.getItem(GAME_SESSION_KEYS.started) === "true" &&
+    getStoredRoomCode().length > 0 &&
+    getStoredGameSessionId().length > 0
+  );
 }
 
 export function setGameResumePath(path: string): void {
@@ -127,10 +170,7 @@ export function getGameLaunchHref(): string {
 }
 
 export function getActiveGameSessionSnapshot(): ActiveGameSessionSnapshot {
-  const players = getStoredPlayerNames();
-  const isActive = hasActiveGameSession();
-
-  if (!isActive) {
+  if (!hasActiveGameSession()) {
     return EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT;
   }
 
@@ -138,9 +178,192 @@ export function getActiveGameSessionSnapshot(): ActiveGameSessionSnapshot {
     isActive: true,
     roomCode: getStoredRoomCode(),
     sessionId: getStoredGameSessionId(),
-    players,
-    playerCount: players.length,
+    players: [],
+    playerCount: 0,
     resumePath: getStoredResumePath(),
+  };
+}
+
+function normalizeRoomSnapshot(data: unknown): RoomGameSnapshot | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const room = (data as { room?: unknown }).room;
+  if (!room || typeof room !== "object") {
+    return null;
+  }
+
+  const roomRecord = room as {
+    code?: unknown;
+    name?: unknown;
+    maxPlayers?: unknown;
+    difficulty?: unknown;
+    is18Plus?: unknown;
+    players?: unknown;
+    customQuestions?: unknown;
+    activeSession?: unknown;
+  };
+
+  const players = Array.isArray(roomRecord.players)
+    ? roomRecord.players.map((player) => {
+        const record = player as Record<string, unknown>;
+        return {
+          id: typeof record.id === "string" ? record.id : "",
+          name: typeof record.name === "string" ? record.name : "",
+          isHost: record.isHost === true,
+          isReady: record.isReady === true,
+          drinkCount:
+            typeof record.drinkCount === "number" ? record.drinkCount : 0,
+          skipCount: typeof record.skipCount === "number" ? record.skipCount : 0,
+        };
+      })
+    : [];
+
+  const customQuestions = Array.isArray(roomRecord.customQuestions)
+    ? roomRecord.customQuestions.map((question) => {
+        const record = question as Record<string, unknown>;
+        return {
+          id: typeof record.id === "string" ? record.id : "",
+          sessionId: typeof record.sessionId === "string" ? record.sessionId : null,
+          text: typeof record.text === "string" ? record.text : "",
+          type: typeof record.type === "string" ? record.type : "QUESTION",
+          level: typeof record.level === "number" ? record.level : 2,
+          is18Plus: record.is18Plus === true,
+        };
+      })
+    : [];
+
+  const activeSessionRecord =
+    roomRecord.activeSession && typeof roomRecord.activeSession === "object"
+      ? (roomRecord.activeSession as Record<string, unknown>)
+      : null;
+
+  return {
+    code: typeof roomRecord.code === "string" ? roomRecord.code : "",
+    name: typeof roomRecord.name === "string" ? roomRecord.name : "",
+    maxPlayers:
+      typeof roomRecord.maxPlayers === "number" ? roomRecord.maxPlayers : 0,
+    difficulty:
+      typeof roomRecord.difficulty === "number" ? roomRecord.difficulty : 3,
+    is18Plus: roomRecord.is18Plus === true,
+    players,
+    customQuestions,
+    activeSession: activeSessionRecord
+      ? {
+          id: typeof activeSessionRecord.id === "string" ? activeSessionRecord.id : "",
+          mode:
+            typeof activeSessionRecord.mode === "string"
+              ? activeSessionRecord.mode
+              : "MIXED",
+          status:
+            typeof activeSessionRecord.status === "string"
+              ? activeSessionRecord.status
+              : "ACTIVE",
+          resumePath:
+            typeof activeSessionRecord.resumePath === "string"
+              ? activeSessionRecord.resumePath
+              : null,
+          roundCount:
+            typeof activeSessionRecord.roundCount === "number"
+              ? activeSessionRecord.roundCount
+              : 0,
+          totalDrinks:
+            typeof activeSessionRecord.totalDrinks === "number"
+              ? activeSessionRecord.totalDrinks
+              : 0,
+          currentPlayerId:
+            typeof activeSessionRecord.currentPlayerId === "string"
+              ? activeSessionRecord.currentPlayerId
+              : null,
+          currentQuestionId:
+            typeof activeSessionRecord.currentQuestionId === "string"
+              ? activeSessionRecord.currentQuestionId
+              : null,
+          currentQuestionText:
+            typeof activeSessionRecord.currentQuestionText === "string"
+              ? activeSessionRecord.currentQuestionText
+              : null,
+          currentQuestionType:
+            typeof activeSessionRecord.currentQuestionType === "string"
+              ? activeSessionRecord.currentQuestionType
+              : null,
+          currentQuestionLevel:
+            typeof activeSessionRecord.currentQuestionLevel === "number"
+              ? activeSessionRecord.currentQuestionLevel
+              : null,
+          currentQuestionIs18Plus:
+            activeSessionRecord.currentQuestionIs18Plus === true,
+          currentQuestionIsCustom:
+            activeSessionRecord.currentQuestionIsCustom === true,
+          startedAt:
+            typeof activeSessionRecord.startedAt === "string"
+              ? activeSessionRecord.startedAt
+              : new Date(0).toISOString(),
+          endedAt:
+            typeof activeSessionRecord.endedAt === "string"
+              ? activeSessionRecord.endedAt
+              : null,
+        }
+      : null,
+  };
+}
+
+export async function fetchRoomGameSnapshot(
+  roomCode: string,
+  expectedSessionId?: string,
+): Promise<RoomGameSnapshot | null> {
+  if (!roomCode) {
+    return null;
+  }
+
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomCode)}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = await response.json().catch(() => null);
+  const room = normalizeRoomSnapshot(data);
+  if (!room) {
+    return null;
+  }
+
+  if (
+    expectedSessionId &&
+    room.activeSession &&
+    room.activeSession.id !== expectedSessionId
+  ) {
+    return null;
+  }
+
+  return room;
+}
+
+export async function refreshStoredActiveGameSession(): Promise<ActiveGameSessionSnapshot> {
+  const snapshot = getActiveGameSessionSnapshot();
+  if (!snapshot.roomCode || !snapshot.sessionId) {
+    return EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT;
+  }
+
+  const room = await fetchRoomGameSnapshot(snapshot.roomCode, snapshot.sessionId);
+  if (!room?.activeSession || room.activeSession.status !== "ACTIVE") {
+    clearActiveGameSession();
+    return EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT;
+  }
+
+  const resumePath = room.activeSession.resumePath ?? snapshot.resumePath;
+  markGameSessionStarted(room.code, resumePath, room.activeSession.id);
+
+  return {
+    isActive: true,
+    roomCode: room.code,
+    sessionId: room.activeSession.id,
+    players: room.players.map((player) => player.name),
+    playerCount: room.players.length,
+    resumePath,
   };
 }
 
@@ -152,17 +375,13 @@ export function markGameSessionStarted(
   if (typeof window === "undefined") return;
 
   window.localStorage.setItem(GAME_SESSION_KEYS.started, "true");
-  window.localStorage.removeItem(GAME_SESSION_KEYS.stats);
-  window.localStorage.removeItem(GAME_SESSION_KEYS.rounds);
-  setGameResumePath(resumePath);
   if (roomCode) {
     window.localStorage.setItem(GAME_SESSION_KEYS.roomCode, roomCode);
   }
   if (sessionId) {
     window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, sessionId);
-  } else {
-    window.localStorage.removeItem(GAME_SESSION_KEYS.sessionId);
   }
+  setGameResumePath(resumePath);
   dispatchGameSessionChanged();
 }
 
@@ -172,93 +391,18 @@ export function clearActiveGameSession(): void {
   window.localStorage.removeItem(GAME_SESSION_KEYS.started);
   window.localStorage.removeItem(GAME_SESSION_KEYS.roomCode);
   window.localStorage.removeItem(GAME_SESSION_KEYS.sessionId);
-  window.localStorage.removeItem(GAME_SESSION_KEYS.players);
-  window.localStorage.removeItem(GAME_SESSION_KEYS.customQuestions);
   window.localStorage.removeItem(GAME_SESSION_KEYS.resumePath);
   dispatchGameSessionChanged();
 }
 
 export function resetGameSessionForRestart(): void {
-  if (typeof window === "undefined") return;
-
   clearActiveGameSession();
   clearGameSummary();
 }
 
 export function clearGameSummary(): void {
   if (typeof window === "undefined") return;
-
-  window.localStorage.removeItem(GAME_SESSION_KEYS.stats);
-  window.localStorage.removeItem(GAME_SESSION_KEYS.rounds);
-}
-
-function sanitizeCount(
-  value: unknown,
-  max: number,
-): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
-  return Math.min(max, Math.max(0, Math.round(value)));
-}
-
-export function normalizeStoredPlayerStats(
-  rawStats: unknown,
-  fallbackPlayers: string[] = [],
-): StoredPlayerStat[] {
-  if (!Array.isArray(rawStats)) {
-    return fallbackPlayers.map((name) => ({
-      name,
-      drinkCount: 0,
-      questionsAnswered: 0,
-    }));
-  }
-
-  const stats = rawStats
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return null;
-
-      const name =
-        typeof entry.name === "string" ? entry.name.trim().slice(0, 50) : "";
-      if (!name) return null;
-
-      return {
-        name,
-        drinkCount: sanitizeCount(entry.drinkCount, MAX_REASONABLE_DRINKS),
-        questionsAnswered: sanitizeCount(
-          entry.questionsAnswered,
-          MAX_REASONABLE_QUESTIONS,
-        ),
-      };
-    })
-    .filter((entry): entry is StoredPlayerStat => entry !== null);
-
-  if (stats.length > 0) {
-    return stats;
-  }
-
-  return fallbackPlayers.map((name) => ({
-    name,
-    drinkCount: 0,
-    questionsAnswered: 0,
-  }));
-}
-
-export function saveGameSummary(
-  rawStats: StoredPlayerStat[],
-  rawRounds: number,
-): void {
-  if (typeof window === "undefined") return;
-
-  const normalizedStats = normalizeStoredPlayerStats(rawStats);
-  const normalizedRounds = sanitizeCount(rawRounds, MAX_REASONABLE_ROUNDS);
-
-  window.localStorage.setItem(
-    GAME_SESSION_KEYS.stats,
-    JSON.stringify(normalizedStats),
-  );
-  window.localStorage.setItem(
-    GAME_SESSION_KEYS.rounds,
-    normalizedRounds.toString(),
-  );
+  window.localStorage.removeItem(GAME_SESSION_KEYS.summary);
 }
 
 function normalizeApiErrorMessage(error: unknown, fallback: string): string {
@@ -329,12 +473,15 @@ function getPersistedGameModeForRoute(route: string): PersistedGameMode {
 export async function startRoomGameSession(
   roomCode: string,
   mode: PersistedGameMode = "MIXED",
+  resumePath = "/game/modes",
   existingSessionId?: string,
 ): Promise<string> {
   const data = await postRoomSessionRequest<{
     sessionId: string;
+    session?: { resumePath?: string | null };
   }>(roomCode, "start", {
     mode,
+    resumePath,
     ...(existingSessionId ? { sessionId: existingSessionId } : {}),
   });
 
@@ -342,10 +489,12 @@ export async function startRoomGameSession(
     throw new Error("ไม่พบ session ที่สร้างสำเร็จ");
   }
 
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, data.sessionId);
-    dispatchGameSessionChanged();
-  }
+  markGameSessionStarted(
+    roomCode,
+    data.session?.resumePath || resumePath,
+    data.sessionId,
+  );
+  dispatchGameSessionChanged();
 
   return data.sessionId;
 }
@@ -359,6 +508,7 @@ export async function syncStoredGameSessionMode(route: string): Promise<void> {
   await startRoomGameSession(
     roomCode,
     getPersistedGameModeForRoute(route),
+    route,
     getStoredGameSessionId() || undefined,
   );
 }
@@ -369,7 +519,7 @@ export interface StoredGameSessionMetrics {
 }
 
 export async function recordCompletedGameRound(
-  roundNumber: number,
+  action: ProgressAction,
   drinkDelta = 0,
 ): Promise<StoredGameSessionMetrics> {
   const roomCode = getStoredRoomCode();
@@ -381,34 +531,35 @@ export async function recordCompletedGameRound(
 
   const data = await postRoomSessionRequest<{
     success: boolean;
-    session: StoredGameSessionMetrics;
+    session: {
+      roundCount?: number;
+      totalDrinks?: number;
+    };
   }>(roomCode, "progress", {
     sessionId,
-    roundNumber: sanitizeCount(roundNumber, MAX_REASONABLE_ROUNDS),
-    drinkDelta: sanitizeCount(drinkDelta, MAX_REASONABLE_DRINK_DELTA),
+    action,
+    drinkDelta,
   });
 
+  dispatchGameSessionChanged();
+
   return {
-    roundCount: sanitizeCount(
-      data.session?.roundCount,
-      MAX_REASONABLE_ROUNDS,
-    ),
-    totalDrinks: sanitizeCount(
-      data.session?.totalDrinks,
-      MAX_REASONABLE_DRINKS * 20,
-    ),
+    roundCount:
+      typeof data.session?.roundCount === "number" ? data.session.roundCount : 0,
+    totalDrinks:
+      typeof data.session?.totalDrinks === "number" ? data.session.totalDrinks : 0,
   };
 }
 
 export async function tryRecordCompletedGameRound(
-  roundNumber: number,
+  action: ProgressAction,
   drinkDelta = 0,
 ): Promise<
   | ({ ok: true } & StoredGameSessionMetrics)
   | { ok: false; error: string }
 > {
   try {
-    const metrics = await recordCompletedGameRound(roundNumber, drinkDelta);
+    const metrics = await recordCompletedGameRound(action, drinkDelta);
     return { ok: true, ...metrics };
   } catch (error) {
     return {
@@ -421,35 +572,128 @@ export async function tryRecordCompletedGameRound(
   }
 }
 
-export async function completeStoredGameSession(
-): Promise<
-  | ({ ok: true } & StoredGameSessionMetrics)
+function normalizePersistedGameSummary(
+  value: unknown,
+): PersistedGameSummary | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.sessionId !== "string" ||
+    typeof record.roomCode !== "string" ||
+    typeof record.totalRounds !== "number" ||
+    typeof record.totalDrinks !== "number" ||
+    !Array.isArray(record.players)
+  ) {
+    return null;
+  }
+
+  return {
+    sessionId: record.sessionId,
+    roomCode: record.roomCode,
+    totalRounds: record.totalRounds,
+    totalDrinks: record.totalDrinks,
+    players: record.players
+      .map((player) => {
+        const entry = player as Record<string, unknown>;
+        if (
+          typeof entry.id !== "string" ||
+          typeof entry.name !== "string" ||
+          typeof entry.drinkCount !== "number" ||
+          typeof entry.questionsAnswered !== "number"
+        ) {
+          return null;
+        }
+
+        return {
+          id: entry.id,
+          name: entry.name,
+          drinkCount: entry.drinkCount,
+          questionsAnswered: entry.questionsAnswered,
+        };
+      })
+      .filter((player): player is PersistedSummaryPlayer => player !== null),
+  };
+}
+
+export function getStoredGameSummary(): PersistedGameSummary | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawSummary = window.localStorage.getItem(GAME_SESSION_KEYS.summary);
+  if (!rawSummary) {
+    return null;
+  }
+
+  try {
+    return normalizePersistedGameSummary(JSON.parse(rawSummary));
+  } catch {
+    return null;
+  }
+}
+
+function saveGameSummary(summary: PersistedGameSummary): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(GAME_SESSION_KEYS.summary, JSON.stringify(summary));
+}
+
+export async function completeStoredGameSession(): Promise<
+  | ({
+      ok: true;
+      summary: PersistedGameSummary | null;
+    } & StoredGameSessionMetrics)
   | { ok: false; error?: string }
 > {
   const roomCode = getStoredRoomCode();
   const sessionId = getStoredGameSessionId();
 
   if (!roomCode || !sessionId) {
-    return { ok: true, roundCount: 0, totalDrinks: 0 };
+    return {
+      ok: true,
+      roundCount: 0,
+      totalDrinks: 0,
+      summary: null,
+    };
   }
 
   try {
     const data = await postRoomSessionRequest<{
       success: boolean;
       session: StoredGameSessionMetrics;
+      summary?: {
+        totalRounds?: number;
+        totalDrinks?: number;
+        players?: PersistedSummaryPlayer[];
+      } | null;
     }>(roomCode, "complete", {
       sessionId,
     });
+    dispatchGameSessionChanged();
+
+    const summary =
+      data.summary &&
+      typeof data.summary.totalRounds === "number" &&
+      typeof data.summary.totalDrinks === "number" &&
+      Array.isArray(data.summary.players)
+        ? {
+            sessionId,
+            roomCode,
+            totalRounds: data.summary.totalRounds,
+            totalDrinks: data.summary.totalDrinks,
+            players: data.summary.players,
+          }
+        : null;
+
     return {
       ok: true,
-      roundCount: sanitizeCount(
-        data.session?.roundCount,
-        MAX_REASONABLE_ROUNDS,
-      ),
-      totalDrinks: sanitizeCount(
-        data.session?.totalDrinks,
-        MAX_REASONABLE_DRINKS * 20,
-      ),
+      roundCount:
+        typeof data.session?.roundCount === "number" ? data.session.roundCount : 0,
+      totalDrinks:
+        typeof data.session?.totalDrinks === "number" ? data.session.totalDrinks : 0,
+      summary,
     };
   } catch (error) {
     return {
@@ -462,14 +706,11 @@ export async function completeStoredGameSession(
   }
 }
 
-export async function finalizeStoredGameSummary(
-  players: string[],
-  playerDrinks: PlayerCountMap,
-  playerTurnCount: PlayerCountMap,
-): Promise<
+export async function finalizeStoredGameSummary(): Promise<
   | ({ ok: true } & StoredGameSessionMetrics)
   | { ok: false; error: string }
 > {
+  const roomCode = getStoredRoomCode();
   const completion = await completeStoredGameSession();
   if (!completion.ok) {
     return {
@@ -478,11 +719,15 @@ export async function finalizeStoredGameSummary(
     };
   }
 
-  saveGameSummary(
-    buildStoredPlayerStats(players, playerDrinks, playerTurnCount),
-    completion.roundCount,
-  );
-  clearActiveGameSession();
+  if (completion.summary) {
+    saveGameSummary(completion.summary);
+  } else if (roomCode) {
+    const room = await fetchRoomGameSnapshot(roomCode);
+    if (room?.activeSession === null) {
+      clearGameSummary();
+    }
+  }
 
+  clearActiveGameSession();
   return completion;
 }

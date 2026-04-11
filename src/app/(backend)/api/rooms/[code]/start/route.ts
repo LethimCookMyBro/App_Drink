@@ -8,6 +8,11 @@ import {
   mapServerError,
 } from "@/backend/apiUtils";
 import { getAuthenticatedAppUser } from "@/backend/appAuth";
+import {
+  attachPendingRoomQuestionsToSession,
+  chooseNextSessionState,
+  sessionNeedsCurrentTurnHydration,
+} from "@/backend/gameSessionState";
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
@@ -24,6 +29,16 @@ type SessionResponse = {
   id: string;
   mode: GameModeType;
   status: "ACTIVE" | "PAUSED" | "COMPLETED" | "ABANDONED";
+  resumePath: string | null;
+  roundCount: number;
+  totalDrinks: number;
+  currentPlayerId: string | null;
+  currentQuestionId: string | null;
+  currentQuestionText: string | null;
+  currentQuestionType: string | null;
+  currentQuestionLevel: number | null;
+  currentQuestionIs18Plus: boolean;
+  currentQuestionIsCustom: boolean;
   startedAt: Date;
   userId: string | null;
 };
@@ -58,13 +73,14 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const modeValidation = roomStartSchema.safeParse({
       mode: body?.mode,
+      resumePath: body?.resumePath,
     });
     if (!modeValidation.success) {
       return jsonError("โหมดเกมไม่ถูกต้อง", 400);
     }
 
     const sessionId = parseSessionId(body?.sessionId);
-    const { mode } = modeValidation.data;
+    const { mode, resumePath } = modeValidation.data;
 
     const payload = await getRoomHostPayloadFromCookies(roomCode);
     if (!payload || payload.code !== roomCode) {
@@ -93,6 +109,16 @@ export async function POST(
               id: true,
               mode: true,
               status: true,
+              resumePath: true,
+              roundCount: true,
+              totalDrinks: true,
+              currentPlayerId: true,
+              currentQuestionId: true,
+              currentQuestionText: true,
+              currentQuestionType: true,
+              currentQuestionLevel: true,
+              currentQuestionIs18Plus: true,
+              currentQuestionIsCustom: true,
               startedAt: true,
               userId: true,
             },
@@ -108,6 +134,7 @@ export async function POST(
 
             const needsUpdate =
               activeSession.mode !== mode ||
+              activeSession.resumePath !== resumePath ||
               (!activeSession.userId && authenticatedUserId);
 
             const updatedSession = needsUpdate
@@ -115,6 +142,7 @@ export async function POST(
                   where: { id: activeSession.id },
                   data: {
                     mode,
+                    resumePath,
                     ...(authenticatedUserId && !activeSession.userId
                       ? { userId: authenticatedUserId }
                       : {}),
@@ -123,11 +151,56 @@ export async function POST(
                     id: true,
                     mode: true,
                     status: true,
+                    resumePath: true,
+                    roundCount: true,
+                    totalDrinks: true,
+                    currentPlayerId: true,
+                    currentQuestionId: true,
+                    currentQuestionText: true,
+                    currentQuestionType: true,
+                    currentQuestionLevel: true,
+                    currentQuestionIs18Plus: true,
+                    currentQuestionIsCustom: true,
                     startedAt: true,
                     userId: true,
                   },
                 })
               : activeSession;
+
+            if (needsUpdate || sessionNeedsCurrentTurnHydration(updatedSession)) {
+              await attachPendingRoomQuestionsToSession(
+                tx,
+                access.room.id,
+                updatedSession.id,
+              );
+              const nextState = await chooseNextSessionState(tx, updatedSession.id);
+              const rehydratedSession = await tx.gameSession.update({
+                where: { id: updatedSession.id },
+                data: nextState,
+                select: {
+                  id: true,
+                  mode: true,
+                  status: true,
+                  resumePath: true,
+                  roundCount: true,
+                  totalDrinks: true,
+                  currentPlayerId: true,
+                  currentQuestionId: true,
+                  currentQuestionText: true,
+                  currentQuestionType: true,
+                  currentQuestionLevel: true,
+                  currentQuestionIs18Plus: true,
+                  currentQuestionIsCustom: true,
+                  startedAt: true,
+                  userId: true,
+                },
+              });
+
+              return {
+                kind: "existing" as const,
+                session: rehydratedSession,
+              };
+            }
 
             return {
               kind: "existing" as const,
@@ -135,17 +208,60 @@ export async function POST(
             };
           }
 
+          await tx.player.updateMany({
+            where: { roomId: access.room.id },
+            data: {
+              drinkCount: 0,
+              skipCount: 0,
+            },
+          });
+
           const createdSession = await tx.gameSession.create({
             data: {
               roomId: access.room.id,
               userId: authenticatedUserId,
               mode,
+              resumePath,
               status: "ACTIVE",
             },
             select: {
               id: true,
               mode: true,
               status: true,
+              resumePath: true,
+              roundCount: true,
+              totalDrinks: true,
+              currentPlayerId: true,
+              currentQuestionId: true,
+              currentQuestionText: true,
+              currentQuestionType: true,
+              currentQuestionLevel: true,
+              currentQuestionIs18Plus: true,
+              currentQuestionIsCustom: true,
+              startedAt: true,
+              userId: true,
+            },
+          });
+
+          await attachPendingRoomQuestionsToSession(tx, access.room.id, createdSession.id);
+          const nextState = await chooseNextSessionState(tx, createdSession.id);
+          const initializedSession = await tx.gameSession.update({
+            where: { id: createdSession.id },
+            data: nextState,
+            select: {
+              id: true,
+              mode: true,
+              status: true,
+              resumePath: true,
+              roundCount: true,
+              totalDrinks: true,
+              currentPlayerId: true,
+              currentQuestionId: true,
+              currentQuestionText: true,
+              currentQuestionType: true,
+              currentQuestionLevel: true,
+              currentQuestionIs18Plus: true,
+              currentQuestionIsCustom: true,
               startedAt: true,
               userId: true,
             },
@@ -153,7 +269,7 @@ export async function POST(
 
           return {
             kind: "created" as const,
-            session: createdSession,
+            session: initializedSession,
           };
         },
         {
@@ -192,6 +308,16 @@ export async function POST(
           id: session.id,
           mode: session.mode,
           status: session.status,
+          resumePath: session.resumePath,
+          roundCount: session.roundCount,
+          totalDrinks: session.totalDrinks,
+          currentPlayerId: session.currentPlayerId,
+          currentQuestionId: session.currentQuestionId,
+          currentQuestionText: session.currentQuestionText,
+          currentQuestionType: session.currentQuestionType,
+          currentQuestionLevel: session.currentQuestionLevel,
+          currentQuestionIs18Plus: session.currentQuestionIs18Plus,
+          currentQuestionIsCustom: session.currentQuestionIsCustom,
           startedAt: session.startedAt,
         },
       },

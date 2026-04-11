@@ -64,16 +64,30 @@ export const roomCodeSchema = z
 
 export const roomStartSchema = z.object({
   mode: z.enum(["QUESTION", "VOTE", "TRUTH_OR_DARE", "CHAOS", "MIXED"]).default("QUESTION"),
+  resumePath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((value) => value.startsWith("/game"), "เส้นทางเกมไม่ถูกต้อง")
+    .default("/game/modes"),
 });
 
 export const roomProgressSchema = z.object({
   sessionId: z.string().trim().min(10).max(100),
-  roundNumber: z.coerce.number().int().min(1).max(999),
+  action: z.enum(["ANSWERED", "SKIPPED", "DRANK", "GAVE_UP", "TIMEOUT", "VOTED"]),
   drinkDelta: z.coerce.number().int().min(0).max(10).default(0),
 });
 
 export const roomCompleteSchema = z.object({
   sessionId: z.string().trim().min(10).max(100),
+});
+
+export const roomCustomQuestionSchema = z.object({
+  text: safeString(5, 500, "คำถามต้องมี 5-500 ตัวอักษร"),
+  type: z.enum(["QUESTION", "TRUTH", "DARE", "CHAOS", "VOTE"]).default("QUESTION"),
+  level: z.coerce.number().int().min(1).max(3).default(2),
+  is18Plus: z.boolean().default(false),
 });
 
 export const adminLoginSchema = z.object({
@@ -135,6 +149,7 @@ const schemas = {
   questionUpdateSchema,
   roomCodeSchema,
   roomCompleteSchema,
+  roomCustomQuestionSchema,
   roomHostPlayerSchema,
   roomJoinSchema,
   roomProgressSchema,

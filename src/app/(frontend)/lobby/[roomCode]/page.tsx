@@ -6,9 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/frontend/components/ui";
 import {
-  GAME_SESSION_KEYS,
-  getStoredGameSessionId,
-  hasActiveGameSession,
+  clearActiveGameSession,
   markGameSessionStarted,
   startRoomGameSession,
 } from "@/frontend/game/gameSession";
@@ -18,6 +16,8 @@ interface LocalPlayer {
   name: string;
   isHost: boolean;
   isReady: boolean;
+  drinkCount?: number;
+  skipCount?: number;
 }
 
 interface CustomQuestion {
@@ -32,8 +32,11 @@ interface ActiveSessionSummary {
   id: string;
   mode: string;
   status: string;
+  resumePath?: string | null;
   roundCount: number;
   totalDrinks: number;
+  currentPlayerId?: string | null;
+  currentQuestionText?: string | null;
   startedAt: string;
 }
 
@@ -72,6 +75,7 @@ export default function LobbyPage() {
         name: string;
         maxPlayers: number;
         players: LocalPlayer[];
+        customQuestions?: CustomQuestion[];
         activeSession?: ActiveSessionSummary | null;
       },
       nextCanManageLobby: boolean,
@@ -88,38 +92,22 @@ export default function LobbyPage() {
       setRoomName(room.name);
       setMaxPlayers(room.maxPlayers);
       setPlayers(normalizedPlayers);
+      setCustomQuestions(room.customQuestions ?? []);
       setCanManageLobby(nextCanManageLobby);
       setActiveSession(session);
 
-      if (session?.status === "ACTIVE" && typeof window !== "undefined") {
-        window.localStorage.setItem(
-          GAME_SESSION_KEYS.players,
-          JSON.stringify(normalizedPlayers.map((player) => player.name)),
+      if (session?.status === "ACTIVE") {
+        markGameSessionStarted(
+          roomCode,
+          session.resumePath ?? "/game/modes",
+          session.id,
         );
-
-        if (!hasActiveGameSession() || getStoredGameSessionId() !== session.id) {
-          markGameSessionStarted(roomCode, "/game/modes", session.id);
-        }
+      } else {
+        clearActiveGameSession();
       }
     },
     [roomCode],
   );
-
-  useEffect(() => {
-    const savedCustomQuestions = localStorage.getItem(
-      "wongtaek-custom-questions",
-    );
-    if (savedCustomQuestions) {
-      try {
-        const parsed = JSON.parse(savedCustomQuestions);
-        if (Array.isArray(parsed)) {
-          setCustomQuestions(parsed);
-        }
-      } catch {
-        // Ignore malformed local data
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (!roomCode) {
@@ -152,6 +140,7 @@ export default function LobbyPage() {
           name: string;
           maxPlayers: number;
           players: LocalPlayer[];
+          customQuestions?: CustomQuestion[];
           activeSession?: ActiveSessionSummary | null;
         };
 
@@ -286,37 +275,100 @@ export default function LobbyPage() {
     }
   };
 
-  const handleAddQuestion = () => {
+  const handleAddQuestion = async () => {
     if (!canManageLobby) return;
     if (!newQuestion.trim() || newQuestion.length < 5) return;
+    if (isMutatingPlayers) return;
 
-    const question: CustomQuestion = {
-      id: `custom-${Date.now()}`,
-      text: newQuestion.trim(),
-      type: "QUESTION",
-      level: 2,
-      is18Plus: false,
-    };
+    setPlayerMutationError("");
+    setIsMutatingPlayers(true);
 
-    setCustomQuestions([...customQuestions, question]);
-    setNewQuestion("");
-    setShowQuestionModal(false);
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/questions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: newQuestion.trim(),
+          type: "QUESTION",
+          level: 2,
+          is18Plus: false,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            room?: {
+              name: string;
+              maxPlayers: number;
+              players: LocalPlayer[];
+              customQuestions?: CustomQuestion[];
+              activeSession?: ActiveSessionSummary | null;
+            };
+            canManageLobby?: boolean;
+          }
+        | null;
+
+      if (!response.ok || !data?.room) {
+        setPlayerMutationError(data?.error || "ไม่สามารถเพิ่มคำถามพิเศษได้");
+        return;
+      }
+
+      applyRoomSnapshot(data.room, Boolean(data.canManageLobby));
+      setNewQuestion("");
+      setShowQuestionModal(false);
+    } catch {
+      setPlayerMutationError("ไม่สามารถเพิ่มคำถามพิเศษได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setIsMutatingPlayers(false);
+    }
   };
 
-  const handleRemoveQuestion = (id: string) => {
+  const handleRemoveQuestion = async (id: string) => {
     if (!canManageLobby) return;
-    setCustomQuestions(customQuestions.filter((q) => q.id !== id));
+    if (isMutatingPlayers) return;
+
+    setPlayerMutationError("");
+    setIsMutatingPlayers(true);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}/questions/${id}`, {
+        method: "DELETE",
+      });
+      const data = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            room?: {
+              name: string;
+              maxPlayers: number;
+              players: LocalPlayer[];
+              customQuestions?: CustomQuestion[];
+              activeSession?: ActiveSessionSummary | null;
+            };
+            canManageLobby?: boolean;
+          }
+        | null;
+
+      if (!response.ok || !data?.room) {
+        setPlayerMutationError(data?.error || "ไม่สามารถลบคำถามพิเศษได้");
+        return;
+      }
+
+      applyRoomSnapshot(data.room, Boolean(data.canManageLobby));
+    } catch {
+      setPlayerMutationError("ไม่สามารถลบคำถามพิเศษได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setIsMutatingPlayers(false);
+    }
   };
 
   const handleEnterActiveGame = () => {
     if (!activeSession) return;
 
-    localStorage.setItem(
-      GAME_SESSION_KEYS.players,
-      JSON.stringify(players.map((player) => player.name)),
-    );
-    markGameSessionStarted(roomCode, "/game/modes", activeSession.id);
-    router.push("/game/modes");
+    const resumePath = activeSession.resumePath ?? "/game/modes";
+    markGameSessionStarted(roomCode, resumePath, activeSession.id);
+    router.push(resumePath);
   };
 
   const handleStartGame = async () => {
@@ -327,26 +379,13 @@ export default function LobbyPage() {
     setStartError("");
     setIsStartingGame(true);
 
-    // Save players to localStorage
-    localStorage.setItem(
-      "wongtaek-players",
-      JSON.stringify(players.map((p) => p.name)),
-    );
-
-    // Save custom questions to localStorage
-    if (customQuestions.length > 0) {
-      localStorage.setItem(
-        "wongtaek-custom-questions",
-        JSON.stringify(customQuestions),
-      );
-    } else {
-      localStorage.removeItem("wongtaek-custom-questions");
-    }
-
     try {
-      const sessionId = await startRoomGameSession(roomCode, "MIXED");
+      const sessionId = await startRoomGameSession(
+        roomCode,
+        "MIXED",
+        "/game/modes",
+      );
 
-      // Set game started flag only after the session is persisted.
       markGameSessionStarted(roomCode, "/game/modes", sessionId);
       router.push("/game/modes");
     } catch (error) {
