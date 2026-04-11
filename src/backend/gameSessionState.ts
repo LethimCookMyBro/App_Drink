@@ -1,9 +1,11 @@
 import {
   GameEventType,
-  type Prisma,
+  Prisma,
   type PrismaClient,
   QuestionType,
 } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { isUniqueConstraintError } from "@/backend/prismaRetry";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -30,6 +32,7 @@ const SESSION_STATE_SELECT = {
   currentQuestionLevel: true,
   currentQuestionIs18Plus: true,
   currentQuestionIsCustom: true,
+  currentTurnToken: true,
   startedAt: true,
   endedAt: true,
 } satisfies Prisma.GameSessionSelect;
@@ -53,6 +56,7 @@ export type SessionStateSnapshot = {
   currentQuestionLevel: number | null;
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
+  currentTurnToken: string | null;
   startedAt: Date;
   endedAt: Date | null;
 };
@@ -86,6 +90,7 @@ type SessionChoice = {
   currentQuestionLevel: number | null;
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
+  currentTurnToken: string | null;
 };
 
 type SessionTurnHydrationCandidate = {
@@ -93,7 +98,52 @@ type SessionTurnHydrationCandidate = {
   currentPlayerId?: string | null;
   currentQuestionText?: string | null;
   currentQuestionType?: string | null;
+  currentTurnToken?: string | null;
 };
+
+type ProgressRequestInput = {
+  roomId: string;
+  sessionId: string;
+  action: GameEventType;
+  drinkDelta: number;
+  turnToken: string;
+  requestId: string;
+};
+
+export type ProgressWriteResult =
+  | { kind: "not_found" }
+  | { kind: "closed"; session: SessionStateSnapshot }
+  | { kind: "invalid_state"; session: SessionStateSnapshot }
+  | { kind: "stale"; session: SessionStateSnapshot }
+  | { kind: "duplicate"; session: SessionStateSnapshot }
+  | { kind: "updated"; session: SessionStateSnapshot };
+
+function createTurnToken(): string {
+  return randomUUID();
+}
+
+function hasAuthoritativeTurn(
+  session: SessionTurnHydrationCandidate | null | undefined,
+): boolean {
+  return Boolean(
+    session?.currentPlayerId &&
+      session.currentQuestionText &&
+      session.currentQuestionType &&
+      session.currentTurnToken,
+  );
+}
+
+async function getSessionStateById(
+  prisma: DbClient,
+  sessionId: string,
+): Promise<SessionStateSnapshot | null> {
+  const session = await prisma.gameSession.findUnique({
+    where: { id: sessionId },
+    select: SESSION_STATE_SELECT,
+  });
+
+  return toSessionStateSnapshot(session);
+}
 
 function getPreferredQuestionTypes(
   mode: string,
@@ -168,6 +218,7 @@ export function toSessionStateSnapshot(
     currentQuestionLevel: session.currentQuestionLevel ?? null,
     currentQuestionIs18Plus: session.currentQuestionIs18Plus,
     currentQuestionIsCustom: session.currentQuestionIsCustom,
+    currentTurnToken: session.currentTurnToken ?? null,
     startedAt: session.startedAt,
     endedAt: session.endedAt ?? null,
   };
@@ -183,13 +234,15 @@ export function sessionNeedsCurrentTurnHydration(
   return (
     !session.currentPlayerId ||
     !session.currentQuestionText ||
-    !session.currentQuestionType
+    !session.currentQuestionType ||
+    !session.currentTurnToken
   );
 }
 
 export async function chooseNextSessionState(
   prisma: DbClient,
   sessionId: string,
+  completedRoundIncrement = 0,
 ): Promise<SessionChoice> {
   const session = await prisma.gameSession.findUnique({
     where: { id: sessionId },
@@ -239,9 +292,11 @@ export async function chooseNextSessionState(
       currentQuestionLevel: null,
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
+      currentTurnToken: null,
     };
   }
 
+  const effectiveRoundCount = session.roundCount + completedRoundIncrement;
   const playerIds = session.room.players.map((player) => player.id);
   if (playerIds.length === 0) {
     return {
@@ -252,10 +307,12 @@ export async function chooseNextSessionState(
       currentQuestionLevel: null,
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
+      currentTurnToken: null,
     };
   }
 
-  const currentPlayerId = playerIds[session.roundCount % playerIds.length] ?? null;
+  const currentPlayerId =
+    playerIds[effectiveRoundCount % playerIds.length] ?? null;
   const usedQuestionIds = new Set(
     session.events
       .map((event) => event.questionId)
@@ -272,11 +329,11 @@ export async function chooseNextSessionState(
   );
   const preferredTypes = getPreferredQuestionTypes(
     session.mode,
-    session.roundCount,
+    effectiveRoundCount,
   );
   const shouldPreferCustom =
     availableCustomQuestions.length > 0 &&
-    shouldUseCustomQuestion(session.mode, session.roundCount);
+    shouldUseCustomQuestion(session.mode, effectiveRoundCount);
 
   if (shouldPreferCustom) {
     const customQuestion = availableCustomQuestions[0];
@@ -288,6 +345,7 @@ export async function chooseNextSessionState(
       currentQuestionLevel: customQuestion.level,
       currentQuestionIs18Plus: customQuestion.is18Plus,
       currentQuestionIsCustom: true,
+      currentTurnToken: createTurnToken(),
     };
   }
 
@@ -326,6 +384,7 @@ export async function chooseNextSessionState(
         currentQuestionLevel: question.level,
         currentQuestionIs18Plus: question.is18Plus,
         currentQuestionIsCustom: false,
+        currentTurnToken: createTurnToken(),
       };
     }
   }
@@ -355,6 +414,7 @@ export async function chooseNextSessionState(
       currentQuestionLevel: 1,
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
+      currentTurnToken: createTurnToken(),
     };
   }
 
@@ -366,6 +426,7 @@ export async function chooseNextSessionState(
     currentQuestionLevel: fallbackQuestion.level,
     currentQuestionIs18Plus: fallbackQuestion.is18Plus,
     currentQuestionIsCustom: false,
+    currentTurnToken: createTurnToken(),
   };
 }
 
@@ -450,6 +511,139 @@ export function buildProgressEventData(input: {
     drinkDelta: input.drinkDelta,
     ...(input.customQuestionId ? { customQuestionId: input.customQuestionId } : {}),
   });
+}
+
+export async function writeAuthoritativeProgress(
+  prisma: DbClient,
+  input: ProgressRequestInput,
+): Promise<ProgressWriteResult> {
+  const session = await prisma.gameSession.findFirst({
+    where: {
+      id: input.sessionId,
+      roomId: input.roomId,
+    },
+    select: SESSION_STATE_SELECT,
+  });
+
+  const sessionSnapshot = toSessionStateSnapshot(session);
+  if (!sessionSnapshot) {
+    return { kind: "not_found" };
+  }
+
+  const duplicateRequest = await prisma.gameEvent.findFirst({
+    where: {
+      sessionId: input.sessionId,
+      requestId: input.requestId,
+    },
+    select: { id: true },
+  });
+
+  if (duplicateRequest) {
+    return { kind: "duplicate", session: sessionSnapshot };
+  }
+
+  if (sessionSnapshot.status !== "ACTIVE") {
+    return { kind: "closed", session: sessionSnapshot };
+  }
+
+  if (!hasAuthoritativeTurn(sessionSnapshot)) {
+    return { kind: "invalid_state", session: sessionSnapshot };
+  }
+
+  if (sessionSnapshot.currentTurnToken !== input.turnToken) {
+    return { kind: "stale", session: sessionSnapshot };
+  }
+
+  const nextRoundNumber = sessionSnapshot.roundCount + 1;
+  const eventData = buildProgressEventData({
+    customQuestionId: sessionSnapshot.currentQuestionIsCustom
+      ? sessionSnapshot.currentQuestionId
+      : null,
+    roundNumber: nextRoundNumber,
+    drinkDelta: input.drinkDelta,
+  });
+
+  try {
+    await prisma.gameEvent.create({
+      data: {
+        sessionId: sessionSnapshot.id,
+        playerId: sessionSnapshot.currentPlayerId!,
+        questionId: sessionSnapshot.currentQuestionIsCustom
+          ? null
+          : sessionSnapshot.currentQuestionId ?? null,
+        type: input.action,
+        turnToken: input.turnToken,
+        requestId: input.requestId,
+        data: eventData,
+      },
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    const latestSession = await getSessionStateById(prisma, input.sessionId);
+    if (!latestSession) {
+      return { kind: "not_found" };
+    }
+
+    const sameRequest = await prisma.gameEvent.findFirst({
+      where: {
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+      },
+      select: { id: true },
+    });
+
+    return sameRequest
+      ? { kind: "duplicate", session: latestSession }
+      : { kind: "stale", session: latestSession };
+  }
+
+  if (!sessionSnapshot.currentQuestionIsCustom && sessionSnapshot.currentQuestionId) {
+    await prisma.question.update({
+      where: { id: sessionSnapshot.currentQuestionId },
+      data: {
+        usageCount: {
+          increment: 1,
+        },
+      },
+    });
+  }
+
+  if (input.drinkDelta > 0) {
+    await prisma.player.update({
+      where: { id: sessionSnapshot.currentPlayerId! },
+      data: {
+        drinkCount: {
+          increment: input.drinkDelta,
+        },
+        skipCount: {
+          increment: 1,
+        },
+      },
+    });
+  }
+
+  const nextState = await chooseNextSessionState(prisma, sessionSnapshot.id, 1);
+  const updatedSession = await prisma.gameSession.update({
+    where: { id: sessionSnapshot.id },
+    data: {
+      roundCount: { increment: 1 },
+      totalDrinks: { increment: input.drinkDelta },
+      durationMs: Math.max(
+        sessionSnapshot.durationMs,
+        Date.now() - sessionSnapshot.startedAt.getTime(),
+      ),
+      ...nextState,
+    },
+    select: SESSION_STATE_SELECT,
+  });
+
+  return {
+    kind: "updated",
+    session: toSessionStateSnapshot(updatedSession)!,
+  };
 }
 
 export const GAME_SESSION_STATE_SELECT = SESSION_STATE_SELECT;

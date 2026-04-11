@@ -47,9 +47,19 @@ export default function ChaosModePage() {
     if (isRoundSyncing || isEndingGame) return;
 
     setIsRoundSyncing(true);
-    const syncResult = await tryRecordCompletedGameRound("DRANK", 1);
+    const syncResult = await tryRecordCompletedGameRound(
+      "DRANK",
+      1,
+      activeSession?.currentTurnToken ?? null,
+    );
     if (!syncResult.ok) {
       window.alert(syncResult.error);
+      setIsRoundSyncing(false);
+      return;
+    }
+
+    if (syncResult.outcome !== "applied") {
+      setIsTimerPaused(false);
       setIsRoundSyncing(false);
       return;
     }
@@ -216,7 +226,7 @@ export default function ChaosModePage() {
             </h1>
             <div className="mt-8 flex justify-center">
               <Timer
-                key={timerKey}
+                key={`${timerKey}:${activeSession.currentTurnToken ?? "no-turn"}`}
                 duration={GAME_SETTINGS.defaultTimerDuration}
                 onComplete={handleTimerComplete}
                 onWarning={handleTimerWarning}

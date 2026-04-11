@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { GameEventType, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import {
   enforceRateLimit,
@@ -8,8 +8,7 @@ import {
   mapServerError,
 } from "@/backend/apiUtils";
 import {
-  buildProgressEventData,
-  chooseNextSessionState,
+  writeAuthoritativeProgress,
 } from "@/backend/gameSessionState";
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
@@ -44,6 +43,8 @@ export async function POST(
       sessionId: body?.sessionId,
       action: body?.action,
       drinkDelta: body?.drinkDelta,
+      turnToken: body?.turnToken,
+      requestId: body?.requestId,
     });
     if (!bodyValidation.success) {
       return jsonError(
@@ -52,7 +53,8 @@ export async function POST(
       );
     }
 
-    const { sessionId, action, drinkDelta } = bodyValidation.data;
+    const { sessionId, action, drinkDelta, turnToken, requestId } =
+      bodyValidation.data;
 
     const hostPayload = await getRoomHostPayloadFromCookies(roomCode);
     if (!hostPayload) {
@@ -76,122 +78,14 @@ export async function POST(
     const result = await withSerializableRetry(async () =>
       prisma.$transaction(
         async (tx) => {
-          const session = await tx.gameSession.findFirst({
-            where: {
-              id: sessionId,
-              roomId: access.room.id,
-            },
-            select: {
-              id: true,
-              status: true,
-              resumePath: true,
-              roundCount: true,
-              totalDrinks: true,
-              durationMs: true,
-              mode: true,
-              currentPlayerId: true,
-              currentQuestionId: true,
-              currentQuestionText: true,
-              currentQuestionType: true,
-              currentQuestionLevel: true,
-              currentQuestionIs18Plus: true,
-              currentQuestionIsCustom: true,
-              startedAt: true,
-              endedAt: true,
-            },
-          });
-
-          if (!session) {
-            return { kind: "not_found" as const };
-          }
-
-          if (session.status !== "ACTIVE") {
-            return { kind: "closed" as const, session };
-          }
-
-          if (!session.currentPlayerId) {
-            return { kind: "invalid_state" as const, session };
-          }
-
-          const nextRoundNumber = session.roundCount + 1;
-          const eventData = buildProgressEventData({
-            customQuestionId: session.currentQuestionIsCustom
-              ? session.currentQuestionId
-              : null,
-            roundNumber: nextRoundNumber,
+          return writeAuthoritativeProgress(tx, {
+            roomId: access.room.id,
+            sessionId,
+            action: action as GameEventType,
             drinkDelta,
+            turnToken,
+            requestId,
           });
-
-          await tx.gameEvent.create({
-            data: {
-              sessionId: session.id,
-              playerId: session.currentPlayerId,
-              questionId: session.currentQuestionIsCustom
-                ? null
-                : session.currentQuestionId ?? null,
-              type: action,
-              data: eventData,
-            },
-          });
-
-          if (!session.currentQuestionIsCustom && session.currentQuestionId) {
-            await tx.question.update({
-              where: { id: session.currentQuestionId },
-              data: {
-                usageCount: {
-                  increment: 1,
-                },
-              },
-            });
-          }
-
-          if (drinkDelta > 0) {
-            await tx.player.update({
-              where: { id: session.currentPlayerId },
-              data: {
-                drinkCount: {
-                  increment: drinkDelta,
-                },
-                skipCount: {
-                  increment: 1,
-                },
-              },
-            });
-          }
-
-          const nextState = await chooseNextSessionState(tx, session.id);
-          const updatedSession = await tx.gameSession.update({
-            where: { id: session.id },
-            data: {
-              roundCount: { increment: 1 },
-              totalDrinks: { increment: drinkDelta },
-              durationMs: Math.max(
-                session.durationMs,
-                Date.now() - session.startedAt.getTime(),
-              ),
-              ...nextState,
-            },
-            select: {
-              id: true,
-              status: true,
-              resumePath: true,
-              roundCount: true,
-              totalDrinks: true,
-              durationMs: true,
-              mode: true,
-              currentPlayerId: true,
-              currentQuestionId: true,
-              currentQuestionText: true,
-              currentQuestionType: true,
-              currentQuestionLevel: true,
-              currentQuestionIs18Plus: true,
-              currentQuestionIsCustom: true,
-              startedAt: true,
-              endedAt: true,
-            },
-          });
-
-          return { kind: "updated" as const, session: updatedSession };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -205,17 +99,34 @@ export async function POST(
     }
 
     if (result.kind === "closed") {
-      return jsonError("session นี้จบแล้ว", 409);
+      return jsonError("session นี้จบแล้ว", 409, {
+        code: "SESSION_CLOSED",
+        sessionId: result.session.id,
+        session: result.session,
+      });
     }
 
     if (result.kind === "invalid_state") {
-      return jsonError("สถานะเกมปัจจุบันไม่พร้อมใช้งาน", 409);
+      return jsonError("สถานะเกมปัจจุบันไม่พร้อมใช้งาน", 409, {
+        code: "INVALID_TURN_STATE",
+        sessionId: result.session.id,
+        session: result.session,
+      });
+    }
+
+    if (result.kind === "stale") {
+      return jsonError("ตาปัจจุบันถูกอัปเดตแล้ว", 409, {
+        code: "STALE_TURN",
+        sessionId: result.session.id,
+        session: result.session,
+      });
     }
 
     return jsonOk({
       success: true,
       sessionId: result.session.id,
       session: result.session,
+      outcome: result.kind === "duplicate" ? "duplicate" : "applied",
     });
   } catch (error) {
     logger.error("rooms.progress.failed", {

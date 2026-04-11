@@ -234,6 +234,7 @@ model GameSession {
   currentQuestionLevel Int?
   currentQuestionIs18Plus Boolean @default(false)
   currentQuestionIsCustom Boolean @default(false)
+  currentTurnToken String?
   startedAt   DateTime @default(now())
   endedAt     DateTime?
   
@@ -274,6 +275,8 @@ model GameEvent {
   playerId    String
   questionId  String?
   type        GameEventType
+  turnToken   String?
+  requestId   String?
   data        String?  // JSON string for additional event data
   createdAt   DateTime @default(now())
   
@@ -284,6 +287,8 @@ model GameEvent {
   @@index([sessionId, createdAt])
   @@index([playerId, type])
   @@index([questionId])
+  @@unique([sessionId, turnToken])
+  @@unique([sessionId, requestId])
 }
 
 // ==========================================

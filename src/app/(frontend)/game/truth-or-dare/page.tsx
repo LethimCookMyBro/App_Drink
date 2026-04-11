@@ -50,9 +50,19 @@ export default function TruthOrDarePage() {
     if (isRoundSyncing || isEndingGame) return;
 
     setIsRoundSyncing(true);
-    const syncResult = await tryRecordCompletedGameRound("ANSWERED", 0);
+    const syncResult = await tryRecordCompletedGameRound(
+      "ANSWERED",
+      0,
+      activeSession?.currentTurnToken ?? null,
+    );
     if (!syncResult.ok) {
       window.alert(syncResult.error);
+      setIsRoundSyncing(false);
+      return;
+    }
+
+    if (syncResult.outcome !== "applied") {
+      setIsTimerPaused(false);
       setIsRoundSyncing(false);
       return;
     }
@@ -68,9 +78,19 @@ export default function TruthOrDarePage() {
     if (isRoundSyncing || isEndingGame) return;
 
     setIsRoundSyncing(true);
-    const syncResult = await tryRecordCompletedGameRound("GAVE_UP", 2);
+    const syncResult = await tryRecordCompletedGameRound(
+      "GAVE_UP",
+      2,
+      activeSession?.currentTurnToken ?? null,
+    );
     if (!syncResult.ok) {
       window.alert(syncResult.error);
+      setIsRoundSyncing(false);
+      return;
+    }
+
+    if (syncResult.outcome !== "applied") {
+      setIsTimerPaused(false);
       setIsRoundSyncing(false);
       return;
     }
@@ -250,7 +270,7 @@ export default function TruthOrDarePage() {
 
             <div className="flex justify-center mb-6">
               <Timer
-                key={timerKey}
+                key={`${timerKey}:${activeSession.currentTurnToken ?? "no-turn"}`}
                 duration={GAME_SETTINGS.defaultTimerDuration}
                 onComplete={handleTimerComplete}
                 onWarning={handleTimerWarning}

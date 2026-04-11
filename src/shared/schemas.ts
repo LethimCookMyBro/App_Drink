@@ -77,6 +77,8 @@ export const roomProgressSchema = z.object({
   sessionId: z.string().trim().min(10).max(100),
   action: z.enum(["ANSWERED", "SKIPPED", "DRANK", "GAVE_UP", "TIMEOUT", "VOTED"]),
   drinkDelta: z.coerce.number().int().min(0).max(10).default(0),
+  turnToken: z.string().trim().min(10).max(200),
+  requestId: z.string().trim().min(10).max(200),
 });
 
 export const roomCompleteSchema = z.object({

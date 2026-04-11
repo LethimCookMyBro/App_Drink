@@ -191,9 +191,19 @@ function GamePlayContent() {
 
     setIsRoundSyncing(true);
 
-    const syncResult = await tryRecordCompletedGameRound("SKIPPED", skipPenalty);
+    const syncResult = await tryRecordCompletedGameRound(
+      "SKIPPED",
+      skipPenalty,
+      activeSession?.currentTurnToken ?? null,
+    );
     if (!syncResult.ok) {
       window.alert(syncResult.error);
+      setIsRoundSyncing(false);
+      return;
+    }
+
+    if (syncResult.outcome !== "applied") {
+      setIsTimerPaused(false);
       setIsRoundSyncing(false);
       return;
     }
@@ -211,9 +221,19 @@ function GamePlayContent() {
 
     setIsRoundSyncing(true);
 
-    const syncResult = await tryRecordCompletedGameRound("ANSWERED", 0);
+    const syncResult = await tryRecordCompletedGameRound(
+      "ANSWERED",
+      0,
+      activeSession?.currentTurnToken ?? null,
+    );
     if (!syncResult.ok) {
       window.alert(syncResult.error);
+      setIsRoundSyncing(false);
+      return;
+    }
+
+    if (syncResult.outcome !== "applied") {
+      setIsTimerPaused(false);
       setIsRoundSyncing(false);
       return;
     }
@@ -472,11 +492,11 @@ function GamePlayContent() {
                     )}
 
                     <div className="mt-8">
-                      <Timer
-                        key={timerKey}
-                        duration={GAME_SETTINGS.defaultTimerDuration}
-                        onComplete={handleTimerComplete}
-                        onWarning={handleTimerWarning}
+              <Timer
+                key={`${timerKey}:${activeSession.currentTurnToken ?? "no-turn"}`}
+                duration={GAME_SETTINGS.defaultTimerDuration}
+                onComplete={handleTimerComplete}
+                onWarning={handleTimerWarning}
                         isPaused={isTimerPaused}
                         size="lg"
                       />

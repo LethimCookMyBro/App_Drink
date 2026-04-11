@@ -88,6 +88,7 @@ export async function POST(
             currentQuestionLevel: true,
             currentQuestionIs18Plus: true,
             currentQuestionIsCustom: true,
+            currentTurnToken: true,
             startedAt: true,
             endedAt: true,
           },
@@ -134,6 +135,7 @@ export async function POST(
             currentQuestionLevel: null,
             currentQuestionIs18Plus: false,
             currentQuestionIsCustom: false,
+            currentTurnToken: null,
           },
           select: {
             id: true,
@@ -150,6 +152,7 @@ export async function POST(
             currentQuestionLevel: true,
             currentQuestionIs18Plus: true,
             currentQuestionIsCustom: true,
+            currentTurnToken: true,
             startedAt: true,
             endedAt: true,
           },

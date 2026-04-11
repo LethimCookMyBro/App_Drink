@@ -23,6 +23,7 @@ test("session state snapshot preserves authoritative current-turn fields", () =>
     currentQuestionLevel: 2,
     currentQuestionIs18Plus: false,
     currentQuestionIsCustom: true,
+    currentTurnToken: "turn_active",
     startedAt: new Date("2026-04-11T00:00:00.000Z"),
     endedAt: null,
   });
@@ -31,6 +32,7 @@ test("session state snapshot preserves authoritative current-turn fields", () =>
   assert.equal(snapshot?.currentPlayerId, "player_2");
   assert.equal(snapshot?.currentQuestionText, "คำถามปัจจุบัน");
   assert.equal(snapshot?.currentQuestionIsCustom, true);
+  assert.equal(snapshot?.currentTurnToken, "turn_active");
 });
 
 test("progress event data records round, drinks, and custom question ids", () => {
@@ -96,6 +98,7 @@ test("legacy session with missing current-turn fields rehydrates correctly", asy
       currentPlayerId: null,
       currentQuestionText: null,
       currentQuestionType: null,
+      currentTurnToken: null,
     }),
     true,
   );
@@ -103,6 +106,8 @@ test("legacy session with missing current-turn fields rehydrates correctly", asy
   assert.equal(nextState.currentQuestionId, "custom_1");
   assert.equal(nextState.currentQuestionText, "คำถามจากวง");
   assert.equal(nextState.currentQuestionIsCustom, true);
+  assert.equal(typeof nextState.currentTurnToken, "string");
+  assert.ok((nextState.currentTurnToken ?? "").length > 0);
 });
 
 test("missing question inventory falls back to a safe placeholder turn", async () => {
@@ -134,4 +139,6 @@ test("missing question inventory falls back to a safe placeholder turn", async (
   assert.equal(nextState.currentQuestionId, null);
   assert.equal(nextState.currentQuestionText, "ยังไม่มีคำถามพร้อมใช้งาน");
   assert.equal(nextState.currentQuestionType, "QUESTION");
+  assert.equal(typeof nextState.currentTurnToken, "string");
+  assert.ok((nextState.currentTurnToken ?? "").length > 0);
 });

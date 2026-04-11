@@ -39,6 +39,7 @@ type SessionResponse = {
   currentQuestionLevel: number | null;
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
+  currentTurnToken: string | null;
   startedAt: Date;
   userId: string | null;
 };
@@ -119,6 +120,7 @@ export async function POST(
               currentQuestionLevel: true,
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
+              currentTurnToken: true,
               startedAt: true,
               userId: true,
             },
@@ -161,13 +163,14 @@ export async function POST(
                     currentQuestionLevel: true,
                     currentQuestionIs18Plus: true,
                     currentQuestionIsCustom: true,
+                    currentTurnToken: true,
                     startedAt: true,
                     userId: true,
                   },
                 })
               : activeSession;
 
-            if (needsUpdate || sessionNeedsCurrentTurnHydration(updatedSession)) {
+            if (sessionNeedsCurrentTurnHydration(updatedSession)) {
               await attachPendingRoomQuestionsToSession(
                 tx,
                 access.room.id,
@@ -191,6 +194,7 @@ export async function POST(
                   currentQuestionLevel: true,
                   currentQuestionIs18Plus: true,
                   currentQuestionIsCustom: true,
+                  currentTurnToken: true,
                   startedAt: true,
                   userId: true,
                 },
@@ -238,6 +242,7 @@ export async function POST(
               currentQuestionLevel: true,
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
+              currentTurnToken: true,
               startedAt: true,
               userId: true,
             },
@@ -262,6 +267,7 @@ export async function POST(
               currentQuestionLevel: true,
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
+              currentTurnToken: true,
               startedAt: true,
               userId: true,
             },
@@ -318,6 +324,7 @@ export async function POST(
           currentQuestionLevel: session.currentQuestionLevel,
           currentQuestionIs18Plus: session.currentQuestionIs18Plus,
           currentQuestionIsCustom: session.currentQuestionIsCustom,
+          currentTurnToken: session.currentTurnToken,
           startedAt: session.startedAt,
         },
       },

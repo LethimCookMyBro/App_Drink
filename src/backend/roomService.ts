@@ -59,6 +59,7 @@ export const ROOM_SUMMARY_SELECT = {
       currentQuestionLevel: true,
       currentQuestionIs18Plus: true,
       currentQuestionIsCustom: true,
+      currentTurnToken: true,
       startedAt: true,
       endedAt: true,
     },

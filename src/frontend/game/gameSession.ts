@@ -9,6 +9,7 @@ export const GAME_SESSION_KEYS = {
 } as const;
 
 export const GAME_SESSION_CHANGED_EVENT = "wongtaek-game-session-changed";
+const pendingProgressRequestIds = new Map<string, string>();
 
 export interface ActiveGameSessionSnapshot {
   isActive: boolean;
@@ -51,6 +52,7 @@ export interface SessionSummarySnapshot {
   currentQuestionLevel: number | null;
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
+  currentTurnToken: string | null;
   startedAt: string;
   endedAt: string | null;
 }
@@ -87,6 +89,8 @@ export interface PersistedGameSummary {
   players: PersistedSummaryPlayer[];
 }
 
+export type ProgressSyncOutcome = "applied" | "duplicate" | "stale";
+
 export type PersistedGameMode =
   | "QUESTION"
   | "VOTE"
@@ -101,6 +105,24 @@ export type ProgressAction =
   | "GAVE_UP"
   | "TIMEOUT"
   | "VOTED";
+
+class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly data: Record<string, unknown> | null;
+
+  constructor(
+    message: string,
+    status: number,
+    data: Record<string, unknown> | null,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = typeof data?.code === "string" ? data.code : undefined;
+    this.data = data;
+  }
+}
 
 export const EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT: ActiveGameSessionSnapshot = {
   isActive: false,
@@ -296,6 +318,10 @@ function normalizeRoomSnapshot(data: unknown): RoomGameSnapshot | null {
             activeSessionRecord.currentQuestionIs18Plus === true,
           currentQuestionIsCustom:
             activeSessionRecord.currentQuestionIsCustom === true,
+          currentTurnToken:
+            typeof activeSessionRecord.currentTurnToken === "string"
+              ? activeSessionRecord.currentTurnToken
+              : null,
           startedAt:
             typeof activeSessionRecord.startedAt === "string"
               ? activeSessionRecord.startedAt
@@ -434,7 +460,11 @@ async function postRoomSessionRequest<T>(
     | null;
 
   if (!response.ok) {
-    throw new Error(data?.error || "เกิดข้อผิดพลาดในการบันทึกสถานะเกม");
+    throw new ApiRequestError(
+      data?.error || "เกิดข้อผิดพลาดในการบันทึกสถานะเกม",
+      response.status,
+      data,
+    );
   }
 
   if (!data) {
@@ -442,6 +472,75 @@ async function postRoomSessionRequest<T>(
   }
 
   return data;
+}
+
+function createProgressRequestId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `progress_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildProgressRequestCacheKey(
+  sessionId: string,
+  turnToken: string,
+  action: ProgressAction,
+  drinkDelta: number,
+): string {
+  return [sessionId, turnToken, action, String(drinkDelta)].join(":");
+}
+
+function getOrCreateProgressRequestId(
+  sessionId: string,
+  turnToken: string,
+  action: ProgressAction,
+  drinkDelta: number,
+): string {
+  const cacheKey = buildProgressRequestCacheKey(
+    sessionId,
+    turnToken,
+    action,
+    drinkDelta,
+  );
+  const existingRequestId = pendingProgressRequestIds.get(cacheKey);
+  if (existingRequestId) {
+    return existingRequestId;
+  }
+
+  const requestId = createProgressRequestId();
+  pendingProgressRequestIds.set(cacheKey, requestId);
+  return requestId;
+}
+
+function clearProgressRequestId(
+  sessionId: string,
+  turnToken: string,
+  action: ProgressAction,
+  drinkDelta: number,
+): void {
+  pendingProgressRequestIds.delete(
+    buildProgressRequestCacheKey(sessionId, turnToken, action, drinkDelta),
+  );
+}
+
+function getMetricsFromSessionRecord(
+  session: unknown,
+): StoredGameSessionMetrics {
+  if (!session || typeof session !== "object") {
+    return {
+      roundCount: 0,
+      totalDrinks: 0,
+    };
+  }
+
+  const record = session as Record<string, unknown>;
+  return {
+    roundCount:
+      typeof record.roundCount === "number" ? record.roundCount : 0,
+    totalDrinks:
+      typeof record.totalDrinks === "number" ? record.totalDrinks : 0,
+  };
 }
 
 function getPersistedGameModeForRoute(route: string): PersistedGameMode {
@@ -518,10 +617,15 @@ export interface StoredGameSessionMetrics {
   totalDrinks: number;
 }
 
+export interface StoredGameProgressResult extends StoredGameSessionMetrics {
+  outcome: ProgressSyncOutcome;
+}
+
 export async function recordCompletedGameRound(
   action: ProgressAction,
   drinkDelta = 0,
-): Promise<StoredGameSessionMetrics> {
+  turnToken: string | null,
+): Promise<StoredGameProgressResult> {
   const roomCode = getStoredRoomCode();
   const sessionId = getStoredGameSessionId();
 
@@ -529,8 +633,20 @@ export async function recordCompletedGameRound(
     throw new Error("ไม่พบ session เกมที่กำลังเล่น");
   }
 
+  if (!turnToken) {
+    throw new Error("ไม่พบ turn token ปัจจุบัน");
+  }
+
+  const requestId = getOrCreateProgressRequestId(
+    sessionId,
+    turnToken,
+    action,
+    drinkDelta,
+  );
+
   const data = await postRoomSessionRequest<{
     success: boolean;
+    outcome?: ProgressSyncOutcome;
     session: {
       roundCount?: number;
       totalDrinks?: number;
@@ -539,29 +655,44 @@ export async function recordCompletedGameRound(
     sessionId,
     action,
     drinkDelta,
+    turnToken,
+    requestId,
   });
 
+  clearProgressRequestId(sessionId, turnToken, action, drinkDelta);
   dispatchGameSessionChanged();
 
   return {
-    roundCount:
-      typeof data.session?.roundCount === "number" ? data.session.roundCount : 0,
-    totalDrinks:
-      typeof data.session?.totalDrinks === "number" ? data.session.totalDrinks : 0,
+    ...getMetricsFromSessionRecord(data.session),
+    outcome: data.outcome === "duplicate" ? "duplicate" : "applied",
   };
 }
 
 export async function tryRecordCompletedGameRound(
   action: ProgressAction,
   drinkDelta = 0,
+  turnToken: string | null,
 ): Promise<
-  | ({ ok: true } & StoredGameSessionMetrics)
+  | ({ ok: true } & StoredGameProgressResult)
   | { ok: false; error: string }
 > {
   try {
-    const metrics = await recordCompletedGameRound(action, drinkDelta);
+    const metrics = await recordCompletedGameRound(action, drinkDelta, turnToken);
     return { ok: true, ...metrics };
   } catch (error) {
+    const sessionId = getStoredGameSessionId();
+    if (error instanceof ApiRequestError && error.code === "STALE_TURN") {
+      if (sessionId && turnToken) {
+        clearProgressRequestId(sessionId, turnToken, action, drinkDelta);
+      }
+      dispatchGameSessionChanged();
+      return {
+        ok: true,
+        ...getMetricsFromSessionRecord(error.data?.session),
+        outcome: "stale",
+      };
+    }
+
     return {
       ok: false,
       error: normalizeApiErrorMessage(

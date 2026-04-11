@@ -37,6 +37,7 @@ interface ActiveSessionSummary {
   totalDrinks: number;
   currentPlayerId?: string | null;
   currentQuestionText?: string | null;
+  currentTurnToken?: string | null;
   startedAt: string;
 }
 

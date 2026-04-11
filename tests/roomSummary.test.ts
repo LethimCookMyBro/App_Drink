@@ -32,6 +32,7 @@ test("room summary exposes active session state when selected", () => {
         currentQuestionLevel: 2,
         currentQuestionIs18Plus: false,
         currentQuestionIsCustom: false,
+        currentTurnToken: "turn_1",
         startedAt,
         endedAt: null,
       },
@@ -44,6 +45,7 @@ test("room summary exposes active session state when selected", () => {
   assert.equal(room.activeSession?.totalDrinks, 4);
   assert.equal(room.activeSession?.currentPlayerId, "player_1");
   assert.equal(room.activeSession?.currentQuestionText, "ถามจริงหรือกล้า?");
+  assert.equal(room.activeSession?.currentTurnToken, "turn_1");
 });
 
 test("room summary only exposes custom questions for the active session", () => {
@@ -92,6 +94,7 @@ test("room summary only exposes custom questions for the active session", () => 
         currentQuestionLevel: 2,
         currentQuestionIs18Plus: false,
         currentQuestionIsCustom: true,
+        currentTurnToken: "turn_active",
         startedAt: new Date("2026-04-11T00:00:00.000Z"),
         endedAt: null,
       },

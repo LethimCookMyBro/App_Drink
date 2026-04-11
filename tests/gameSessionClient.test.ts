@@ -5,7 +5,9 @@ import {
   fetchRoomGameSnapshot,
   GAME_SESSION_KEYS,
   markGameSessionStarted,
+  recordCompletedGameRound,
   refreshStoredActiveGameSession,
+  tryRecordCompletedGameRound,
 } from "../src/frontend/game/gameSession";
 
 type MockResponse = {
@@ -57,6 +59,7 @@ function createRoomPayload(input?: {
     currentQuestionLevel: number | null;
     currentQuestionIs18Plus: boolean;
     currentQuestionIsCustom: boolean;
+    currentTurnToken: string | null;
     startedAt: string;
     endedAt: string | null;
   }>;
@@ -75,6 +78,7 @@ function createRoomPayload(input?: {
     currentQuestionLevel: 2,
     currentQuestionIs18Plus: false,
     currentQuestionIsCustom: false,
+    currentTurnToken: "turn_1",
     startedAt: "2026-04-11T00:00:00.000Z",
     endedAt: null,
     ...input?.session,
@@ -316,6 +320,7 @@ test("second client sees updated current turn after polling refresh", async () =
             currentPlayerId: "player_2",
             currentQuestionId: "question_2",
             currentQuestionText: "คำถามถัดไป",
+            currentTurnToken: "turn_2",
           },
         }),
       },
@@ -328,6 +333,115 @@ test("second client sees updated current turn after polling refresh", async () =
     assert.equal(second?.activeSession?.currentPlayerId, "player_2");
     assert.equal(second?.activeSession?.currentQuestionText, "คำถามถัดไป");
     assert.equal(second?.activeSession?.roundCount, 4);
+    assert.equal(second?.activeSession?.currentTurnToken, "turn_2");
+  } finally {
+    browser.restore();
+  }
+});
+
+test("progress request includes the authoritative turn token and request id", async () => {
+  const browser = setupBrowserEnv();
+
+  try {
+    markGameSessionStarted("ABCD", "/game/modes", "session_active");
+    const requests = mockFetchSequence([
+      {
+        ok: true,
+        body: {
+          success: true,
+          outcome: "applied",
+          session: {
+            roundCount: 4,
+            totalDrinks: 5,
+          },
+        },
+      },
+    ]);
+
+    const result = await recordCompletedGameRound("ANSWERED", 0, "turn_1");
+    const requestBody = JSON.parse(requests[0]?.body ?? "{}") as Record<string, unknown>;
+
+    assert.equal(requests[0]?.url, "/api/rooms/ABCD/progress");
+    assert.equal(requestBody.sessionId, "session_active");
+    assert.equal(requestBody.turnToken, "turn_1");
+    assert.equal(typeof requestBody.requestId, "string");
+    assert.ok(String(requestBody.requestId).length >= 10);
+    assert.equal(result.outcome, "applied");
+  } finally {
+    browser.restore();
+  }
+});
+
+test("retries of the same client action reuse the same request id", async () => {
+  const browser = setupBrowserEnv();
+
+  try {
+    markGameSessionStarted("ABCD", "/game/modes", "session_active");
+    const requests = mockFetchSequence([
+      {
+        ok: false,
+        status: 500,
+        body: {
+          error: "temporary failure",
+        },
+      },
+      {
+        ok: true,
+        body: {
+          success: true,
+          outcome: "applied",
+          session: {
+            roundCount: 4,
+            totalDrinks: 5,
+          },
+        },
+      },
+    ]);
+
+    await assert.rejects(
+      () => recordCompletedGameRound("ANSWERED", 0, "turn_1"),
+      /temporary failure/,
+    );
+
+    const result = await recordCompletedGameRound("ANSWERED", 0, "turn_1");
+    const firstBody = JSON.parse(requests[0]?.body ?? "{}") as Record<string, unknown>;
+    const secondBody = JSON.parse(requests[1]?.body ?? "{}") as Record<string, unknown>;
+
+    assert.equal(firstBody.requestId, secondBody.requestId);
+    assert.equal(result.outcome, "applied");
+  } finally {
+    browser.restore();
+  }
+});
+
+test("stale progress responses resync without surfacing a generic failure", async () => {
+  const browser = setupBrowserEnv();
+
+  try {
+    markGameSessionStarted("ABCD", "/game/modes", "session_active");
+    mockFetchSequence([
+      {
+        ok: false,
+        status: 409,
+        body: {
+          error: "ตาปัจจุบันถูกอัปเดตแล้ว",
+          code: "STALE_TURN",
+          session: {
+            roundCount: 4,
+            totalDrinks: 5,
+          },
+        },
+      },
+    ]);
+
+    const result = await tryRecordCompletedGameRound("ANSWERED", 0, "turn_1");
+
+    assert.deepEqual(result, {
+      ok: true,
+      outcome: "stale",
+      roundCount: 4,
+      totalDrinks: 5,
+    });
   } finally {
     browser.restore();
   }
