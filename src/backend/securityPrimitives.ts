@@ -1,4 +1,10 @@
 import { createHash, randomBytes } from "crypto";
+import type { Algorithm, VerifyOptions } from "jsonwebtoken";
+
+export const JWT_HS256_ALGORITHM: Algorithm = "HS256";
+export const JWT_HS256_VERIFY_OPTIONS: VerifyOptions = {
+  algorithms: [JWT_HS256_ALGORITHM],
+};
 
 const globalForSecurityPrimitives = globalThis as typeof globalThis & {
   __wongTaekDevSecrets?: Map<string, string>;

@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { buildContentSecurityPolicy } from "./src/backend/contentSecurityPolicy";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -14,12 +13,6 @@ const sharedHeaders = [
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 ];
 
-const generalCsp = buildContentSecurityPolicy({ isDevelopment: !isProd });
-const adminCsp = buildContentSecurityPolicy({
-  admin: true,
-  isDevelopment: !isProd,
-});
-
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
@@ -28,14 +21,12 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: [
           ...sharedHeaders.filter((header) => isProd || header.key !== "Strict-Transport-Security"),
-          { key: "Content-Security-Policy", value: generalCsp },
         ],
       },
       {
         source: "/admin/:path*",
         headers: [
           ...sharedHeaders.filter((header) => isProd || header.key !== "Strict-Transport-Security"),
-          { key: "Content-Security-Policy", value: adminCsp },
         ],
       },
     ];

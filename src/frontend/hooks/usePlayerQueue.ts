@@ -66,17 +66,28 @@ export function usePlayerQueue({
   const lastPlayerRef = useRef<number>(-1);
 
   useEffect(() => {
-    const newQueue = shuffleArray(
-      Array.from({ length: players.length }, (_, i) => i),
-    );
-    const firstPlayerIndex = newQueue[0] ?? 0;
+    let cancelled = false;
 
-    setQueue(newQueue);
-    setQueuePosition(0);
-    setCurrentPlayerIndex(firstPlayerIndex);
-    setPlayerTurnCount(createInitialTurnCount(players, newQueue[0]));
-    lastPlayerRef.current = -1;
-  }, [players, playersKey]);
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      const nextPlayers = playersKey ? playersKey.split("|") : [];
+      const newQueue = shuffleArray(
+        Array.from({ length: nextPlayers.length }, (_, i) => i),
+      );
+      const firstPlayerIndex = newQueue[0] ?? 0;
+
+      setQueue(newQueue);
+      setQueuePosition(0);
+      setCurrentPlayerIndex(firstPlayerIndex);
+      setPlayerTurnCount(createInitialTurnCount(nextPlayers, newQueue[0]));
+      lastPlayerRef.current = -1;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playersKey]);
 
   const getNextPlayer = useCallback(() => {
     if (players.length <= 1) {

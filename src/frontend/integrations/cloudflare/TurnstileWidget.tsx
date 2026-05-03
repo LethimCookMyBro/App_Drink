@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Script from "next/script";
+import { useSecurityNonce } from "@/frontend/components/SecurityNonceProvider";
 import {
   TURNSTILE_SCRIPT_SRC,
   type TurnstileAction,
@@ -37,6 +38,7 @@ export function TurnstileWidget({
 }: TurnstileWidgetProps) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const isDevelopment = process.env.NODE_ENV !== "production";
+  const nonce = useSecurityNonce();
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | number | null>(null);
   const lastResetKeyRef = useRef(resetKey);
@@ -131,6 +133,7 @@ export function TurnstileWidget({
         <Script
           src={TURNSTILE_SCRIPT_SRC}
           strategy="afterInteractive"
+          nonce={nonce}
           onReady={() => setIsReady(true)}
         />
         <div className={className}>
@@ -150,6 +153,7 @@ export function TurnstileWidget({
       <Script
         src={TURNSTILE_SCRIPT_SRC}
         strategy="afterInteractive"
+        nonce={nonce}
         onReady={() => setIsReady(true)}
       />
       <div className={className}>

@@ -24,6 +24,8 @@ test("session state snapshot preserves authoritative current-turn fields", () =>
     currentQuestionIs18Plus: false,
     currentQuestionIsCustom: true,
     currentTurnToken: "turn_active",
+    currentTurnStartedAt: new Date("2026-04-11T00:00:00.000Z"),
+    currentTurnExpiresAt: new Date("2026-04-11T00:00:30.000Z"),
     startedAt: new Date("2026-04-11T00:00:00.000Z"),
     endedAt: null,
   });
@@ -33,6 +35,10 @@ test("session state snapshot preserves authoritative current-turn fields", () =>
   assert.equal(snapshot?.currentQuestionText, "คำถามปัจจุบัน");
   assert.equal(snapshot?.currentQuestionIsCustom, true);
   assert.equal(snapshot?.currentTurnToken, "turn_active");
+  assert.equal(
+    snapshot?.currentTurnExpiresAt?.toISOString(),
+    "2026-04-11T00:00:30.000Z",
+  );
 });
 
 test("progress event data records round, drinks, and custom question ids", () => {
@@ -99,6 +105,8 @@ test("legacy session with missing current-turn fields rehydrates correctly", asy
       currentQuestionText: null,
       currentQuestionType: null,
       currentTurnToken: null,
+      currentTurnStartedAt: null,
+      currentTurnExpiresAt: null,
     }),
     true,
   );
@@ -108,6 +116,8 @@ test("legacy session with missing current-turn fields rehydrates correctly", asy
   assert.equal(nextState.currentQuestionIsCustom, true);
   assert.equal(typeof nextState.currentTurnToken, "string");
   assert.ok((nextState.currentTurnToken ?? "").length > 0);
+  assert.ok(nextState.currentTurnStartedAt instanceof Date);
+  assert.ok(nextState.currentTurnExpiresAt instanceof Date);
 });
 
 test("missing question inventory falls back to a safe placeholder turn", async () => {
@@ -141,4 +151,105 @@ test("missing question inventory falls back to a safe placeholder turn", async (
   assert.equal(nextState.currentQuestionType, "QUESTION");
   assert.equal(typeof nextState.currentTurnToken, "string");
   assert.ok((nextState.currentTurnToken ?? "").length > 0);
+});
+
+test("custom question selection honors room adult mode and difficulty", async () => {
+  const nextState = await chooseNextSessionState(
+    {
+      gameSession: {
+        findUnique: async () => ({
+          id: "session_custom_filter",
+          roomId: "room_1",
+          mode: "MIXED",
+          roundCount: 0,
+          room: {
+            difficulty: 2,
+            is18Plus: false,
+            players: [{ id: "player_1" }],
+            questions: [
+              {
+                id: "custom_adult",
+                text: "adult custom",
+                type: "QUESTION",
+                level: 2,
+                is18Plus: true,
+              },
+              {
+                id: "custom_hard",
+                text: "hard custom",
+                type: "QUESTION",
+                level: 3,
+                is18Plus: false,
+              },
+              {
+                id: "custom_safe",
+                text: "safe custom",
+                type: "QUESTION",
+                level: 2,
+                is18Plus: false,
+              },
+            ],
+          },
+          events: [],
+        }),
+      },
+      question: {
+        findFirst: async () => null,
+      },
+    } as never,
+    "session_custom_filter",
+  );
+
+  assert.equal(nextState.currentQuestionId, "custom_safe");
+  assert.equal(nextState.currentQuestionIs18Plus, false);
+});
+
+test("fallback question selection reuses difficulty and dedup filters", async () => {
+  let fallbackWhere: Record<string, unknown> | undefined;
+  const nextState = await chooseNextSessionState(
+    {
+      gameSession: {
+        findUnique: async () => ({
+          id: "session_fallback_filter",
+          roomId: "room_1",
+          mode: "VOTE",
+          roundCount: 0,
+          room: {
+            difficulty: 2,
+            is18Plus: false,
+            players: [{ id: "player_1" }],
+            questions: [],
+          },
+          events: [
+            {
+              questionId: "question_used",
+              data: null,
+            },
+          ],
+        }),
+      },
+      question: {
+        findFirst: async ({ where }: { where?: Record<string, unknown> }) => {
+          if ((where as { type?: string }).type === "VOTE") {
+            return null;
+          }
+
+          fallbackWhere = where;
+          return {
+            id: "question_safe",
+            text: "safe fallback",
+            type: "QUESTION",
+            level: 2,
+            is18Plus: false,
+          };
+        },
+      },
+    } as never,
+    "session_fallback_filter",
+  );
+
+  assert.equal(nextState.currentQuestionId, "question_safe");
+  assert.deepEqual(fallbackWhere?.level, { lte: 2 });
+  assert.equal(fallbackWhere?.is18Plus, false);
+  assert.deepEqual(fallbackWhere?.id, { notIn: ["question_used"] });
 });

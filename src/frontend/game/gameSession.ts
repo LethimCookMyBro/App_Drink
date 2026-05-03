@@ -53,6 +53,8 @@ export interface SessionSummarySnapshot {
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
   currentTurnToken: string | null;
+  currentTurnStartedAt: string | null;
+  currentTurnExpiresAt: string | null;
   startedAt: string;
   endedAt: string | null;
 }
@@ -321,6 +323,14 @@ function normalizeRoomSnapshot(data: unknown): RoomGameSnapshot | null {
           currentTurnToken:
             typeof activeSessionRecord.currentTurnToken === "string"
               ? activeSessionRecord.currentTurnToken
+              : null,
+          currentTurnStartedAt:
+            typeof activeSessionRecord.currentTurnStartedAt === "string"
+              ? activeSessionRecord.currentTurnStartedAt
+              : null,
+          currentTurnExpiresAt:
+            typeof activeSessionRecord.currentTurnExpiresAt === "string"
+              ? activeSessionRecord.currentTurnExpiresAt
               : null,
           startedAt:
             typeof activeSessionRecord.startedAt === "string"

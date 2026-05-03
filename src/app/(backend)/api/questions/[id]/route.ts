@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
+import { writeAdminAuditLog } from "@/backend/adminSecurity";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/backend/apiUtils";
 import { mapServerError } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
-import { rateLimitConfigs } from "@/backend/rateLimit";
+import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
 import { questionUpdateSchema } from "@/shared/schemas";
 
 export const runtime = "nodejs";
@@ -21,7 +22,6 @@ export async function GET(
       const { message, status } = getAdminAccessError(access);
       return jsonError(message, status);
     }
-
     const { id } = await params;
     if (!id || id.length < 10) {
       return jsonError("ไม่พบ ID ที่ถูกต้อง", 400);
@@ -78,6 +78,7 @@ export async function PUT(
       const { message, status } = getAdminAccessError(access);
       return jsonError(message, status);
     }
+    const { admin } = access;
 
     const body = await request.json();
     const validation = questionUpdateSchema.safeParse(body);
@@ -132,6 +133,19 @@ export async function PUT(
       },
     });
 
+    await writeAdminAuditLog({
+      adminId: admin.id,
+      action: "ADMIN_QUESTION_UPDATE",
+      status: "SUCCESS",
+      ip: getClientIP(request),
+      userAgent: request.headers.get("user-agent") ?? undefined,
+      metadata: {
+        questionId: question.id,
+        type: question.type,
+        is18Plus: question.is18Plus,
+      },
+    });
+
     return jsonOk({ question: toAdminQuestion(question) });
   } catch (error) {
     logger.error("questions.update.failed", {
@@ -163,6 +177,7 @@ export async function DELETE(
       const { message, status } = getAdminAccessError(access);
       return jsonError(message, status);
     }
+    const { admin } = access;
 
     const { default: prisma } = await import("@/backend/db");
 
@@ -174,6 +189,19 @@ export async function DELETE(
     await prisma.question.update({
       where: { id },
       data: { isActive: false },
+    });
+
+    await writeAdminAuditLog({
+      adminId: admin.id,
+      action: "ADMIN_QUESTION_DELETE",
+      status: "SUCCESS",
+      ip: getClientIP(request),
+      userAgent: request.headers.get("user-agent") ?? undefined,
+      metadata: {
+        questionId: existing.id,
+        type: existing.type,
+        is18Plus: existing.is18Plus,
+      },
     });
 
     return jsonOk({

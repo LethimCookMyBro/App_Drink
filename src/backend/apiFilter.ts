@@ -122,6 +122,8 @@ export function toGameSessionSummary(session: {
   currentQuestionIs18Plus?: boolean;
   currentQuestionIsCustom?: boolean;
   currentTurnToken?: string | null;
+  currentTurnStartedAt?: Date | null;
+  currentTurnExpiresAt?: Date | null;
   startedAt: Date;
   endedAt?: Date | null;
 }) {
@@ -140,6 +142,8 @@ export function toGameSessionSummary(session: {
     currentQuestionIs18Plus: session.currentQuestionIs18Plus ?? false,
     currentQuestionIsCustom: session.currentQuestionIsCustom ?? false,
     currentTurnToken: session.currentTurnToken ?? null,
+    currentTurnStartedAt: session.currentTurnStartedAt ?? null,
+    currentTurnExpiresAt: session.currentTurnExpiresAt ?? null,
     startedAt: session.startedAt,
     endedAt: session.endedAt ?? null,
   };

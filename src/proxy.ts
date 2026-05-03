@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { buildContentSecurityPolicy } from "@/backend/contentSecurityPolicy";
 import env from "@/backend/env";
 import verifyHs256Jwt from "@/backend/jwtEdge";
 import {
@@ -53,10 +54,24 @@ function applyRateLimitHeaders(response: NextResponse, limit: ReturnType<typeof 
   response.headers.set("X-RateLimit-Reset", limit.resetAt.toString());
 }
 
-function applySecurityHeaders(response: NextResponse, isApi = false) {
+function createNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function createRequestHeadersWithNonce(request: NextRequest, csp: string, nonce: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  return requestHeaders;
+}
+
+function applySecurityHeaders(response: NextResponse, csp: string, isApi = false) {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("Content-Security-Policy", csp);
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()",
@@ -81,6 +96,13 @@ function applySecurityHeaders(response: NextResponse, isApi = false) {
 }
 
 export async function proxy(request: NextRequest) {
+  const nonce = createNonce();
+  const csp = buildContentSecurityPolicy({
+    admin: request.nextUrl.pathname.startsWith("/admin"),
+    isDevelopment: env.isDevelopment,
+    nonce,
+  });
+  const requestHeaders = createRequestHeadersWithNonce(request, csp, nonce);
   const isAdminLoginPage = request.nextUrl.pathname === "/admin/login";
   const isAdminLoginApi = request.nextUrl.pathname === "/api/admin/login";
   const isAdminVerifyApi = request.nextUrl.pathname === "/api/admin/verify";
@@ -92,11 +114,11 @@ export async function proxy(request: NextRequest) {
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     });
     if (preflight) {
-      return applySecurityHeaders(preflight, true);
+      return applySecurityHeaders(preflight, csp, true);
     }
 
     if (request.headers.get("origin") && !isCorsOriginAllowed(request)) {
-      return applySecurityHeaders(forbiddenCorsResponse(), true);
+      return applySecurityHeaders(forbiddenCorsResponse(), csp, true);
     }
   }
 
@@ -105,7 +127,7 @@ export async function proxy(request: NextRequest) {
     if (!verification.ok) {
       const loginUrl = new URL("/admin/login", request.url);
       loginUrl.searchParams.set("reason", verification.reason);
-      return NextResponse.redirect(loginUrl);
+      return applySecurityHeaders(NextResponse.redirect(loginUrl), csp);
     }
   }
 
@@ -117,6 +139,7 @@ export async function proxy(request: NextRequest) {
         { error: "Unauthorized", reason: verification.reason },
         { status: 401 },
         ),
+        csp,
         true,
       );
     }
@@ -138,22 +161,35 @@ export async function proxy(request: NextRequest) {
       applyRateLimitHeaders(limitedResponse, limit);
       return applySecurityHeaders(
         ensureRateLimitCookie(request, limitedResponse),
+        csp,
         true,
       );
     }
 
-    const response = NextResponse.next();
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
     applyRateLimitHeaders(response, limit);
     return applySecurityHeaders(
       applyCorsHeaders(request, ensureRateLimitCookie(request, response), {
       allowCredentials: request.nextUrl.pathname.startsWith("/api/admin/"),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       }),
+      csp,
       true,
     );
   }
 
-  return applySecurityHeaders(NextResponse.next());
+  return applySecurityHeaders(
+    NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    }),
+    csp,
+  );
 }
 
 export const config = {

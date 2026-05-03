@@ -1,8 +1,15 @@
 import { NextRequest } from "next/server";
+import type { PrismaClient } from "@prisma/client";
 import { toPublicQuestion } from "@/backend/apiFilter";
 import { enforceRateLimit, jsonError, jsonOk } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { rateLimitConfigs } from "@/backend/rateLimit";
+import {
+  verifyRoomHostToken,
+  verifyRoomPlayerToken,
+  type RoomHostTokenPayload,
+  type RoomPlayerTokenPayload,
+} from "@/backend/roomAuth";
 import { GAME_QUESTION_TYPE_SET } from "@/shared/config/gameConstants";
 
 export const runtime = "nodejs";
@@ -46,6 +53,59 @@ function parseOptionalLevel(value: string | null): number | null {
   return parseBoundedInt(value, 1, 1, 3);
 }
 
+type RoomAdultAccessToken =
+  | { kind: "host"; payload: RoomHostTokenPayload }
+  | { kind: "player"; payload: RoomPlayerTokenPayload };
+
+function getRoomAdultAccessTokens(request: NextRequest): RoomAdultAccessToken[] {
+  const tokens: RoomAdultAccessToken[] = [];
+
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("room-host-")) {
+      const payload = verifyRoomHostToken(cookie.value);
+      if (payload) {
+        tokens.push({ kind: "host", payload });
+      }
+      continue;
+    }
+
+    if (cookie.name.startsWith("room-player-")) {
+      const payload = verifyRoomPlayerToken(cookie.value);
+      if (payload) {
+        tokens.push({ kind: "player", payload });
+      }
+    }
+  }
+
+  return tokens;
+}
+
+async function hasServerSideAdultQuestionAccess(
+  prisma: Pick<PrismaClient, "room">,
+  request: NextRequest,
+): Promise<boolean> {
+  const tokens = getRoomAdultAccessTokens(request);
+  for (const token of tokens) {
+    const room = await prisma.room.findFirst({
+      where: {
+        id: token.payload.roomId,
+        code: token.payload.code,
+        isActive: true,
+        ...(token.kind === "host"
+          ? { hostId: token.payload.hostId }
+          : { players: { some: { id: token.payload.playerId } } }),
+      },
+      select: { is18Plus: true },
+    });
+
+    if (room?.is18Plus) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // GET /api/questions/random - Get random question(s) for gameplay
 export async function GET(request: NextRequest) {
   const rateLimited = enforceRateLimit(request, rateLimitConfigs.randomQuestion);
@@ -53,7 +113,6 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
-  const is18Plus = searchParams.get("is18Plus") === "true";
   const count = parseBoundedInt(searchParams.get("count"), 1, 1, 10);
   const level = parseOptionalLevel(searchParams.get("level"));
   const excludeIds =
@@ -69,6 +128,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const { default: prisma } = await import("@/backend/db");
+    const canAccessAdultQuestions = await hasServerSideAdultQuestionAccess(
+      prisma,
+      request,
+    );
 
     const where: Record<string, unknown> = {
       isActive: true,
@@ -80,7 +143,7 @@ export async function GET(request: NextRequest) {
     if (level !== null) {
       where.level = { lte: level };
     }
-    if (!is18Plus) {
+    if (!canAccessAdultQuestions) {
       where.is18Plus = false;
     }
     if (excludeIds.length > 0) {

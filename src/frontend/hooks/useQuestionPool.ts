@@ -198,7 +198,6 @@ async function fetchQuestionPool(
       const questionType = QUESTION_TYPE_BY_MODE[mode] ?? "QUESTION";
       const params = new URLSearchParams();
       params.set("count", "50");
-      params.set("is18Plus", is18PlusEnabled.toString());
       params.set("level", level.toString());
       if (questionType) {
         params.set("type", questionType);
@@ -217,10 +216,10 @@ async function fetchQuestionPool(
         mode === "truth-or-dare"
           ? await Promise.all([
               fetchJson(
-                `/api/questions/random?count=25&type=TRUTH&is18Plus=${is18PlusEnabled}&level=${level}`,
+                `/api/questions/random?count=25&type=TRUTH&level=${level}`,
               ),
               fetchJson(
-                `/api/questions/random?count=25&type=DARE&is18Plus=${is18PlusEnabled}&level=${level}`,
+                `/api/questions/random?count=25&type=DARE&level=${level}`,
               ),
             ]).then(([truthData, dareData]) => [
               ...(truthData.questions || []),
@@ -254,6 +253,7 @@ export function useQuestionPool({
   customQuestions = [],
   customQuestionChance = 0.25, // 25% chance to show custom question
 }: UseQuestionPoolOptions): UseQuestionPoolReturn {
+  const playersKey = players.join("|");
   const [questions, setQuestions] = useState<GameQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -266,9 +266,21 @@ export function useQuestionPool({
   const usedCustomQuestionsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setPlayerAnswered(createAnsweredState(players));
-    usedCustomQuestionsRef.current.clear();
-  }, [players]);
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setPlayerAnswered(
+        createAnsweredState(playersKey ? playersKey.split("|") : []),
+      );
+      usedCustomQuestionsRef.current.clear();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playersKey]);
 
   useEffect(() => {
     usedCustomQuestionsRef.current.clear();

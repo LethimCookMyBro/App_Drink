@@ -3,7 +3,11 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import env from "@/backend/env";
 import logger from "@/backend/logger";
-import { createTokenFingerprint } from "@/backend/securityPrimitives";
+import {
+  createTokenFingerprint,
+  JWT_HS256_ALGORITHM,
+  JWT_HS256_VERIFY_OPTIONS,
+} from "@/backend/securityPrimitives";
 import {
   hasAdminRole,
   type AdminRoleName,
@@ -28,7 +32,7 @@ export function signAdminToken(admin: Pick<Admin, "id" | "email" | "role">) {
       iat: Math.floor(Date.now() / 1000),
     },
     getAdminJwtSecret(),
-    { expiresIn: "2h" },
+    { expiresIn: "2h", algorithm: JWT_HS256_ALGORITHM },
   );
 }
 
@@ -47,7 +51,11 @@ export async function getAdminTokenFromCookies(): Promise<string | null> {
 
 export function verifyAdminToken(token: string): AdminTokenPayload | null {
   try {
-    const decoded = jwt.verify(token, getAdminJwtSecret()) as AdminTokenPayload;
+    const decoded = jwt.verify(
+      token,
+      getAdminJwtSecret(),
+      JWT_HS256_VERIFY_OPTIONS,
+    ) as unknown as AdminTokenPayload;
     if (!decoded?.adminId) return null;
     return decoded;
   } catch {
@@ -60,7 +68,11 @@ export function verifyAdminTokenDetailed(token: string): {
   reason?: "expired" | "invalid";
 } {
   try {
-    const decoded = jwt.verify(token, getAdminJwtSecret()) as AdminTokenPayload;
+    const decoded = jwt.verify(
+      token,
+      getAdminJwtSecret(),
+      JWT_HS256_VERIFY_OPTIONS,
+    ) as unknown as AdminTokenPayload;
     if (!decoded?.adminId) {
       return { payload: null, reason: "invalid" };
     }

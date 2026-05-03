@@ -40,6 +40,8 @@ type SessionResponse = {
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
   currentTurnToken: string | null;
+  currentTurnStartedAt: Date | null;
+  currentTurnExpiresAt: Date | null;
   startedAt: Date;
   userId: string | null;
 };
@@ -121,6 +123,8 @@ export async function POST(
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
               currentTurnToken: true,
+              currentTurnStartedAt: true,
+              currentTurnExpiresAt: true,
               startedAt: true,
               userId: true,
             },
@@ -164,6 +168,8 @@ export async function POST(
                     currentQuestionIs18Plus: true,
                     currentQuestionIsCustom: true,
                     currentTurnToken: true,
+                    currentTurnStartedAt: true,
+                    currentTurnExpiresAt: true,
                     startedAt: true,
                     userId: true,
                   },
@@ -195,6 +201,8 @@ export async function POST(
                   currentQuestionIs18Plus: true,
                   currentQuestionIsCustom: true,
                   currentTurnToken: true,
+                  currentTurnStartedAt: true,
+                  currentTurnExpiresAt: true,
                   startedAt: true,
                   userId: true,
                 },
@@ -243,6 +251,8 @@ export async function POST(
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
               currentTurnToken: true,
+              currentTurnStartedAt: true,
+              currentTurnExpiresAt: true,
               startedAt: true,
               userId: true,
             },
@@ -268,6 +278,8 @@ export async function POST(
               currentQuestionIs18Plus: true,
               currentQuestionIsCustom: true,
               currentTurnToken: true,
+              currentTurnStartedAt: true,
+              currentTurnExpiresAt: true,
               startedAt: true,
               userId: true,
             },
@@ -325,6 +337,8 @@ export async function POST(
           currentQuestionIs18Plus: session.currentQuestionIs18Plus,
           currentQuestionIsCustom: session.currentQuestionIsCustom,
           currentTurnToken: session.currentTurnToken,
+          currentTurnStartedAt: session.currentTurnStartedAt,
+          currentTurnExpiresAt: session.currentTurnExpiresAt,
           startedAt: session.startedAt,
         },
       },

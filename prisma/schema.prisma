@@ -235,6 +235,8 @@ model GameSession {
   currentQuestionIs18Plus Boolean @default(false)
   currentQuestionIsCustom Boolean @default(false)
   currentTurnToken String?
+  currentTurnStartedAt DateTime?
+  currentTurnExpiresAt DateTime?
   startedAt   DateTime @default(now())
   endedAt     DateTime?
   

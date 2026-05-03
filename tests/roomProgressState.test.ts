@@ -51,6 +51,8 @@ type MutableSession = {
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
   currentTurnToken: string | null;
+  currentTurnStartedAt: Date | null;
+  currentTurnExpiresAt: Date | null;
   startedAt: Date;
   endedAt: Date | null;
 };
@@ -89,6 +91,8 @@ function createProgressState(): ProgressState {
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
       currentTurnToken: "turn_1",
+      currentTurnStartedAt: new Date("2026-04-11T00:00:00.000Z"),
+      currentTurnExpiresAt: new Date("2026-04-11T00:00:30.000Z"),
       startedAt: new Date("2026-04-11T00:00:00.000Z"),
       endedAt: null,
     },
@@ -148,6 +152,8 @@ function advanceSessionToNextTurn(state: ProgressState, drinkDelta: number): voi
   state.session.currentQuestionIs18Plus = false;
   state.session.currentQuestionIsCustom = false;
   state.session.currentTurnToken = "turn_2";
+  state.session.currentTurnStartedAt = new Date("2026-04-11T00:01:00.000Z");
+  state.session.currentTurnExpiresAt = new Date("2026-04-11T00:01:30.000Z");
 }
 
 function matchesQuestionWhere(
@@ -275,6 +281,12 @@ function createProgressDb(state = createProgressState()) {
           state.session.currentTurnToken =
             (data.currentTurnToken as string | null | undefined) ??
             state.session.currentTurnToken;
+          state.session.currentTurnStartedAt =
+            (data.currentTurnStartedAt as Date | null | undefined) ??
+            state.session.currentTurnStartedAt;
+          state.session.currentTurnExpiresAt =
+            (data.currentTurnExpiresAt as Date | null | undefined) ??
+            state.session.currentTurnExpiresAt;
 
           return { ...state.session };
         },
@@ -488,4 +500,39 @@ test("stale client requests cannot mutate the authoritative turn twice", async (
   assert.equal(state.events.length, 0);
   assert.equal(result.session.currentPlayerId, "player_2");
   assert.equal(result.session.currentTurnToken, "turn_2");
+});
+
+test("current turn cannot be advanced before server timer expiry", async () => {
+  const { db, state } = createProgressDb();
+  state.session.currentTurnExpiresAt = new Date(Date.now() + 30_000);
+
+  const result = await writeAuthoritativeProgress(db, {
+    roomId: "room_1",
+    sessionId: "session_1",
+    action: GameEventType.ANSWERED,
+    drinkDelta: 0,
+    turnToken: "turn_1",
+    requestId: "request_early",
+  });
+
+  assert.equal(result.kind, "too_early");
+  assert.equal(state.events.length, 0);
+  assert.equal(state.session.roundCount, 0);
+});
+
+test("positive drink actions do not increment skip count unless skipped", async () => {
+  const { db, state } = createProgressDb();
+
+  const result = await writeAuthoritativeProgress(db, {
+    roomId: "room_1",
+    sessionId: "session_1",
+    action: GameEventType.DRANK,
+    drinkDelta: 2,
+    turnToken: "turn_1",
+    requestId: "request_drank",
+  });
+
+  assert.equal(result.kind, "updated");
+  assert.equal(state.players[0]?.drinkCount, 2);
+  assert.equal(state.players[0]?.skipCount, 0);
 });

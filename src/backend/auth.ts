@@ -5,6 +5,8 @@ import logger from "@/backend/logger";
 import sanitize from "@/shared/sanitize";
 import {
   hashStoredSessionToken,
+  JWT_HS256_ALGORITHM,
+  JWT_HS256_VERIFY_OPTIONS,
 } from "@/backend/securityPrimitives";
 
 // Get JWT secret - check at runtime, not build time
@@ -42,13 +44,20 @@ export function normalizeEmail(email: string): string {
 export function generateToken(
   payload: Omit<JWTPayload, "iat" | "exp">,
 ): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), {
+    expiresIn: TOKEN_EXPIRY,
+    algorithm: JWT_HS256_ALGORITHM,
+  });
 }
 
 // Verify JWT token
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as JWTPayload;
+    return jwt.verify(
+      token,
+      getJwtSecret(),
+      JWT_HS256_VERIFY_OPTIONS,
+    ) as unknown as JWTPayload;
   } catch {
     return null;
   }

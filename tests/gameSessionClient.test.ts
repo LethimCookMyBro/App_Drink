@@ -60,6 +60,8 @@ function createRoomPayload(input?: {
     currentQuestionIs18Plus: boolean;
     currentQuestionIsCustom: boolean;
     currentTurnToken: string | null;
+    currentTurnStartedAt: string | null;
+    currentTurnExpiresAt: string | null;
     startedAt: string;
     endedAt: string | null;
   }>;
@@ -79,6 +81,8 @@ function createRoomPayload(input?: {
     currentQuestionIs18Plus: false,
     currentQuestionIsCustom: false,
     currentTurnToken: "turn_1",
+    currentTurnStartedAt: "2026-04-11T00:00:00.000Z",
+    currentTurnExpiresAt: "2026-04-11T00:00:30.000Z",
     startedAt: "2026-04-11T00:00:00.000Z",
     endedAt: null,
     ...input?.session,

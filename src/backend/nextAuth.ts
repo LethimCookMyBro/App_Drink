@@ -237,7 +237,7 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: getGoogleClientId(),
       clientSecret: getGoogleClientSecret(),
-      allowDangerousEmailAccountLinking: true,
+      allowDangerousEmailAccountLinking: false,
       profile(profile) {
         const googleProfile = profile as GoogleProfile;
         const email = normalizeEmail(googleProfile.email || "");
@@ -275,7 +275,7 @@ export const authOptions: NextAuthOptions = {
 
       const matchingUsers = await prisma.user.findMany({
         where: { email },
-        select: { id: true },
+        select: { id: true, isVerified: true, emailVerified: true },
         take: 2,
       });
 
@@ -284,10 +284,17 @@ export const authOptions: NextAuthOptions = {
       }
 
       if (matchingUsers[0]) {
+        const emailIsVerified = Boolean(
+          matchingUsers[0].isVerified || matchingUsers[0].emailVerified,
+        );
         const linkedProviders = await prisma.account.findMany({
           where: { userId: matchingUsers[0].id },
           select: { provider: true },
         });
+
+        if (linkedProviders.length === 0 && !emailIsVerified) {
+          return false;
+        }
 
         if (
           linkedProviders.some((linkedAccount) => linkedAccount.provider !== "google")

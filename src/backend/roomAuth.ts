@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import env from "@/backend/env";
+import {
+  JWT_HS256_ALGORITHM,
+  JWT_HS256_VERIFY_OPTIONS,
+} from "@/backend/securityPrimitives";
 
 export interface RoomHostTokenPayload {
   roomId: string;
@@ -31,22 +35,36 @@ export function getRoomPlayerCookieName(code: string) {
 }
 
 export function signRoomHostToken(payload: RoomHostTokenPayload) {
-  return jwt.sign(payload, getRoomJwtSecret(), { expiresIn: "4h" });
+  return jwt.sign(payload, getRoomJwtSecret(), {
+    expiresIn: "4h",
+    algorithm: JWT_HS256_ALGORITHM,
+  });
 }
 
 export function signRoomPlayerToken(payload: RoomPlayerTokenPayload) {
-  return jwt.sign(payload, getRoomJwtSecret(), { expiresIn: "4h" });
+  return jwt.sign(payload, getRoomJwtSecret(), {
+    expiresIn: "4h",
+    algorithm: JWT_HS256_ALGORITHM,
+  });
 }
 
 export function verifyRoomHostToken(token: string): RoomHostTokenPayload | null {
   try {
-    const decoded = jwt.verify(token, getRoomJwtSecret()) as RoomHostTokenPayload;
+    const decoded = jwt.verify(
+      token,
+      getRoomJwtSecret(),
+      JWT_HS256_VERIFY_OPTIONS,
+    ) as unknown as RoomHostTokenPayload;
     if (!decoded?.roomId || !decoded?.hostId || !decoded?.code) return null;
     return decoded;
   } catch {
     if (env.previousRoomJwtSecret) {
       try {
-        const decoded = jwt.verify(token, env.previousRoomJwtSecret) as RoomHostTokenPayload;
+        const decoded = jwt.verify(
+          token,
+          env.previousRoomJwtSecret,
+          JWT_HS256_VERIFY_OPTIONS,
+        ) as unknown as RoomHostTokenPayload;
         if (!decoded?.roomId || !decoded?.hostId || !decoded?.code) return null;
         return decoded;
       } catch {
@@ -64,7 +82,8 @@ export function verifyRoomPlayerToken(
     const decoded = jwt.verify(
       token,
       getRoomJwtSecret(),
-    ) as RoomPlayerTokenPayload;
+      JWT_HS256_VERIFY_OPTIONS,
+    ) as unknown as RoomPlayerTokenPayload;
     if (!decoded?.roomId || !decoded?.playerId || !decoded?.code) return null;
     return decoded;
   } catch {
@@ -73,7 +92,8 @@ export function verifyRoomPlayerToken(
         const decoded = jwt.verify(
           token,
           env.previousRoomJwtSecret,
-        ) as RoomPlayerTokenPayload;
+          JWT_HS256_VERIFY_OPTIONS,
+        ) as unknown as RoomPlayerTokenPayload;
         if (!decoded?.roomId || !decoded?.playerId || !decoded?.code) return null;
         return decoded;
       } catch {

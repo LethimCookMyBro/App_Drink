@@ -94,20 +94,45 @@ const resolvedSecrets = {
   jwt: resolveSecret(rawEnv.JWT_SECRET, "jwt-secret"),
   admin: resolveSecret(rawEnv.ADMIN_JWT_SECRET, "admin-jwt-secret"),
   room: resolveSecret(rawEnv.ROOM_JWT_SECRET, "room-jwt-secret"),
-  nextAuth: resolveSecret(rawEnv.NEXTAUTH_SECRET ?? rawEnv.JWT_SECRET, "nextauth-secret"),
+  nextAuth: resolveSecret(rawEnv.NEXTAUTH_SECRET, "nextauth-secret"),
 };
 
-if (rawEnv.NODE_ENV === "production" && !allowBuildTimeSecretFallback) {
-  const providedSecuritySecrets = [
-    rawEnv.JWT_SECRET,
-    rawEnv.ADMIN_JWT_SECRET,
-    rawEnv.ROOM_JWT_SECRET,
-    rawEnv.NEXTAUTH_SECRET,
-  ].filter((value): value is string => Boolean(value));
-  const uniqueSecrets = new Set(providedSecuritySecrets);
-  if (uniqueSecrets.size !== providedSecuritySecrets.length) {
-    throw new Error("JWT_SECRET, ADMIN_JWT_SECRET, ROOM_JWT_SECRET, and NEXTAUTH_SECRET must all be different in production when explicitly provided.");
+export function validateProductionSecuritySecrets(
+  secrets: Record<string, string | undefined>,
+): void {
+  const requiredSecretNames = [
+    "JWT_SECRET",
+    "ADMIN_JWT_SECRET",
+    "ROOM_JWT_SECRET",
+    "NEXTAUTH_SECRET",
+    "API_ENCRYPTION_KEY",
+  ] as const;
+
+  for (const name of requiredSecretNames) {
+    const value = secrets[name];
+    if (!value || value.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `${name} must be set and at least ${MIN_SECRET_LENGTH} characters long in production.`,
+      );
+    }
   }
+
+  const values = requiredSecretNames.map((name) => secrets[name]);
+  if (new Set(values).size !== values.length) {
+    throw new Error(
+      "JWT_SECRET, ADMIN_JWT_SECRET, ROOM_JWT_SECRET, NEXTAUTH_SECRET, and API_ENCRYPTION_KEY must all be different in production.",
+    );
+  }
+}
+
+if (rawEnv.NODE_ENV === "production" && !allowBuildTimeSecretFallback) {
+  validateProductionSecuritySecrets({
+    JWT_SECRET: rawEnv.JWT_SECRET,
+    ADMIN_JWT_SECRET: rawEnv.ADMIN_JWT_SECRET,
+    ROOM_JWT_SECRET: rawEnv.ROOM_JWT_SECRET,
+    NEXTAUTH_SECRET: rawEnv.NEXTAUTH_SECRET,
+    API_ENCRYPTION_KEY: rawEnv.API_ENCRYPTION_KEY,
+  });
 }
 
 export const env = {
@@ -124,10 +149,7 @@ export const env = {
   roomJwtSecret: resolvedSecrets.room,
   previousRoomJwtSecret: rawEnv.ROOM_JWT_SECRET_PREVIOUS || "",
   nextAuthSecret: resolvedSecrets.nextAuth,
-  apiEncryptionKey:
-    rawEnv.API_ENCRYPTION_KEY && rawEnv.API_ENCRYPTION_KEY.length >= MIN_SECRET_LENGTH
-      ? rawEnv.API_ENCRYPTION_KEY
-      : resolvedSecrets.jwt,
+  apiEncryptionKey: resolveSecret(rawEnv.API_ENCRYPTION_KEY, "api-encryption-key"),
   rateLimitMax: rawEnv.RATE_LIMIT_MAX,
   trustProxyIpHeaders: rawEnv.TRUST_PROXY_IP_HEADERS === "true",
   googleLoginEnabled:

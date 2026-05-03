@@ -60,6 +60,8 @@ export const ROOM_SUMMARY_SELECT = {
       currentQuestionIs18Plus: true,
       currentQuestionIsCustom: true,
       currentTurnToken: true,
+      currentTurnStartedAt: true,
+      currentTurnExpiresAt: true,
       startedAt: true,
       endedAt: true,
     },
@@ -71,6 +73,8 @@ export const ROOM_HOST_ACCESS_SELECT = {
   code: true,
   name: true,
   hostId: true,
+  difficulty: true,
+  is18Plus: true,
   maxPlayers: true,
   isActive: true,
 } satisfies Prisma.RoomSelect;

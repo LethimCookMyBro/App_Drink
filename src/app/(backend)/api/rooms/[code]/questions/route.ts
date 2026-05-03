@@ -70,6 +70,10 @@ export async function POST(
             return access;
           }
 
+          if (validation.data.is18Plus && !access.room.is18Plus) {
+            return { kind: "adult_not_allowed" as const };
+          }
+
           const activeSession = await tx.gameSession.findFirst({
             where: {
               roomId: access.room.id,
@@ -110,6 +114,10 @@ export async function POST(
 
     if (result.kind === "forbidden") {
       return jsonError("ไม่มีสิทธิ์เข้าถึง", 403);
+    }
+
+    if (result.kind === "adult_not_allowed") {
+      return jsonError("Adult custom questions are not allowed in this room", 403);
     }
 
     if (result.kind === "room_missing") {

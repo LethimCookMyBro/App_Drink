@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { isUniqueConstraintError } from "@/backend/prismaRetry";
+import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -33,6 +34,8 @@ const SESSION_STATE_SELECT = {
   currentQuestionIs18Plus: true,
   currentQuestionIsCustom: true,
   currentTurnToken: true,
+  currentTurnStartedAt: true,
+  currentTurnExpiresAt: true,
   startedAt: true,
   endedAt: true,
 } satisfies Prisma.GameSessionSelect;
@@ -57,6 +60,8 @@ export type SessionStateSnapshot = {
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
   currentTurnToken: string | null;
+  currentTurnStartedAt: Date | null;
+  currentTurnExpiresAt: Date | null;
   startedAt: Date;
   endedAt: Date | null;
 };
@@ -74,14 +79,6 @@ export type SessionCompletionSummary = {
   players: SessionPlayerStats[];
 };
 
-type RoomQuestionRecord = {
-  id: string;
-  text: string;
-  type: QuestionType;
-  level: number;
-  is18Plus: boolean;
-};
-
 type SessionChoice = {
   currentPlayerId: string | null;
   currentQuestionId: string | null;
@@ -91,6 +88,8 @@ type SessionChoice = {
   currentQuestionIs18Plus: boolean;
   currentQuestionIsCustom: boolean;
   currentTurnToken: string | null;
+  currentTurnStartedAt: Date | null;
+  currentTurnExpiresAt: Date | null;
 };
 
 type SessionTurnHydrationCandidate = {
@@ -99,6 +98,8 @@ type SessionTurnHydrationCandidate = {
   currentQuestionText?: string | null;
   currentQuestionType?: string | null;
   currentTurnToken?: string | null;
+  currentTurnStartedAt?: Date | null;
+  currentTurnExpiresAt?: Date | null;
 };
 
 type ProgressRequestInput = {
@@ -114,12 +115,22 @@ export type ProgressWriteResult =
   | { kind: "not_found" }
   | { kind: "closed"; session: SessionStateSnapshot }
   | { kind: "invalid_state"; session: SessionStateSnapshot }
+  | { kind: "too_early"; session: SessionStateSnapshot; retryAfterSeconds: number }
   | { kind: "stale"; session: SessionStateSnapshot }
   | { kind: "duplicate"; session: SessionStateSnapshot }
   | { kind: "updated"; session: SessionStateSnapshot };
 
+const TURN_DURATION_MS = GAME_SETTINGS.defaultTimerDuration * 1000;
+
 function createTurnToken(): string {
   return randomUUID();
+}
+
+function createTurnTiming(now = new Date()) {
+  return {
+    currentTurnStartedAt: now,
+    currentTurnExpiresAt: new Date(now.getTime() + TURN_DURATION_MS),
+  };
 }
 
 function hasAuthoritativeTurn(
@@ -129,7 +140,9 @@ function hasAuthoritativeTurn(
     session?.currentPlayerId &&
       session.currentQuestionText &&
       session.currentQuestionType &&
-      session.currentTurnToken,
+      session.currentTurnToken &&
+      session.currentTurnStartedAt &&
+      session.currentTurnExpiresAt,
   );
 }
 
@@ -219,6 +232,8 @@ export function toSessionStateSnapshot(
     currentQuestionIs18Plus: session.currentQuestionIs18Plus,
     currentQuestionIsCustom: session.currentQuestionIsCustom,
     currentTurnToken: session.currentTurnToken ?? null,
+    currentTurnStartedAt: session.currentTurnStartedAt ?? null,
+    currentTurnExpiresAt: session.currentTurnExpiresAt ?? null,
     startedAt: session.startedAt,
     endedAt: session.endedAt ?? null,
   };
@@ -235,7 +250,9 @@ export function sessionNeedsCurrentTurnHydration(
     !session.currentPlayerId ||
     !session.currentQuestionText ||
     !session.currentQuestionType ||
-    !session.currentTurnToken
+    !session.currentTurnToken ||
+    !session.currentTurnStartedAt ||
+    !session.currentTurnExpiresAt
   );
 }
 
@@ -293,6 +310,8 @@ export async function chooseNextSessionState(
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
       currentTurnToken: null,
+      currentTurnStartedAt: null,
+      currentTurnExpiresAt: null,
     };
   }
 
@@ -308,6 +327,8 @@ export async function chooseNextSessionState(
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
       currentTurnToken: null,
+      currentTurnStartedAt: null,
+      currentTurnExpiresAt: null,
     };
   }
 
@@ -325,7 +346,10 @@ export async function chooseNextSessionState(
   );
 
   const availableCustomQuestions = session.room.questions.filter(
-    (question) => !usedCustomQuestionIds.has(question.id),
+    (question) =>
+      !usedCustomQuestionIds.has(question.id) &&
+      question.level <= session.room.difficulty &&
+      (session.room.is18Plus || !question.is18Plus),
   );
   const preferredTypes = getPreferredQuestionTypes(
     session.mode,
@@ -346,6 +370,7 @@ export async function chooseNextSessionState(
       currentQuestionIs18Plus: customQuestion.is18Plus,
       currentQuestionIsCustom: true,
       currentTurnToken: createTurnToken(),
+      ...createTurnTiming(),
     };
   }
 
@@ -385,16 +410,13 @@ export async function chooseNextSessionState(
         currentQuestionIs18Plus: question.is18Plus,
         currentQuestionIsCustom: false,
         currentTurnToken: createTurnToken(),
+        ...createTurnTiming(),
       };
     }
   }
 
   const fallbackQuestion = await prisma.question.findFirst({
-    where: {
-      isActive: true,
-      isPublic: true,
-      ...(session.room.is18Plus ? {} : { is18Plus: false }),
-    },
+    where: baseWhere,
     orderBy: [{ usageCount: "asc" }, { updatedAt: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
@@ -415,6 +437,7 @@ export async function chooseNextSessionState(
       currentQuestionIs18Plus: false,
       currentQuestionIsCustom: false,
       currentTurnToken: createTurnToken(),
+      ...createTurnTiming(),
     };
   }
 
@@ -427,6 +450,7 @@ export async function chooseNextSessionState(
     currentQuestionIs18Plus: fallbackQuestion.is18Plus,
     currentQuestionIsCustom: false,
     currentTurnToken: createTurnToken(),
+    ...createTurnTiming(),
   };
 }
 
@@ -554,6 +578,19 @@ export async function writeAuthoritativeProgress(
     return { kind: "stale", session: sessionSnapshot };
   }
 
+  const nowMs = Date.now();
+  const turnExpiresAtMs = sessionSnapshot.currentTurnExpiresAt?.getTime();
+  if (!turnExpiresAtMs || nowMs < turnExpiresAtMs) {
+    return {
+      kind: "too_early",
+      session: sessionSnapshot,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil(((turnExpiresAtMs ?? nowMs + TURN_DURATION_MS) - nowMs) / 1000),
+      ),
+    };
+  }
+
   const nextRoundNumber = sessionSnapshot.roundCount + 1;
   const eventData = buildProgressEventData({
     customQuestionId: sessionSnapshot.currentQuestionIsCustom
@@ -618,6 +655,19 @@ export async function writeAuthoritativeProgress(
         drinkCount: {
           increment: input.drinkDelta,
         },
+        ...(input.action === GameEventType.SKIPPED
+          ? {
+              skipCount: {
+                increment: 1,
+              },
+            }
+          : {}),
+      },
+    });
+  } else if (input.action === GameEventType.SKIPPED) {
+    await prisma.player.update({
+      where: { id: sessionSnapshot.currentPlayerId! },
+      data: {
         skipCount: {
           increment: 1,
         },

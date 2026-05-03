@@ -122,6 +122,15 @@ export async function POST(
       });
     }
 
+    if (result.kind === "too_early") {
+      return jsonError("Turn timer has not expired yet", 409, {
+        code: "TURN_TOO_EARLY",
+        retryAfterSeconds: result.retryAfterSeconds,
+        sessionId: result.session.id,
+        session: result.session,
+      });
+    }
+
     return jsonOk({
       success: true,
       sessionId: result.session.id,

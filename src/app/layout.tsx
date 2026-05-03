@@ -1,6 +1,8 @@
 /* eslint-disable @next/next/no-page-custom-font */
 import type { Metadata, Viewport } from "next";
 import { Kanit, Space_Grotesk } from "next/font/google";
+import { headers } from "next/headers";
+import { SecurityNonceProvider } from "@/frontend/components/SecurityNonceProvider";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
 import "./globals.css";
 
@@ -41,11 +43,13 @@ export const viewport: Viewport = {
   themeColor: "#1e1022",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce");
+
   return (
     <html
       lang="th"
@@ -63,17 +67,19 @@ export default function RootLayout({
         className={`${kanit.variable} ${spaceGrotesk.variable} font-[family-name:var(--font-kanit)] antialiased`}
         suppressHydrationWarning
       >
-        <ThemeProvider>
-          {/* Background Effects */}
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-            <div className="smoke-bg absolute top-[-10%] left-0 right-0 h-[70vh] w-full" />
-            <div className="absolute bottom-[-20%] left-[-20%] h-[50vh] w-[80%] rounded-full bg-primary/5 blur-[80px]" />
-            <div className="noise-overlay absolute inset-0" />
-          </div>
+        <SecurityNonceProvider nonce={nonce}>
+          <ThemeProvider>
+            {/* Background Effects */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+              <div className="smoke-bg absolute top-[-10%] left-0 right-0 h-[70vh] w-full" />
+              <div className="absolute bottom-[-20%] left-[-20%] h-[50vh] w-[80%] rounded-full bg-primary/5 blur-[80px]" />
+              <div className="noise-overlay absolute inset-0" />
+            </div>
 
-          {/* Main Content */}
-          <div className="app-shell">{children}</div>
-        </ThemeProvider>
+            {/* Main Content */}
+            <div className="app-shell">{children}</div>
+          </ThemeProvider>
+        </SecurityNonceProvider>
       </body>
     </html>
   );

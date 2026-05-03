@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
+import { writeAdminAuditLog } from "@/backend/adminSecurity";
 import {
   enforceRateLimit,
   enforceSameOrigin,
@@ -9,7 +10,7 @@ import {
   mapServerError,
 } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
-import { rateLimitConfigs } from "@/backend/rateLimit";
+import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
 import { questionSchema } from "@/shared/schemas";
 import { GAME_QUESTION_TYPE_SET } from "@/shared/config/gameConstants";
 
@@ -172,6 +173,19 @@ export async function POST(request: NextRequest) {
         isPublic: true,
         isActive: true,
         usageCount: true,
+      },
+    });
+
+    await writeAdminAuditLog({
+      adminId: admin.id,
+      action: "ADMIN_QUESTION_CREATE",
+      status: "SUCCESS",
+      ip: getClientIP(request),
+      userAgent: request.headers.get("user-agent") ?? undefined,
+      metadata: {
+        questionId: question.id,
+        type: question.type,
+        is18Plus: question.is18Plus,
       },
     });
 

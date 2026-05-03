@@ -46,18 +46,14 @@ function getConfig() {
   const databaseUrl = hasRailwayRuntime
     ? internalUrl || publicUrl
     : publicUrl || internalUrl;
-  const jwtSecret = env.JWT_SECRET || "";
-  const apiEncryptionKey =
-    env.API_ENCRYPTION_KEY && env.API_ENCRYPTION_KEY.length >= 32
-      ? env.API_ENCRYPTION_KEY
-      : jwtSecret;
+  const apiEncryptionKey = env.API_ENCRYPTION_KEY || "";
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL or DATABASE_PUBLIC_URL is required");
   }
 
-  if (!apiEncryptionKey) {
-    throw new Error("API_ENCRYPTION_KEY or JWT_SECRET is required");
+  if (apiEncryptionKey.length < 32) {
+    throw new Error("API_ENCRYPTION_KEY is required and must be at least 32 characters");
   }
 
   return { databaseUrl, apiEncryptionKey };
