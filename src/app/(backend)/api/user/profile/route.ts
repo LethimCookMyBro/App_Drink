@@ -4,6 +4,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import env from "@/backend/env";
 import {
@@ -114,7 +115,9 @@ export async function PATCH(request: Request) {
 
     const { default: prisma } = await import("@/backend/db");
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const validation = profileUpdateSchema.safeParse({
       name: body?.name,
       avatarUrl: body?.avatarUrl,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassPanel, BottomNav } from "@/frontend/components/ui";
@@ -39,30 +39,42 @@ export default function HistoryPage() {
     totalPlayTime: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    checkAuth();
-    fetchHistory();
-  }, [checkAuth]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setLoadError("");
       const res = await fetch("/api/user/history");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.history) {
-          setHistoryItems(data.history);
-        }
-        if (data.stats) {
-          setStats(data.stats);
-        }
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setLoadError(data?.error || "ไม่สามารถโหลดประวัติการเล่นได้");
+        return;
+      }
+
+      setHistoryItems(Array.isArray(data?.history) ? data.history : []);
+      if (data?.stats) {
+        setStats(data.stats);
       }
     } catch {
-      // Keep default empty state
+      setLoadError("ไม่สามารถเชื่อมต่อเพื่อโหลดประวัติได้");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void checkAuth();
+
+    const fetchId = window.setTimeout(() => {
+      void fetchHistory();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(fetchId);
+    };
+  }, [checkAuth, fetchHistory]);
 
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
@@ -143,6 +155,10 @@ export default function HistoryPage() {
           <div className="text-center py-8">
             <div className="text-white/40">กำลังโหลด...</div>
           </div>
+        ) : loadError ? (
+          <GlassPanel variant="red" className="p-5 text-center text-neon-red">
+            {loadError}
+          </GlassPanel>
         ) : historyItems.length > 0 ? (
           historyItems.map((item, index) => (
             <motion.div

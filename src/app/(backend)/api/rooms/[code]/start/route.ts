@@ -6,6 +6,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import { getAuthenticatedAppUser } from "@/backend/appAuth";
 import {
@@ -73,7 +74,9 @@ export async function POST(
       return jsonError("รหัสห้องไม่ถูกต้อง", 400);
     }
 
-    const body = await request.json().catch(() => ({}));
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const modeValidation = roomStartSchema.safeParse({
       mode: body?.mode,
       resumePath: body?.resumePath,

@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
 import { Button, GlassPanel } from "@/frontend/components/ui";
@@ -64,6 +70,88 @@ function getQuestionTextError(text: string): string | null {
   if (trimmed.length > 500) return "คำถามยาวได้ไม่เกิน 500 ตัวอักษร";
 
   return null;
+}
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+interface CustomDropdownProps {
+  id: string;
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  label: string;
+  openDropdown: string | null;
+  setOpenDropdown: Dispatch<SetStateAction<string | null>>;
+}
+
+function CustomDropdown({
+  id,
+  value,
+  options,
+  onChange,
+  label,
+  openDropdown,
+  setOpenDropdown,
+}: CustomDropdownProps) {
+  const isOpen = openDropdown === id;
+  const selectedOption = options.find((o) => o.value === value) || options[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpenDropdown(isOpen ? null : id)}
+        className="flex items-center justify-between gap-2 bg-surface border border-white/10 rounded-xl px-4 py-3 text-white text-sm min-w-[120px] hover:border-primary/50 transition-colors"
+      >
+        <span className="truncate">{selectedOption?.label || label}</span>
+        <span
+          className={`material-symbols-outlined text-lg transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        >
+          expand_more
+        </span>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setOpenDropdown(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute z-50 mt-2 w-full min-w-[150px] bg-surface border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+            >
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpenDropdown(null);
+                  }}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                    value === option.value
+                      ? "bg-primary text-white"
+                      : "text-white/80 hover:bg-white/5"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default function AdminQuestionsPage() {
@@ -266,76 +354,6 @@ export default function AdminQuestionsPage() {
     setQuestions((current) => current.filter((q) => q.id !== id));
   };
 
-  // Custom Dropdown Component
-  const CustomDropdown = ({
-    id,
-    value,
-    options,
-    onChange,
-    label,
-  }: {
-    id: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-    label: string;
-  }) => {
-    const isOpen = openDropdown === id;
-    const selectedOption = options.find((o) => o.value === value) || options[0];
-
-    return (
-      <div className="relative">
-        <button
-          onClick={() => setOpenDropdown(isOpen ? null : id)}
-          className="flex items-center justify-between gap-2 bg-surface border border-white/10 rounded-xl px-4 py-3 text-white text-sm min-w-[120px] hover:border-primary/50 transition-colors"
-        >
-          <span className="truncate">{selectedOption?.label || label}</span>
-          <span
-            className={`material-symbols-outlined text-lg transition-transform ${
-              isOpen ? "rotate-180" : ""
-            }`}
-          >
-            expand_more
-          </span>
-        </button>
-
-        <AnimatePresence>
-          {isOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setOpenDropdown(null)}
-              />
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="absolute z-50 mt-2 w-full min-w-[150px] bg-surface border border-white/10 rounded-xl overflow-hidden shadow-2xl"
-              >
-                {options.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => {
-                      onChange(option.value);
-                      setOpenDropdown(null);
-                    }}
-                    className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                      value === option.value
-                        ? "bg-primary text-white"
-                        : "text-white/80 hover:bg-white/5"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  };
-
   if (isCheckingAuth) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#0d0a10]">
@@ -409,6 +427,8 @@ export default function AdminQuestionsPage() {
           <CustomDropdown
             id="type"
             value={filter.type}
+            openDropdown={openDropdown}
+            setOpenDropdown={setOpenDropdown}
             options={typeOptions}
             onChange={(value) => setFilter({ ...filter, type: value })}
             label="ประเภท"
@@ -416,6 +436,8 @@ export default function AdminQuestionsPage() {
           <CustomDropdown
             id="level"
             value={filter.level}
+            openDropdown={openDropdown}
+            setOpenDropdown={setOpenDropdown}
             options={levelOptions}
             onChange={(value) => setFilter({ ...filter, level: value })}
             label="ระดับ"
@@ -423,6 +445,8 @@ export default function AdminQuestionsPage() {
           <CustomDropdown
             id="rating"
             value={filter.is18Plus}
+            openDropdown={openDropdown}
+            setOpenDropdown={setOpenDropdown}
             options={ratingOptions}
             onChange={(value) => setFilter({ ...filter, is18Plus: value })}
             label="Rating"
@@ -567,6 +591,8 @@ export default function AdminQuestionsPage() {
                     <CustomDropdown
                       id="add-type"
                       value={newQuestion.type}
+                      openDropdown={openDropdown}
+                      setOpenDropdown={setOpenDropdown}
                       options={typeOptions.slice(1)}
                       onChange={(value) =>
                         setNewQuestion({ ...newQuestion, type: value })
@@ -582,6 +608,8 @@ export default function AdminQuestionsPage() {
                     <CustomDropdown
                       id="add-level"
                       value={newQuestion.level.toString()}
+                      openDropdown={openDropdown}
+                      setOpenDropdown={setOpenDropdown}
                       options={levelOptions.slice(1)}
                       onChange={(value) =>
                         setNewQuestion({
@@ -693,6 +721,8 @@ export default function AdminQuestionsPage() {
                     <CustomDropdown
                       id="edit-type"
                       value={editingQuestion.type}
+                      openDropdown={openDropdown}
+                      setOpenDropdown={setOpenDropdown}
                       options={typeOptions.slice(1)}
                       onChange={(value) =>
                         setEditingQuestion({ ...editingQuestion, type: value })
@@ -708,6 +738,8 @@ export default function AdminQuestionsPage() {
                     <CustomDropdown
                       id="edit-level"
                       value={editingQuestion.level.toString()}
+                      openDropdown={openDropdown}
+                      setOpenDropdown={setOpenDropdown}
                       options={levelOptions.slice(1)}
                       onChange={(value) =>
                         setEditingQuestion({

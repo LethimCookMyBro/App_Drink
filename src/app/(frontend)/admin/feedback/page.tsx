@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
@@ -80,6 +81,7 @@ function withUpdatedFeedbacks(
 }
 
 export default function AdminFeedbackPage() {
+  const router = useRouter();
   const { data, loading, error, refresh, setData } = useAdminRouteData<AdminFeedbackData>(
     "/api/admin/feedback",
     "ไม่สามารถโหลด feedback ได้",
@@ -112,7 +114,7 @@ export default function AdminFeedbackPage() {
       });
 
       if (response.status === 401) {
-        window.location.href = "/admin/login";
+        router.push("/admin/login");
         return;
       }
 
@@ -158,7 +160,7 @@ export default function AdminFeedbackPage() {
 
       const response = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
       if (response.status === 401) {
-        window.location.href = "/admin/login";
+        router.push("/admin/login");
         return;
       }
 

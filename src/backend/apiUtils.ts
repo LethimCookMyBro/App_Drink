@@ -28,6 +28,22 @@ export function jsonOk(data: Record<string, unknown>, status = 200) {
   return NextResponse.json(filterApiResponse(data), { status });
 }
 
+export async function parseJsonBody(
+  request: Request,
+  errorMessage = "Invalid JSON body",
+) {
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return { ok: false as const, response: jsonError(errorMessage, 400) };
+    }
+
+    return { ok: true as const, body: body as Record<string, unknown> };
+  } catch {
+    return { ok: false as const, response: jsonError(errorMessage, 400) };
+  }
+}
+
 export function buildSessionCookieOptions(
   maxAge: number,
   path = "/",

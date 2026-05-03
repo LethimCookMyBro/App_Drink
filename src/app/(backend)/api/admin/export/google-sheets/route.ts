@@ -8,6 +8,7 @@ import {
   enforceSameOrigin,
   jsonError,
   jsonOk,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import {
   GoogleSheetsConfigurationError,
@@ -57,8 +58,9 @@ export async function POST(request: Request) {
   }
   const { admin } = access;
 
-  const rawBody = await request.json().catch(() => null);
-  const validation = exportSchema.safeParse(rawBody);
+  const parsedBody = await parseJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const validation = exportSchema.safeParse(parsedBody.body);
   if (!validation.success) {
     return jsonError("dataset ที่ต้องการ export ไม่ถูกต้อง", 400);
   }

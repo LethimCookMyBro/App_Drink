@@ -30,7 +30,9 @@ export function useActiveGameSession() {
   }, []);
 
   useEffect(() => {
-    void refreshActiveGame();
+    const initialRefreshId = window.setTimeout(() => {
+      void refreshActiveGame();
+    }, 0);
 
     const syncActiveGame = () => {
       void refreshActiveGame();
@@ -41,6 +43,7 @@ export function useActiveGameSession() {
     const pollId = window.setInterval(syncActiveGame, 5000);
 
     return () => {
+      window.clearTimeout(initialRefreshId);
       window.removeEventListener("storage", syncActiveGame);
       window.removeEventListener(GAME_SESSION_CHANGED_EVENT, syncActiveGame);
       window.clearInterval(pollId);

@@ -46,6 +46,7 @@ export default function LobbyPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode =
     typeof params.roomCode === "string" ? params.roomCode.toUpperCase() : "";
+  const hasRoomCode = roomCode.length > 0;
 
   // Players state
   const [players, setPlayers] = useState<LocalPlayer[]>([]);
@@ -54,8 +55,8 @@ export default function LobbyPage() {
   const [roomName, setRoomName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [canManageLobby, setCanManageLobby] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const [isLoading, setIsLoading] = useState(hasRoomCode);
+  const [loadError, setLoadError] = useState(hasRoomCode ? "" : "ไม่พบวงนี้");
   const [playerMutationError, setPlayerMutationError] = useState("");
   const [startError, setStartError] = useState("");
   const [isStartingGame, setIsStartingGame] = useState(false);
@@ -111,11 +112,7 @@ export default function LobbyPage() {
   );
 
   useEffect(() => {
-    if (!roomCode) {
-      setLoadError("ไม่พบวงนี้");
-      setIsLoading(false);
-      return;
-    }
+    if (!hasRoomCode) return;
 
     let isCancelled = false;
 
@@ -175,7 +172,7 @@ export default function LobbyPage() {
       isCancelled = true;
       window.clearInterval(pollId);
     };
-  }, [applyRoomSnapshot, roomCode]);
+  }, [applyRoomSnapshot, hasRoomCode, roomCode]);
 
   const [duplicateError, setDuplicateError] = useState("");
 

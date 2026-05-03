@@ -48,7 +48,13 @@ export function useAdminRouteData<T>(path: string, fallbackError: string) {
   }, [fallbackError, path, router]);
 
   useEffect(() => {
-    void refresh();
+    const refreshId = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(refreshId);
+    };
   }, [refresh]);
 
   return {

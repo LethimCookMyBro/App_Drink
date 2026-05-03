@@ -8,6 +8,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
@@ -139,7 +140,9 @@ export async function POST(request: NextRequest) {
     }
     const { admin } = access;
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const validation = questionSchema.safeParse(body);
     if (!validation.success) {
       return jsonError(

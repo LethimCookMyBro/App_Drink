@@ -9,9 +9,16 @@ import { TURNSTILE_ACTIONS } from "@/shared/integrations/cloudflareTurnstile";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
+function getInitialSearchReason(): "expired" | "invalid" | null {
+  if (typeof window === "undefined") return null;
+
+  const reason = new URLSearchParams(window.location.search).get("reason");
+  return reason === "expired" || reason === "invalid" ? reason : null;
+}
+
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [searchReason, setSearchReason] = useState<"expired" | "invalid" | null>(null);
+  const [searchReason] = useState(getInitialSearchReason);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,13 +38,6 @@ export default function AdminLoginPage() {
 
   // Check if already authenticated
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const reason = new URLSearchParams(window.location.search).get("reason");
-      if (reason === "expired" || reason === "invalid") {
-        setSearchReason(reason);
-      }
-    }
-
     const checkAuth = async () => {
       try {
         const res = await fetch("/api/admin/verify");

@@ -8,6 +8,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { isUniqueConstraintError } from "@/backend/prismaRetry";
@@ -86,7 +87,9 @@ export async function POST(request: NextRequest) {
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomCreate);
     if (rateLimited) return rateLimited;
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const validation = createRoomSchema.safeParse({
       hostName: body.hostName,
       roomName: body.name ?? body.roomName,

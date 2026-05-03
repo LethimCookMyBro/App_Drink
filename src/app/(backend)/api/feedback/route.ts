@@ -1,5 +1,5 @@
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/backend/apiUtils";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError, parseJsonBody } from "@/backend/apiUtils";
 import { encryptFeedbackFields, toFeedbackReceiptResponse, toMaskedFeedbackResponse } from "@/backend/feedbackPrivacy";
 import logger from "@/backend/logger";
 import { rateLimitConfigs } from "@/backend/rateLimit";
@@ -54,7 +54,9 @@ export async function POST(request: Request) {
     const rateLimited = enforceRateLimit(request, rateLimitConfigs.feedback);
     if (rateLimited) return rateLimited;
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
 
     // Validate input
     const validation = feedbackSchema.safeParse(body);

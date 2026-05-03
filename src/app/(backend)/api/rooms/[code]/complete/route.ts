@@ -5,6 +5,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import { buildCompletedSessionSummary } from "@/backend/gameSessionState";
 import logger from "@/backend/logger";
@@ -35,7 +36,9 @@ export async function POST(
       return jsonError("รหัสห้องไม่ถูกต้อง", 400);
     }
 
-    const body = await request.json().catch(() => ({}));
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const bodyValidation = roomCompleteSchema.safeParse({
       sessionId: body?.sessionId,
     });

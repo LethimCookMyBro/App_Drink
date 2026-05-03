@@ -17,6 +17,7 @@ import {
   enforceSameOrigin,
   jsonError,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import { env } from "@/backend/env";
 import logger from "@/backend/logger";
@@ -46,7 +47,9 @@ export async function POST(request: Request) {
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const usernameInput =
       typeof body?.username === "string"
         ? body.username

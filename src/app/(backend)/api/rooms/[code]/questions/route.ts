@@ -7,6 +7,7 @@ import {
   jsonError,
   jsonOk,
   mapServerError,
+  parseJsonBody,
 } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { withSerializableRetry } from "@/backend/prismaRetry";
@@ -47,7 +48,9 @@ export async function POST(
       return jsonError("ไม่มีสิทธิ์เข้าถึง", 401);
     }
 
-    const body = await request.json().catch(() => ({}));
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const validation = roomCustomQuestionSchema.safeParse({
       text: body?.text,
       type: body?.type,

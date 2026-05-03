@@ -5,6 +5,8 @@ export interface ContentSecurityPolicyOptions {
 }
 
 const TURNSTILE_CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
+const TURNSTILE_INLINE_SCRIPT_HASH =
+  "'sha256-eJGI0Ik4oYe/PKLDOt4wcN76wYs8h+Ew05pMzdY6xG8='";
 
 export function buildContentSecurityPolicy(
   options: ContentSecurityPolicyOptions = {},
@@ -20,7 +22,7 @@ export function buildContentSecurityPolicy(
         "'unsafe-eval'",
         TURNSTILE_CHALLENGE_ORIGIN,
       ].join(" ")
-    : ["'self'", nonce, TURNSTILE_CHALLENGE_ORIGIN]
+    : ["'self'", nonce, TURNSTILE_INLINE_SCRIPT_HASH, TURNSTILE_CHALLENGE_ORIGIN]
         .filter(Boolean)
         .join(" ");
   const frameSources = isAdmin

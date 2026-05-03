@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import { writeAdminAuditLog } from "@/backend/adminSecurity";
-import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk } from "@/backend/apiUtils";
-import { mapServerError } from "@/backend/apiUtils";
+import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError, parseJsonBody } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
 import { questionUpdateSchema } from "@/shared/schemas";
@@ -80,7 +79,9 @@ export async function PUT(
     }
     const { admin } = access;
 
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.body;
     const validation = questionUpdateSchema.safeParse(body);
     if (!validation.success) {
       return jsonError(
