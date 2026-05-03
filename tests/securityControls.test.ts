@@ -16,6 +16,13 @@ const strongSecrets = {
   API_ENCRYPTION_KEY: "e".repeat(32),
 };
 
+function getCspDirective(csp: string, name: string): string | undefined {
+  return csp
+    .split(";")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${name} `));
+}
+
 test("production security secrets must be present, long, and distinct", () => {
   assert.doesNotThrow(() => validateProductionSecuritySecrets(strongSecrets));
   assert.throws(
@@ -59,12 +66,28 @@ test("production script CSP uses nonce without unsafe-inline", () => {
     isDevelopment: false,
     nonce: "abc123",
   });
-  const scriptDirective = csp
-    .split(";")
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith("script-src"));
+  const scriptDirective = getCspDirective(csp, "script-src");
 
   assert.ok(scriptDirective);
   assert.match(scriptDirective, /'nonce-abc123'/);
+  assert.match(scriptDirective, /https:\/\/challenges\.cloudflare\.com/);
   assert.doesNotMatch(scriptDirective, /'unsafe-inline'/);
 });
+
+test(
+  "production admin CSP allows Turnstile frames without app Trusted Types enforcement",
+  () => {
+    const csp = buildContentSecurityPolicy({
+      admin: true,
+      isDevelopment: false,
+      nonce: "abc123",
+    });
+    const frameDirective = getCspDirective(csp, "frame-src");
+    const childDirective = getCspDirective(csp, "child-src");
+
+    assert.equal(frameDirective, "frame-src https://challenges.cloudflare.com");
+    assert.equal(childDirective, "child-src https://challenges.cloudflare.com");
+    assert.equal(getCspDirective(csp, "trusted-types"), undefined);
+    assert.equal(getCspDirective(csp, "require-trusted-types-for"), undefined);
+  },
+);

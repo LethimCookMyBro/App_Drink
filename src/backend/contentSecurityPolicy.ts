@@ -4,7 +4,7 @@ export interface ContentSecurityPolicyOptions {
   nonce?: string | null;
 }
 
-const CLOUDFLARE_CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
+const TURNSTILE_CHALLENGE_ORIGIN = "https://challenges.cloudflare.com";
 
 export function buildContentSecurityPolicy(
   options: ContentSecurityPolicyOptions = {},
@@ -14,21 +14,27 @@ export function buildContentSecurityPolicy(
     options.isDevelopment ?? process.env.NODE_ENV !== "production";
   const nonce = options.nonce ? `'nonce-${options.nonce}'` : null;
   const scriptSources = isDevelopment
-    ? `'self' 'unsafe-inline' 'unsafe-eval' ${CLOUDFLARE_CHALLENGE_ORIGIN}`
-    : ["'self'", nonce, CLOUDFLARE_CHALLENGE_ORIGIN]
+    ? [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        TURNSTILE_CHALLENGE_ORIGIN,
+      ].join(" ")
+    : ["'self'", nonce, TURNSTILE_CHALLENGE_ORIGIN]
         .filter(Boolean)
         .join(" ");
   const frameSources = isAdmin
-    ? CLOUDFLARE_CHALLENGE_ORIGIN
-    : `'self' ${CLOUDFLARE_CHALLENGE_ORIGIN}`;
+    ? TURNSTILE_CHALLENGE_ORIGIN
+    : ["'self'", TURNSTILE_CHALLENGE_ORIGIN].join(" ");
   const directives = [
     "default-src 'self'",
     `script-src ${scriptSources}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
-    `connect-src 'self' ${CLOUDFLARE_CHALLENGE_ORIGIN}`,
+    `connect-src 'self' ${TURNSTILE_CHALLENGE_ORIGIN}`,
     `frame-src ${frameSources}`,
+    `child-src ${frameSources}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
