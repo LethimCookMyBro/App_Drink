@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/frontend/components/ui";
@@ -19,6 +19,15 @@ export default function AdminLoginPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+
+  const handleTurnstileTokenChange = useCallback((token: string) => {
+    setTurnstileToken(token);
+    if (token) {
+      setError((current) =>
+        current.includes("ความปลอดภัย") || current.includes("บอท") ? "" : current,
+      );
+    }
+  }, []);
 
   // Check if already authenticated
   useEffect(() => {
@@ -172,7 +181,7 @@ export default function AdminLoginPage() {
               <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <TurnstileWidget
                   action={TURNSTILE_ACTIONS.adminLogin}
-                  onTokenChange={setTurnstileToken}
+                  onTokenChange={handleTurnstileTokenChange}
                   resetKey={turnstileResetKey}
                 />
               </div>

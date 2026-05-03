@@ -13,6 +13,54 @@ export interface TurnstileVerificationResult {
   status?: number;
 }
 
+const TURNSTILE_CONFIG_ERROR_CODES = new Set([
+  "missing-input-secret",
+  "invalid-input-secret",
+]);
+
+const TURNSTILE_EXPIRED_TOKEN_ERROR_CODES = new Set(["timeout-or-duplicate"]);
+
+function getTurnstileErrorCodes(
+  data: TurnstileSiteVerifyResponse | null,
+): string[] {
+  return Array.isArray(data?.["error-codes"]) ? data["error-codes"] : [];
+}
+
+export function mapTurnstileVerificationFailure(
+  errorCodes: readonly string[],
+  responseStatus?: number,
+): TurnstileVerificationResult {
+  if (errorCodes.some((code) => TURNSTILE_CONFIG_ERROR_CODES.has(code))) {
+    return {
+      ok: false,
+      error: "ระบบตรวจสอบความปลอดภัยตั้งค่าไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ",
+      status: 503,
+    };
+  }
+
+  if (errorCodes.some((code) => TURNSTILE_EXPIRED_TOKEN_ERROR_CODES.has(code))) {
+    return {
+      ok: false,
+      error: "การยืนยันความปลอดภัยหมดอายุ กรุณาลองใหม่อีกครั้ง",
+      status: 400,
+    };
+  }
+
+  if (responseStatus && responseStatus >= 500) {
+    return {
+      ok: false,
+      error: "ระบบตรวจสอบความปลอดภัยไม่พร้อมใช้งานชั่วคราว",
+      status: 503,
+    };
+  }
+
+  return {
+    ok: false,
+    error: "การยืนยันความปลอดภัยไม่ผ่าน กรุณาลองใหม่อีกครั้ง",
+    status: 400,
+  };
+}
+
 export function isTurnstileConfigured(): boolean {
   return Boolean(env.turnstileSiteKey && env.turnstileSecretKey);
 }
@@ -87,24 +135,20 @@ export async function verifyTurnstileToken(
       signal: controller.signal,
     });
 
+    const data =
+      (await response.json().catch(() => null)) as TurnstileSiteVerifyResponse | null;
+    const errorCodes = getTurnstileErrorCodes(data);
+
     if (!response.ok) {
-      logger.warn("turnstile.verify.failed", { status: response.status });
-      return {
-        ok: false,
-        error: "ระบบตรวจสอบความปลอดภัยไม่พร้อมใช้งานชั่วคราว",
-        status: 503,
-      };
+      logger.warn("turnstile.verify.failed", {
+        status: response.status,
+        errorCodes,
+      });
+      return mapTurnstileVerificationFailure(errorCodes, response.status);
     }
 
-    const data =
-      (await response.json()) as TurnstileSiteVerifyResponse;
-
-    if (!data.success) {
-      return {
-        ok: false,
-        error: "การยืนยันความปลอดภัยไม่ผ่าน กรุณาลองใหม่อีกครั้ง",
-        status: 400,
-      };
+    if (!data?.success) {
+      return mapTurnstileVerificationFailure(errorCodes, response.status);
     }
 
     if (expectedAction && data.action && data.action !== expectedAction) {
