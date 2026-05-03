@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapTurnstileVerificationFailure } from "../src/backend/integrations/cloudflareTurnstile";
+import {
+  mapTurnstileVerificationFailure,
+  normalizeTurnstileSecret,
+} from "../src/backend/integrations/cloudflareTurnstile";
+
+test("normalizes a common pasted Turnstile secret typo", () => {
+  assert.equal(normalizeTurnstileSecret(" s0x4AAAA-test "), "0x4AAAA-test");
+  assert.equal(normalizeTurnstileSecret("0x4AAAA-test"), "0x4AAAA-test");
+});
 
 test("maps invalid Turnstile secret as a configuration error", () => {
   const result = mapTurnstileVerificationFailure(["invalid-input-secret"], 400);

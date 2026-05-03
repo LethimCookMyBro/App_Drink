@@ -20,6 +20,11 @@ const TURNSTILE_CONFIG_ERROR_CODES = new Set([
 
 const TURNSTILE_EXPIRED_TOKEN_ERROR_CODES = new Set(["timeout-or-duplicate"]);
 
+export function normalizeTurnstileSecret(secret: string): string {
+  const trimmed = secret.trim();
+  return trimmed.replace(/^s(?=0x)/, "");
+}
+
 function getTurnstileErrorCodes(
   data: TurnstileSiteVerifyResponse | null,
 ): string[] {
@@ -102,7 +107,7 @@ export async function verifyTurnstileToken(
     };
   }
 
-  const secret = env.turnstileSecretKey;
+  const secret = normalizeTurnstileSecret(env.turnstileSecretKey);
   if (!secret) {
     return {
       ok: false,
