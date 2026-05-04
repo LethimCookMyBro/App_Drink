@@ -70,8 +70,12 @@ async function getPrisma() {
 }
 
 // Create user session in database
-export async function createSession(userId: string, token: string) {
-  const prisma = await getPrisma();
+export async function createSession(
+  userId: string,
+  token: string,
+  prismaOverride?: any,
+) {
+  const prisma = prismaOverride || (await getPrisma());
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
   const hashedToken = hashStoredSessionToken(token);

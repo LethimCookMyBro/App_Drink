@@ -236,10 +236,6 @@ function createProgressDb(state = createProgressState()) {
             players: state.players.map((player) => ({ id: player.id })),
             questions: [],
           },
-          events: state.events.map((event) => ({
-            questionId: event.questionId,
-            data: event.data,
-          })),
         }),
         update: async ({
           data,
@@ -292,6 +288,19 @@ function createProgressDb(state = createProgressState()) {
         },
       },
       gameEvent: {
+        findMany: async ({
+          where,
+        }: {
+          where?: { sessionId?: string };
+        }) => {
+          if (where?.sessionId && where.sessionId !== state.session.id) {
+            return [];
+          }
+          return state.events.map((event) => ({
+            questionId: event.questionId,
+            data: event.data,
+          }));
+        },
         findFirst: async ({
           where,
         }: {

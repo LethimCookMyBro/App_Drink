@@ -82,8 +82,10 @@ test("legacy session with missing current-turn fields rehydrates correctly", asy
               },
             ],
           },
-          events: [],
         }),
+      },
+      gameEvent: {
+        findMany: async () => [],
       },
       question: {
         findFirst: async () => ({
@@ -135,8 +137,10 @@ test("missing question inventory falls back to a safe placeholder turn", async (
             players: [{ id: "player_1" }],
             questions: [],
           },
-          events: [],
         }),
+      },
+      gameEvent: {
+        findMany: async () => [],
       },
       question: {
         findFirst: async () => null,
@@ -190,8 +194,10 @@ test("custom question selection honors room adult mode and difficulty", async ()
               },
             ],
           },
-          events: [],
         }),
+      },
+      gameEvent: {
+        findMany: async () => [],
       },
       question: {
         findFirst: async () => null,
@@ -220,13 +226,15 @@ test("fallback question selection reuses difficulty and dedup filters", async ()
             players: [{ id: "player_1" }],
             questions: [],
           },
-          events: [
-            {
-              questionId: "question_used",
-              data: null,
-            },
-          ],
         }),
+      },
+      gameEvent: {
+        findMany: async () => [
+          {
+            questionId: "question_used",
+            data: null,
+          },
+        ],
       },
       question: {
         findFirst: async ({ where }: { where?: Record<string, unknown> }) => {

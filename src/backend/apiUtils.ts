@@ -118,6 +118,6 @@ export function mapServerError(
     }
   }
 
-  logger.error("api.route.error", { fallbackMessage });
+  logger.error("api.route.error", { fallbackMessage, error });
   return jsonError(fallbackMessage, 500);
 }

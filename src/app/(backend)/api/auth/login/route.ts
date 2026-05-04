@@ -83,15 +83,19 @@ export async function POST(request: Request) {
       return jsonError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
     }
 
-    // Generate token and create session
-    const token = generateToken({
-      userId: user.id,
-    });
+    // Generate token and create session in a transaction
+    const token = await prisma.$transaction(async (tx) => {
+      const newToken = generateToken({
+        userId: user.id,
+      });
 
-    await createSession(user.id, token);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      await createSession(user.id, newToken, tx);
+      await tx.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      return newToken;
     });
 
     const response = NextResponse.json(
@@ -117,6 +121,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error("auth.login.failed", {
       message: error instanceof Error ? error.message : "unknown",
+      error,
     });
     return mapServerError(error, "บริการเข้าสู่ระบบไม่พร้อมใช้งานชั่วคราว");
   }

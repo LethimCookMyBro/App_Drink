@@ -291,12 +291,6 @@ export async function chooseNextSessionState(
           },
         },
       },
-      events: {
-        select: {
-          questionId: true,
-          data: true,
-        },
-      },
     },
   });
 
@@ -334,15 +328,33 @@ export async function chooseNextSessionState(
 
   const currentPlayerId =
     playerIds[effectiveRoundCount % playerIds.length] ?? null;
+
+  // Optimized: Load only IDs of used questions instead of full events
+  const [usedQuestionRows, customQuestionEventRows] = await Promise.all([
+    prisma.gameEvent.findMany({
+      where: {
+        sessionId,
+        questionId: { not: null },
+      },
+      select: { questionId: true },
+    }),
+    prisma.gameEvent.findMany({
+      where: {
+        sessionId,
+        questionId: null,
+        data: { contains: "customQuestionId" },
+      },
+      select: { data: true },
+    }),
+  ]);
+
   const usedQuestionIds = new Set(
-    session.events
-      .map((event) => event.questionId)
-      .filter((questionId): questionId is string => typeof questionId === "string"),
+    usedQuestionRows.map((row) => row.questionId as string),
   );
   const usedCustomQuestionIds = new Set(
-    session.events
-      .map((event) => tryParseCustomQuestionId(event.data))
-      .filter((questionId): questionId is string => typeof questionId === "string"),
+    customQuestionEventRows
+      .map((row) => tryParseCustomQuestionId(row.data))
+      .filter((id): id is string => id !== null),
   );
 
   const availableCustomQuestions = session.room.questions.filter(

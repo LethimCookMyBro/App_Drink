@@ -244,7 +244,9 @@ function toAuditItem(log: {
     status: log.status,
     ipMasked: maskIpAddress(log.ip),
     userAgent: shortenText(log.userAgent, 48),
-    adminName: log.admin?.name || maskEmail(log.admin?.email || "") || "System",
+    adminName: log.admin
+      ? log.admin.name || maskEmail(log.admin.email) || "Admin"
+      : "System",
     createdAt: log.createdAt.toISOString(),
   };
 }

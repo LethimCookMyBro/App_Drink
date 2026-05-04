@@ -68,44 +68,47 @@ export async function POST(request: Request) {
     // Dynamic import to prevent crash when database is offline
     const { default: prisma } = await import("@/backend/db");
 
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-
-    if (existingUser) {
-      return jsonError("อีเมลนี้ถูกใช้งานแล้ว", 409);
-    }
-
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        avatarUrl: true,
-        image: true,
-      },
-    });
+    // Create user and session in a transaction
+    const { user, token } = await prisma.$transaction(async (tx) => {
+      // Check if email already exists
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
 
-    // Generate token and create session
-    const token = generateToken({
-      userId: user.id,
-    });
+      if (existingUser) {
+        throw new Error("EMAIL_TAKEN");
+      }
 
-    await createSession(user.id, token);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          image: true,
+        },
+      });
+
+      const newToken = generateToken({
+        userId: newUser.id,
+      });
+
+      await createSession(newUser.id, newToken, tx);
+      await tx.user.update({
+        where: { id: newUser.id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      return { user: newUser, token: newToken };
     });
 
     const response = NextResponse.json(
@@ -129,8 +132,13 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
+    if (error instanceof Error && error.message === "EMAIL_TAKEN") {
+      return jsonError("อีเมลนี้ถูกใช้งานแล้ว", 409);
+    }
+
     logger.error("auth.register.failed", {
       message: error instanceof Error ? error.message : "unknown",
+      error,
     });
     return mapServerError(error, "บริการสมัครสมาชิกไม่พร้อมใช้งานชั่วคราว");
   }
