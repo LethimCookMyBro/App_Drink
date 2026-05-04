@@ -7,6 +7,7 @@ import {
 } from "../src/backend/adminAuth";
 import { buildContentSecurityPolicy } from "../src/backend/contentSecurityPolicy";
 import { validateProductionSecuritySecrets } from "../src/backend/env";
+import { roomCodeSchema } from "../src/shared/schemas";
 
 const strongSecrets = {
   JWT_SECRET: "a".repeat(32),
@@ -91,3 +92,8 @@ test(
     assert.equal(getCspDirective(csp, "require-trusted-types-for"), undefined);
   },
 );
+
+test("room code schema requires 8 alphanumeric characters", () => {
+  assert.equal(roomCodeSchema.safeParse("ABCD").success, false);
+  assert.equal(roomCodeSchema.parse("abcd2345"), "ABCD2345");
+});

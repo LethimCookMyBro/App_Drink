@@ -2,6 +2,9 @@ import { PrismaClient, type QuestionType } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
+import { validateAdminSeedEnvironment } from "./seedValidation";
+
+validateAdminSeedEnvironment(process.env);
 
 const dbUrl =
   process.env.DATABASE_PUBLIC_URL?.trim() || process.env.DATABASE_URL?.trim();

@@ -23,6 +23,8 @@ import { getRoomPlayerCookieName, signRoomPlayerToken } from "@/backend/roomAuth
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ROOM_JOIN_UNAVAILABLE_MESSAGE = "Room is unavailable.";
+
 // POST /api/rooms/[code]/join - Join a room
 export async function POST(
   request: NextRequest,
@@ -32,7 +34,7 @@ export async function POST(
     const originBlocked = enforceSameOrigin(request);
     if (originBlocked) return originBlocked;
 
-    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomMutation);
+    const rateLimited = enforceRateLimit(request, rateLimitConfigs.roomJoin);
     if (rateLimited) return rateLimited;
 
     const { code } = await params;
@@ -91,12 +93,8 @@ export async function POST(
       );
     }, "Could not join room");
 
-    if (joinResult.kind === "not_found") {
-      return jsonError("ไม่พบห้อง", 404);
-    }
-
-    if (joinResult.kind === "inactive") {
-      return jsonError("ห้องนี้ถูกปิดแล้ว", 410);
+    if (joinResult.kind === "not_found" || joinResult.kind === "inactive") {
+      return jsonError(ROOM_JOIN_UNAVAILABLE_MESSAGE, 404);
     }
 
     if (joinResult.kind === "full") {

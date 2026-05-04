@@ -1,6 +1,11 @@
+import { randomInt } from "node:crypto";
 import { NextRequest } from "next/server";
 import { toRoomPlayer, toRoomSummary } from "@/backend/apiFilter";
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
+import {
+  clearLegacyAuthCookie,
+  getAuthenticatedAppUser,
+} from "@/backend/appAuth";
 import {
   buildSessionCookieOptions,
   enforceRateLimit,
@@ -20,12 +25,13 @@ import { normalizePlayerNameKey } from "@/backend/roomService";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Generate 4-character room code
+const ROOM_CODE_LENGTH = 8;
+
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < ROOM_CODE_LENGTH; i += 1) {
+    code += chars.charAt(randomInt(chars.length));
   }
   return code;
 }
@@ -107,6 +113,30 @@ export async function POST(request: NextRequest) {
 
     const { hostName, roomName, maxPlayers, is18Plus, difficulty } =
       validation.data;
+
+    let clearLegacyCookie = false;
+    if (is18Plus) {
+      const auth = await getAuthenticatedAppUser(request);
+      clearLegacyCookie = auth.clearLegacyCookie;
+
+      if (!auth.user) {
+        logger.warn("rooms.create.adult_content_requires_auth", {
+          limitation:
+            "18+ mode requires authentication but does not verify legal age.",
+        });
+        const response = jsonError("Sign in before creating an 18+ room.", 401);
+        if (clearLegacyCookie) {
+          clearLegacyAuthCookie(response);
+        }
+        return response;
+      }
+
+      logger.warn("rooms.create.adult_content_auth_only", {
+        userId: auth.user.id,
+        limitation:
+          "18+ mode requires authentication but does not verify legal age.",
+      });
+    }
 
     const name = roomName?.trim() || "Wong Taek Room";
 
@@ -213,6 +243,10 @@ export async function POST(request: NextRequest) {
       hostToken,
       buildSessionCookieOptions(60 * 60 * 4, "/api/rooms"),
     );
+
+    if (clearLegacyCookie) {
+      clearLegacyAuthCookie(response);
+    }
 
     return response;
   } catch (error) {

@@ -11,6 +11,8 @@ import {
   resetGameSessionForRestart,
 } from "@/frontend/game/gameSession";
 
+const ROOM_CODE_LENGTH = 8;
+
 export default function JoinCirclePage() {
   const router = useRouter();
   const { activeGame } = useActiveGameSession();
@@ -24,14 +26,14 @@ export default function JoinCirclePage() {
     const cleaned = value
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
-      .slice(0, 4);
+      .slice(0, ROOM_CODE_LENGTH);
     setRoomCode(cleaned);
     setError("");
   };
 
   const handleJoin = async () => {
-    if (roomCode.length !== 4) {
-      setError("กรุณาใส่รหัสห้อง 4 ตัว");
+    if (roomCode.length !== ROOM_CODE_LENGTH) {
+      setError(`Please enter an ${ROOM_CODE_LENGTH}-character room code`);
       return;
     }
     if (!playerName.trim()) {
@@ -135,13 +137,13 @@ export default function JoinCirclePage() {
           <label className="text-white/60 text-xs font-bold tracking-[0.1em] uppercase ml-1">
             รหัสห้อง
           </label>
-          <div className="flex justify-center gap-3">
-            {[0, 1, 2, 3].map((index) => (
+          <div className="grid grid-cols-4 justify-center gap-3 sm:grid-cols-8">
+            {Array.from({ length: ROOM_CODE_LENGTH }, (_, index) => (
               <motion.div
                 key={index}
                 className={`
-                  size-14 rounded-xl border-2 flex items-center justify-center
-                  text-2xl font-bold font-mono bg-white/5 transition-all sm:size-16 sm:text-3xl
+                  size-12 rounded-xl border-2 flex items-center justify-center
+                  text-xl font-bold font-mono bg-white/5 transition-all sm:size-14 sm:text-2xl
                   ${
                     roomCode[index]
                       ? "border-neon-blue shadow-neon-blue text-neon-blue"
@@ -158,7 +160,7 @@ export default function JoinCirclePage() {
             type="text"
             value={roomCode}
             onChange={(e) => handleCodeChange(e.target.value)}
-            placeholder="ใส่รหัส 4 ตัว"
+            placeholder={`Enter ${ROOM_CODE_LENGTH}-character code`}
             className="opacity-0 absolute -z-10"
             autoFocus
           />
@@ -167,9 +169,9 @@ export default function JoinCirclePage() {
             type="text"
             value={roomCode}
             onChange={(e) => handleCodeChange(e.target.value)}
-            placeholder="พิมพ์รหัสห้องที่นี่..."
+            placeholder="Type room code here..."
             className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-lg font-bold uppercase tracking-[0.3em] text-white placeholder-white/30 transition-all focus:border-neon-blue focus:ring-0 focus:outline-none sm:text-xl sm:tracking-[0.5em]"
-            maxLength={4}
+            maxLength={ROOM_CODE_LENGTH}
           />
         </div>
 
@@ -214,7 +216,7 @@ export default function JoinCirclePage() {
           icon="login"
           iconPosition="right"
           disabled={
-            roomCode.length !== 4 ||
+            roomCode.length !== ROOM_CODE_LENGTH ||
             !playerName.trim() ||
             isSubmitting
           }

@@ -60,7 +60,7 @@ export const roomHostPlayerSchema = z.object({
 export const roomCodeSchema = z
   .string()
   .transform((value) => value.trim().toUpperCase())
-  .refine((value) => /^[A-Z0-9]{4}$/.test(value), "รหัสห้องไม่ถูกต้อง");
+  .refine((value) => /^[A-Z0-9]{8}$/.test(value), "รหัสห้องไม่ถูกต้อง");
 
 export const roomStartSchema = z.object({
   mode: z.enum(["QUESTION", "VOTE", "TRUTH_OR_DARE", "CHAOS", "MIXED"]).default("QUESTION"),

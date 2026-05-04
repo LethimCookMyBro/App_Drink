@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import type { PrismaClient } from "@prisma/client";
 import { toPublicQuestion } from "@/backend/apiFilter";
 import { enforceRateLimit, jsonError, jsonOk } from "@/backend/apiUtils";
+import {
+  clearLegacyAuthCookie,
+  getAuthenticatedAppUser,
+} from "@/backend/appAuth";
 import logger from "@/backend/logger";
 import { rateLimitConfigs } from "@/backend/rateLimit";
 import {
@@ -83,6 +87,7 @@ function getRoomAdultAccessTokens(request: NextRequest): RoomAdultAccessToken[] 
 async function hasServerSideAdultQuestionAccess(
   prisma: Pick<PrismaClient, "room">,
   request: NextRequest,
+  authenticatedUserId: string | null,
 ): Promise<boolean> {
   const tokens = getRoomAdultAccessTokens(request);
   for (const token of tokens) {
@@ -99,6 +104,21 @@ async function hasServerSideAdultQuestionAccess(
     });
 
     if (room?.is18Plus) {
+      if (!authenticatedUserId) {
+        logger.warn("questions.random.adult_content_requires_auth", {
+          roomId: token.payload.roomId,
+          limitation:
+            "18+ mode requires authentication but does not verify legal age.",
+        });
+        return false;
+      }
+
+      logger.warn("questions.random.adult_content_auth_only", {
+        userId: authenticatedUserId,
+        roomId: token.payload.roomId,
+        limitation:
+          "18+ mode requires authentication but does not verify legal age.",
+      });
       return true;
     }
   }
@@ -128,9 +148,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const { default: prisma } = await import("@/backend/db");
+    const auth = await getAuthenticatedAppUser(request);
     const canAccessAdultQuestions = await hasServerSideAdultQuestionAccess(
       prisma,
       request,
+      auth.user?.id ?? null,
     );
 
     const where: Record<string, unknown> = {
@@ -165,12 +187,16 @@ export async function GET(request: NextRequest) {
     });
 
     if (candidates.length === 0) {
-      return jsonOk({
+      const response = jsonOk({
         questions: [],
         count: 0,
         source: "db",
         message: "No questions found matching criteria",
       });
+      if (auth.clearLegacyCookie) {
+        clearLegacyAuthCookie(response);
+      }
+      return response;
     }
 
     const selectedQuestions = pickRandomSubset(candidates, count);
@@ -191,11 +217,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return jsonOk({
+    const response = jsonOk({
       questions: selectedQuestions.map(toPublicQuestion),
       count: selectedQuestions.length,
       source: "db",
     });
+    if (auth.clearLegacyCookie) {
+      clearLegacyAuthCookie(response);
+    }
+    return response;
   } catch (error) {
     logger.error("questions.random.failed", {
       message: error instanceof Error ? error.message : "unknown",

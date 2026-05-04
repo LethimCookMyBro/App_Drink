@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import type { PrismaClient } from "@prisma/client";
 import env from "@/backend/env";
 import logger from "@/backend/logger";
 import sanitize from "@/shared/sanitize";
@@ -15,6 +16,7 @@ function getJwtSecret(): string {
 }
 
 const TOKEN_EXPIRY = "7d"; // Token expires in 7 days
+type UserSessionClient = Pick<PrismaClient, "userSession">;
 
 export interface JWTPayload {
   userId: string;
@@ -64,7 +66,7 @@ export function verifyToken(token: string): JWTPayload | null {
 }
 
 // Helper to get Prisma client with dynamic import
-async function getPrisma() {
+async function getPrisma(): Promise<UserSessionClient> {
   const { default: prisma } = await import("./db");
   return prisma;
 }
@@ -73,7 +75,7 @@ async function getPrisma() {
 export async function createSession(
   userId: string,
   token: string,
-  prismaOverride?: any,
+  prismaOverride?: UserSessionClient,
 ) {
   const prisma = prismaOverride || (await getPrisma());
   const expiresAt = new Date();

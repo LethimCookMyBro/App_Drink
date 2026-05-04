@@ -6,7 +6,7 @@ import verifyHs256Jwt from "@/backend/jwtEdge";
 import {
   buildRateLimitKey,
   checkRateLimit,
-  rateLimitConfigs,
+  getGlobalRateLimitConfig,
 } from "@/backend/rateLimit";
 import {
   applyCorsHeaders,
@@ -17,26 +17,6 @@ import {
 
 function getCookieValue(request: NextRequest, name: string): string | null {
   return request.cookies.get(name)?.value ?? null;
-}
-
-function ensureRateLimitCookie(request: NextRequest, response: NextResponse) {
-  if (request.cookies.get("wongtaek-rate-id")) {
-    return response;
-  }
-
-  response.cookies.set(
-    "wongtaek-rate-id",
-    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: env.isProduction,
-      maxAge: 60 * 60 * 24 * 30,
-      path: "/",
-    },
-  );
-
-  return response;
 }
 
 async function verifyAdminRequest(request: NextRequest) {
@@ -136,8 +116,8 @@ export async function proxy(request: NextRequest) {
     if (!verification.ok) {
       return applySecurityHeaders(
         NextResponse.json(
-        { error: "Unauthorized", reason: verification.reason },
-        { status: 401 },
+          { error: "Unauthorized", reason: verification.reason },
+          { status: 401 },
         ),
         csp,
         true,
@@ -146,8 +126,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (request.nextUrl.pathname.startsWith("/api/")) {
-    const key = buildRateLimitKey(request, rateLimitConfigs.global);
-    const limit = checkRateLimit(key, rateLimitConfigs.global);
+    const globalRateLimitConfig = getGlobalRateLimitConfig(request);
+    const key = buildRateLimitKey(request, globalRateLimitConfig);
+    const limit = checkRateLimit(key, globalRateLimitConfig);
     if (!limit.allowed) {
       const limitedResponse = NextResponse.json(
         { error: "Too many requests. Please try again later." },
@@ -159,11 +140,7 @@ export async function proxy(request: NextRequest) {
         },
       );
       applyRateLimitHeaders(limitedResponse, limit);
-      return applySecurityHeaders(
-        ensureRateLimitCookie(request, limitedResponse),
-        csp,
-        true,
-      );
+      return applySecurityHeaders(limitedResponse, csp, true);
     }
 
     const response = NextResponse.next({
@@ -173,9 +150,9 @@ export async function proxy(request: NextRequest) {
     });
     applyRateLimitHeaders(response, limit);
     return applySecurityHeaders(
-      applyCorsHeaders(request, ensureRateLimitCookie(request, response), {
-      allowCredentials: request.nextUrl.pathname.startsWith("/api/admin/"),
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      applyCorsHeaders(request, response, {
+        allowCredentials: request.nextUrl.pathname.startsWith("/api/admin/"),
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       }),
       csp,
       true,

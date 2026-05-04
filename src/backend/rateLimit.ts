@@ -18,8 +18,8 @@ const RATE_LIMIT_COOKIE_NAMES = new Set([
   "auth-token",
   "next-auth.session-token",
   "__Secure-next-auth.session-token",
-  "wongtaek-rate-id",
 ]);
+const UNIDENTIFIED_CLIENT_BUCKET = "untrusted:global";
 
 export function checkRateLimit(
   identifier: string,
@@ -112,20 +112,6 @@ function getTokenCandidate(request: Request): string | null {
   return matched?.value ?? null;
 }
 
-function getUntrustedRequestSubject(request: Request): string {
-  const token = getTokenCandidate(request);
-  if (token) {
-    return `token:${token}`;
-  }
-
-  return [
-    request.headers.get("user-agent") ?? "",
-    request.headers.get("accept-language") ?? "",
-    request.headers.get("sec-ch-ua") ?? "",
-    request.headers.get("host") ?? "",
-  ].join("|");
-}
-
 export function getTrustedClientIP(request: Request): string | null {
   return getTrustedClientIPFromHeaders(request.headers);
 }
@@ -136,7 +122,7 @@ export function getClientIP(request: Request): string {
     return trustedIp;
   }
 
-  return `untrusted:${createTokenFingerprint(getUntrustedRequestSubject(request))}`;
+  return UNIDENTIFIED_CLIENT_BUCKET;
 }
 
 export function buildRateLimitKey(
@@ -146,6 +132,10 @@ export function buildRateLimitKey(
 ): string {
   const ip = getClientIP(request);
   const baseKey = `${config.scope}:${ip}`;
+
+  if (ip === UNIDENTIFIED_CLIENT_BUCKET) {
+    return baseKey;
+  }
 
   if (config.keyStrategy === "ip+subject") {
     return `${baseKey}:${subject || "anonymous"}`;
@@ -162,20 +152,29 @@ export function buildRateLimitKey(
 
 export const rateLimitConfigs = {
   global: { scope: "global", windowMs: 60 * 1000, maxRequests: 200, keyStrategy: "ip" } as RateLimitConfig,
+  unidentifiedGlobal: { scope: "global-unidentified", windowMs: 60 * 1000, maxRequests: 60, keyStrategy: "ip" } as RateLimitConfig,
   auth: { scope: "auth", windowMs: 60 * 1000, maxRequests: 5, keyStrategy: "ip+subject" } as RateLimitConfig,
   admin: { scope: "admin", windowMs: 60 * 1000, maxRequests: 10, keyStrategy: "ip+token" } as RateLimitConfig,
   questionMutations: { scope: "question-mutations", windowMs: 60 * 1000, maxRequests: 20, keyStrategy: "ip" } as RateLimitConfig,
   randomQuestion: { scope: "random-question", windowMs: 60 * 1000, maxRequests: 80, keyStrategy: "ip" } as RateLimitConfig,
   roomCreate: { scope: "room-create", windowMs: 10 * 60 * 1000, maxRequests: 10, keyStrategy: "ip" } as RateLimitConfig,
+  roomJoin: { scope: "room-join", windowMs: 60 * 1000, maxRequests: 10, keyStrategy: "ip" } as RateLimitConfig,
   roomMutation: { scope: "room-mutation", windowMs: 60 * 1000, maxRequests: 30, keyStrategy: "ip" } as RateLimitConfig,
   roomLookup: { scope: "room-lookup", windowMs: 60 * 1000, maxRequests: 60, keyStrategy: "ip" } as RateLimitConfig,
   profile: { scope: "profile", windowMs: 5 * 60 * 1000, maxRequests: 20, keyStrategy: "ip+token" } as RateLimitConfig,
   feedback: { scope: "feedback", windowMs: 10 * 60 * 1000, maxRequests: 6, keyStrategy: "ip" } as RateLimitConfig,
 };
 
+export function getGlobalRateLimitConfig(request: Request): RateLimitConfig {
+  return getTrustedClientIP(request)
+    ? rateLimitConfigs.global
+    : rateLimitConfigs.unidentifiedGlobal;
+}
+
 const rateLimitModule = {
   buildRateLimitKey,
   checkRateLimit,
+  getGlobalRateLimitConfig,
   getClientIP,
   getTrustedClientIP,
   rateLimitConfigs,
