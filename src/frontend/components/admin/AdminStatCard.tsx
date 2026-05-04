@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAdminNumber } from "@/frontend/admin/format";
 import { GlassPanel } from "@/frontend/components/ui";
 
 interface AdminStatCardProps {
@@ -25,6 +26,9 @@ export function AdminStatCard({
   icon,
   tone = "primary",
 }: AdminStatCardProps) {
+  const formattedValue =
+    typeof value === "number" ? formatAdminNumber(value) : value;
+
   return (
     <GlassPanel className="h-full p-5">
       <div className="flex items-start justify-between gap-4">
@@ -33,7 +37,7 @@ export function AdminStatCard({
             {label}
           </p>
           <p className="mt-3 text-3xl font-black text-white md:text-4xl">
-            {value}
+            {formattedValue}
           </p>
           {description ? (
             <p className="mt-2 text-sm text-white/45">{description}</p>

@@ -120,7 +120,7 @@ export default function AdminLoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🔐</div>
-          <h1 className="text-2xl font-bold text-white">Admin Login</h1>
+          <h1 className="text-2xl font-bold text-white">เข้าสู่ระบบผู้ดูแล</h1>
           <p className="text-white/40 text-sm mt-2">เข้าสู่ระบบผู้ดูแล</p>
         </div>
 
@@ -136,10 +136,11 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username */}
             <div>
-              <label className="block text-white/60 text-sm mb-2">
+              <label htmlFor="admin-username" className="block text-white/60 text-sm mb-2">
                 ชื่อผู้ใช้หรืออีเมล
               </label>
               <input
+                id="admin-username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -152,15 +153,16 @@ export default function AdminLoginPage() {
 
             {/* Password */}
             <div>
-              <label className="block text-white/60 text-sm mb-2">
+              <label htmlFor="admin-password" className="block text-white/60 text-sm mb-2">
                 รหัสผ่าน
               </label>
               <input
+                id="admin-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
-                placeholder="Enter password"
+                placeholder="กรอกรหัสผ่าน"
                 required
                 autoComplete="current-password"
               />

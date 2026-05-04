@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -42,7 +43,7 @@ const levelOptions = [
 ];
 
 const ratingOptions = [
-  { value: "", label: "ทุก Rating" },
+  { value: "", label: "ทุกการจัดระดับ" },
   { value: "false", label: "ทั่วไป" },
   { value: "true", label: "18+" },
 ];
@@ -61,6 +62,7 @@ const typeLabels: Record<string, { label: string; color: string; bg: string }> =
   };
 
 const levelLabels = ["", "ชิลล์", "กลาง", "แรง"];
+const QUESTIONS_PER_PAGE = 20;
 
 function getQuestionTextError(text: string): string | null {
   const trimmed = text.trim();
@@ -158,13 +160,19 @@ export default function AdminQuestionsPage() {
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<AdminIdentity | null>(null);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [questionPage, setQuestionPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState({ type: "", level: "", is18Plus: "" });
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(
     null
   );
+  const [questionPendingDelete, setQuestionPendingDelete] =
+    useState<AdminQuestion | null>(null);
   const [newQuestion, setNewQuestion] = useState({
     text: "",
     type: "QUESTION",
@@ -187,6 +195,8 @@ export default function AdminQuestionsPage() {
       if (filter.type) params.set("type", filter.type);
       if (filter.level) params.set("level", filter.level);
       if (filter.is18Plus) params.set("is18Plus", filter.is18Plus);
+      params.set("limit", QUESTIONS_PER_PAGE.toString());
+      params.set("offset", ((questionPage - 1) * QUESTIONS_PER_PAGE).toString());
 
       const res = await fetch(`/api/questions?${params}`);
       if (res.status === 401) {
@@ -197,30 +207,46 @@ export default function AdminQuestionsPage() {
       if (res.ok) {
         if (Array.isArray(data)) {
           setQuestions(data);
+          setTotalQuestions(data.length);
           setDbConnected(true);
           setApiError(null);
         } else if (data.questions && Array.isArray(data.questions)) {
           setQuestions(data.questions);
+          setTotalQuestions(
+            typeof data.total === "number" ? data.total : data.questions.length,
+          );
           setDbConnected(true);
           setApiError(null);
         } else {
           setQuestions([]);
+          setTotalQuestions(0);
           setDbConnected(true);
         }
       } else {
         setQuestions([]);
+        setTotalQuestions(0);
         setDbConnected(false);
         setApiError(data?.error || "ไม่สามารถโหลดคำถามจาก API ได้");
       }
     } catch {
       setQuestions([]);
+      setTotalQuestions(0);
       setDbConnected(false);
       setApiError("ไม่สามารถเชื่อมต่อ API เพื่อโหลดคำถามได้");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filter, router]);
+  }, [filter, questionPage, router]);
+
+  useEffect(() => {
+    const debounceId = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim().toLowerCase());
+      setQuestionPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(debounceId);
+  }, [searchInput]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -254,14 +280,21 @@ export default function AdminQuestionsPage() {
     : null;
   const canManageQuestions = hasAdminRole(adminUser?.role, "ADMIN");
 
-  // Filter mock data locally
-  const filteredQuestions = questions.filter((q) => {
-    if (filter.type && q.type !== filter.type) return false;
-    if (filter.level && q.level !== parseInt(filter.level)) return false;
-    if (filter.is18Plus === "true" && !q.is18Plus) return false;
-    if (filter.is18Plus === "false" && q.is18Plus) return false;
-    return true;
-  });
+  const filteredQuestions = useMemo(() => {
+    if (!debouncedSearch) return questions;
+
+    return questions.filter((question) =>
+      question.text.toLowerCase().includes(debouncedSearch),
+    );
+  }, [debouncedSearch, questions]);
+  const totalPages = Math.max(1, Math.ceil(totalQuestions / QUESTIONS_PER_PAGE));
+  const currentQuestionPage = Math.min(questionPage, totalPages);
+  const questionStart =
+    totalQuestions === 0 ? 0 : (currentQuestionPage - 1) * QUESTIONS_PER_PAGE + 1;
+  const questionEnd = Math.min(
+    totalQuestions,
+    questionStart + questions.length - 1,
+  );
 
   const handleAddQuestion = async () => {
     if (!canManageQuestions) return;
@@ -280,7 +313,10 @@ export default function AdminQuestionsPage() {
       }
       if (res.ok) {
         const data = await res.json();
-        setQuestions((current) => [data.question, ...current]);
+        setQuestions((current) =>
+          [data.question, ...current].slice(0, QUESTIONS_PER_PAGE),
+        );
+        setTotalQuestions((current) => current + 1);
         setDbConnected(true);
       } else {
         const data = await res.json().catch(() => null);
@@ -352,6 +388,7 @@ export default function AdminQuestionsPage() {
       return;
     }
     setQuestions((current) => current.filter((q) => q.id !== id));
+    setTotalQuestions((current) => Math.max(0, current - 1));
   };
 
   if (isCheckingAuth) {
@@ -366,7 +403,7 @@ export default function AdminQuestionsPage() {
     <AdminShell
       admin={adminUser}
       title="จัดการคำถาม"
-      description={`ฐานคำถามสำหรับทุกโหมดเกม ตอนนี้มี ${filteredQuestions.length} รายการที่ตรงกับ filter ปัจจุบัน`}
+      description={`ฐานคำถามสำหรับทุกโหมดเกม แสดงรายการที่ ${questionStart.toLocaleString("th-TH")}-${questionEnd.toLocaleString("th-TH")} จาก ${totalQuestions.toLocaleString("th-TH")} รายการ`}
       actions={
         <>
           <button
@@ -383,7 +420,7 @@ export default function AdminQuestionsPage() {
             <>
               <AdminGoogleSheetsExportButton
                 dataset="questions"
-                label="Export Questions"
+                label="ส่งออกคำถาม"
               />
               <Button
                 onClick={() => {
@@ -423,6 +460,19 @@ export default function AdminQuestionsPage() {
 
       {/* Filters */}
       <section>
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-semibold text-white/60" htmlFor="question-search">
+            ค้นหาคำถาม
+          </label>
+          <input
+            id="question-search"
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="พิมพ์ข้อความในคำถาม..."
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 transition-colors focus:border-primary focus:outline-none"
+          />
+        </div>
         <div className="flex flex-wrap gap-3">
           <CustomDropdown
             id="type"
@@ -430,7 +480,10 @@ export default function AdminQuestionsPage() {
             openDropdown={openDropdown}
             setOpenDropdown={setOpenDropdown}
             options={typeOptions}
-            onChange={(value) => setFilter({ ...filter, type: value })}
+            onChange={(value) => {
+              setQuestionPage(1);
+              setFilter({ ...filter, type: value });
+            }}
             label="ประเภท"
           />
           <CustomDropdown
@@ -439,7 +492,10 @@ export default function AdminQuestionsPage() {
             openDropdown={openDropdown}
             setOpenDropdown={setOpenDropdown}
             options={levelOptions}
-            onChange={(value) => setFilter({ ...filter, level: value })}
+            onChange={(value) => {
+              setQuestionPage(1);
+              setFilter({ ...filter, level: value });
+            }}
             label="ระดับ"
           />
           <CustomDropdown
@@ -448,8 +504,11 @@ export default function AdminQuestionsPage() {
             openDropdown={openDropdown}
             setOpenDropdown={setOpenDropdown}
             options={ratingOptions}
-            onChange={(value) => setFilter({ ...filter, is18Plus: value })}
-            label="Rating"
+            onChange={(value) => {
+              setQuestionPage(1);
+              setFilter({ ...filter, is18Plus: value });
+            }}
+            label="การจัดระดับ"
           />
         </div>
       </section>
@@ -505,6 +564,8 @@ export default function AdminQuestionsPage() {
                       {canManageQuestions && (
                       <div className="flex items-center gap-1">
                         <button
+                          type="button"
+                          aria-label="แก้ไขคำถาม"
                           onClick={() => {
                             setApiError(null);
                             setEditingQuestion(q);
@@ -517,7 +578,9 @@ export default function AdminQuestionsPage() {
                           </span>
                         </button>
                         <button
-                          onClick={() => handleDeleteQuestion(q.id)}
+                          type="button"
+                          aria-label="ลบคำถาม"
+                          onClick={() => setQuestionPendingDelete(q)}
                           className="p-2 rounded-lg text-white/30 hover:text-neon-red hover:bg-neon-red/10 transition-colors"
                         >
                           <span className="material-symbols-outlined text-lg">
@@ -533,7 +596,87 @@ export default function AdminQuestionsPage() {
             </AnimatePresence>
           </div>
         )}
+        <div className="mt-5 flex flex-col items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/5 p-3 text-sm text-white/60 sm:flex-row">
+          <span>
+            หน้า {currentQuestionPage.toLocaleString("th-TH")} / {totalPages.toLocaleString("th-TH")}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setQuestionPage((current) => Math.max(1, current - 1))}
+              disabled={currentQuestionPage <= 1 || loading}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
+            >
+              ก่อนหน้า
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setQuestionPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={currentQuestionPage >= totalPages || loading}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
+            >
+              ถัดไป
+            </button>
+          </div>
+        </div>
       </section>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {questionPendingDelete && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setQuestionPendingDelete(null)}
+          >
+            <motion.div
+              className="w-full max-w-lg rounded-2xl bg-surface p-6"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-question-title"
+            >
+              <h2 id="delete-question-title" className="text-xl font-bold text-white">
+                ยืนยันการลบคำถาม
+              </h2>
+              <p className="mt-3 text-sm text-white/60">
+                การลบคำถามนี้ไม่สามารถย้อนกลับได้
+              </p>
+              <div className="mt-4 rounded-2xl border border-neon-red/20 bg-neon-red/10 p-4 text-sm text-white">
+                {questionPendingDelete.text}
+              </div>
+              <div className="mt-6 flex gap-3">
+                <Button
+                  onClick={() => setQuestionPendingDelete(null)}
+                  variant="ghost"
+                  size="lg"
+                  fullWidth
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  onClick={() => {
+                    void handleDeleteQuestion(questionPendingDelete.id);
+                    setQuestionPendingDelete(null);
+                  }}
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                >
+                  ลบคำถาม
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add Modal */}
       <AnimatePresence>

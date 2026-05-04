@@ -21,6 +21,7 @@ export function useAdminRouteData<T>(path: string, fallbackError: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -40,6 +41,7 @@ export function useAdminRouteData<T>(path: string, fallbackError: string) {
       }
 
       setData(payload as T);
+      setLastUpdatedAt(new Date());
     } catch {
       setError(fallbackError);
     } finally {
@@ -61,6 +63,7 @@ export function useAdminRouteData<T>(path: string, fallbackError: string) {
     data,
     loading,
     error,
+    lastUpdatedAt,
     refresh,
     setData,
   };

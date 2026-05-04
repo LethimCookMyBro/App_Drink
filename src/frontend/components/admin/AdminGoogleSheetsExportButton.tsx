@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatAdminNumber } from "@/frontend/admin/format";
 import { Button } from "@/frontend/components/ui";
 import type { AdminExportDataset } from "@/backend/adminExportTypes";
 
@@ -53,7 +54,7 @@ export function AdminGoogleSheetsExportButton({
 
       setStatus({
         tone: "success",
-        message: `ซิงก์แล้ว ${payload?.tabsUpdated ?? 0} ชีต`,
+        message: `ซิงก์แล้ว ${formatAdminNumber(payload?.tabsUpdated ?? 0)} ชีต`,
       });
 
       if (payload?.spreadsheetUrl) {
@@ -62,7 +63,7 @@ export function AdminGoogleSheetsExportButton({
     } catch {
       setStatus({
         tone: "error",
-        message: "ไม่สามารถเชื่อมต่อเพื่อ export ได้",
+        message: "ไม่สามารถเชื่อมต่อเพื่อส่งออกได้",
       });
     } finally {
       setLoading(false);

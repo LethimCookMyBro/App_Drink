@@ -6,6 +6,7 @@ import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/Admin
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
 import { GlassPanel } from "@/frontend/components/ui";
+import { formatAdminNumber } from "@/frontend/admin/format";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminFeedbackData } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
@@ -188,7 +189,7 @@ export default function AdminFeedbackPage() {
   return (
     <AdminShell
       admin={data?.admin ?? null}
-      title="Feedback"
+      title="ข้อเสนอแนะ"
       description="ดู queue ของบัคและฟีเจอร์รีเควสต์ในหน้าจัดการเดียว พร้อม mask ข้อมูลติดต่อไว้โดยค่าเริ่มต้น"
       actions={
         <>
@@ -203,7 +204,7 @@ export default function AdminFeedbackPage() {
           {canDeleteFeedback && (
             <AdminGoogleSheetsExportButton
               dataset="feedback"
-              label="Export Feedback"
+              label="ส่งออกข้อเสนอแนะ"
             />
           )}
         </>
@@ -262,7 +263,7 @@ export default function AdminFeedbackPage() {
         <div className="mb-5 flex flex-col gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-              Queue
+              คิวงาน
             </p>
             <h2 className="mt-2 text-2xl font-black text-white">
               จัดการ feedback แบบละเอียด
@@ -271,11 +272,11 @@ export default function AdminFeedbackPage() {
 
           <div className="flex flex-wrap gap-2">
             {([
-              ["ALL", `ทั้งหมด (${summary.ALL})`],
-              ["PENDING", `รอดำเนินการ (${summary.PENDING})`],
-              ["IN_PROGRESS", `กำลังดำเนินการ (${summary.IN_PROGRESS})`],
-              ["RESOLVED", `แก้ไขแล้ว (${summary.RESOLVED})`],
-              ["REJECTED", `ปฏิเสธ (${summary.REJECTED})`],
+              ["ALL", `ทั้งหมด (${formatAdminNumber(summary.ALL)})`],
+              ["PENDING", `รอดำเนินการ (${formatAdminNumber(summary.PENDING)})`],
+              ["IN_PROGRESS", `กำลังดำเนินการ (${formatAdminNumber(summary.IN_PROGRESS)})`],
+              ["RESOLVED", `แก้ไขแล้ว (${formatAdminNumber(summary.RESOLVED)})`],
+              ["REJECTED", `ปฏิเสธ (${formatAdminNumber(summary.REJECTED)})`],
             ] as Array<[FeedbackStatus, string]>).map(([status, label]) => (
               <button
                 key={status}
@@ -329,6 +330,11 @@ export default function AdminFeedbackPage() {
                           <span className="text-xs text-white/30">
                             {formatDateTime(feedback.createdAt)}
                           </span>
+                          {feedback.status === "RESOLVED" && feedback.resolvedAt ? (
+                            <span className="text-xs font-semibold text-neon-green">
+                              แก้ไขเมื่อ {formatDateTime(feedback.resolvedAt)}
+                            </span>
+                          ) : null}
                         </div>
 
                         <h3 className="text-lg font-bold text-white">
@@ -368,6 +374,7 @@ export default function AdminFeedbackPage() {
                           {expanded ? "ซ่อนรายละเอียด" : "ดูรายละเอียด"}
                         </button>
                         <select
+                          aria-label="เปลี่ยนสถานะข้อเสนอแนะ"
                           value={feedback.status}
                           onChange={(event) =>
                             void handleStatusChange(feedback.id, event.target.value)

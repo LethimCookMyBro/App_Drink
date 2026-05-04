@@ -19,11 +19,11 @@ interface AdminShellProps {
 }
 
 const NAV_ITEMS = [
-  { href: "/admin", label: "Overview", icon: "dashboard", minRole: "MODERATOR" },
-  { href: "/admin/users", label: "Users", icon: "group", minRole: "ADMIN" },
-  { href: "/admin/questions", label: "Questions", icon: "quiz", minRole: "MODERATOR" },
-  { href: "/admin/feedback", label: "Feedback", icon: "chat_bubble", minRole: "MODERATOR" },
-  { href: "/admin/security", label: "Security", icon: "shield", minRole: "ADMIN" },
+  { href: "/admin", label: "ภาพรวม", icon: "dashboard", minRole: "MODERATOR" },
+  { href: "/admin/users", label: "ผู้ใช้", icon: "group", minRole: "ADMIN" },
+  { href: "/admin/questions", label: "คำถาม", icon: "quiz", minRole: "MODERATOR" },
+  { href: "/admin/feedback", label: "ข้อเสนอแนะ", icon: "chat_bubble", minRole: "MODERATOR" },
+  { href: "/admin/security", label: "ความปลอดภัย", icon: "shield", minRole: "ADMIN" },
 ] as const;
 
 function canSeeAdminNavItem(
@@ -73,7 +73,7 @@ export function AdminShell({
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">
-                  Admin Console
+                  แผงผู้ดูแล
                 </p>
                 <h1 className="text-2xl font-black text-white md:text-3xl">
                   {title}
@@ -137,7 +137,7 @@ export function AdminShell({
 
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-8">
         <GlassPanel className="border-primary/10 bg-primary/5 p-4 text-sm text-white/65 md:p-5">
-          แดชบอร์ดชุดนี้แสดงข้อมูลที่จำเป็นต่อการดูแลระบบเท่านั้น และ mask
+          แดชบอร์ดชุดนี้แสดงข้อมูลที่จำเป็นต่อการดูแลระบบเท่านั้น และปิดบัง
           ข้อมูลติดต่อของผู้ใช้ไว้โดยค่าเริ่มต้นเพื่อลดการเปิดเผยข้อมูลเกินจำเป็น
         </GlassPanel>
         {children}

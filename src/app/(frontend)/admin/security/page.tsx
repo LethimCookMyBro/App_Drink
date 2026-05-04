@@ -1,16 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
 import { GlassPanel } from "@/frontend/components/ui";
+import {
+  formatAdminDateTime,
+  formatAdminNumber,
+} from "@/frontend/admin/format";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminSecurityData } from "@/backend/adminData";
 
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("th-TH");
+type ServerLogItem = AdminSecurityData["recentServerLogs"][number] & {
+  context?: string | null;
+};
+
+function getServerLogContext(item: ServerLogItem): string | null {
+  return item.context ?? item.contextPreview ?? null;
 }
 
 export default function AdminSecurityPage() {
@@ -18,11 +25,17 @@ export default function AdminSecurityPage() {
     "/api/admin/security",
     "ไม่สามารถโหลดข้อมูลความปลอดภัยได้",
   );
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [visibleServerLogCount, setVisibleServerLogCount] = useState(20);
+  const visibleServerLogs =
+    data?.recentServerLogs.slice(0, visibleServerLogCount) ?? [];
 
   return (
     <AdminShell
       admin={data?.admin ?? null}
-      title="Security"
+      title="ความปลอดภัย"
       description="ติดตามสถานะ lockout, ความเคลื่อนไหวของแอดมิน, และ posture หลักของระบบโดยไม่เปิดเผยข้อมูลดิบเกินจำเป็น"
       actions={
         <>
@@ -36,16 +49,16 @@ export default function AdminSecurityPage() {
           </button>
           <AdminGoogleSheetsExportButton
             dataset="security"
-            label="Export Security"
+            label="ส่งออกความปลอดภัย"
           />
           <AdminGoogleSheetsExportButton
             dataset="audit_logs"
-            label="Export Audit"
+            label="ส่งออกกิจกรรม"
             icon="history"
           />
           <AdminGoogleSheetsExportButton
             dataset="server_logs"
-            label="Export Server Log"
+            label="ส่งออกบันทึกเซิร์ฟเวอร์"
             icon="dns"
           />
         </>
@@ -59,31 +72,31 @@ export default function AdminSecurityPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <AdminStatCard
-          label="Failed Logins / 24h"
+          label="เข้าสู่ระบบไม่สำเร็จ / 24 ชม."
           value={loading ? "..." : data?.metrics.failedLogins24h ?? 0}
           icon="dangerous"
           tone="red"
         />
         <AdminStatCard
-          label="Successful Logins / 24h"
+          label="เข้าสู่ระบบสำเร็จ / 24 ชม."
           value={loading ? "..." : data?.metrics.successfulLogins24h ?? 0}
           icon="login"
           tone="green"
         />
         <AdminStatCard
-          label="Audit Events / 24h"
+          label="กิจกรรมแอดมิน / 24 ชม."
           value={loading ? "..." : data?.metrics.auditEvents24h ?? 0}
           icon="monitoring"
           tone="blue"
         />
         <AdminStatCard
-          label="Question Writes / 24h"
+          label="แก้ไขคำถาม / 24 ชม."
           value={loading ? "..." : data?.metrics.questionWrites24h ?? 0}
           icon="edit_note"
           tone="yellow"
         />
         <AdminStatCard
-          label="Lockouts Active"
+          label="บัญชีที่ถูกล็อก"
           value={loading ? "..." : data?.metrics.activeLockouts ?? 0}
           icon="lock_person"
           tone="red"
@@ -94,7 +107,7 @@ export default function AdminSecurityPage() {
         <GlassPanel className="p-5 md:p-6">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-              Posture
+              สถานะระบบ
             </p>
             <h2 className="mt-2 text-2xl font-black text-white">
               สถานะ config และ hardening
@@ -138,7 +151,7 @@ export default function AdminSecurityPage() {
         <GlassPanel className="p-5 md:p-6">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-              Lockouts
+              การล็อกบัญชี
             </p>
             <h2 className="mt-2 text-2xl font-black text-white">
               รายการ lockout ที่ยังมีผลหรือเพิ่งมีความพยายามผิดซ้ำ
@@ -169,28 +182,28 @@ export default function AdminSecurityPage() {
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-[0.14em] text-white/30">
-                          Failed Attempts
+                          พยายามไม่สำเร็จ
                         </p>
                         <p className="mt-2 text-2xl font-black text-neon-red">
-                          {item.failedAttempts}
+                          {formatAdminNumber(item.failedAttempts)}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-[0.14em] text-white/30">
-                          Locked Until
+                          ล็อกถึง
                         </p>
                         <p className="mt-2 text-sm text-white/75">
-                          {formatDateTime(item.lockedUntil)}
+                          {formatAdminDateTime(item.lockedUntil)}
                         </p>
                         <p className="mt-1 text-xs text-white/35">
-                          พยายามล่าสุด {formatDateTime(item.lastAttemptAt)}
+                          พยายามล่าสุด {formatAdminDateTime(item.lastAttemptAt)}
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="rounded-2xl border border-white/5 bg-white/5 p-8 text-center text-white/45">
-                    ตอนนี้ยังไม่มี lockout ที่ active อยู่
+                    ตอนนี้ยังไม่มีบัญชีที่ถูกล็อกอยู่
                   </div>
                 )}
           </div>
@@ -200,7 +213,7 @@ export default function AdminSecurityPage() {
       <GlassPanel className="p-5 md:p-6">
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Audit Trail
+            ประวัติกิจกรรม
           </p>
           <h2 className="mt-2 text-2xl font-black text-white">
             ความเคลื่อนไหวล่าสุดของผู้ดูแลระบบ
@@ -247,7 +260,7 @@ export default function AdminSecurityPage() {
                       {item.status}
                     </span>
                     <p className="mt-2 text-xs text-white/35">
-                      {formatDateTime(item.createdAt)}
+                      {formatAdminDateTime(item.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -258,7 +271,7 @@ export default function AdminSecurityPage() {
       <GlassPanel className="p-5 md:p-6">
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-            Server Logs
+            บันทึกเซิร์ฟเวอร์
           </p>
           <h2 className="mt-2 text-2xl font-black text-white">
             บันทึกล่าสุดจากฝั่งเซิร์ฟเวอร์
@@ -273,8 +286,12 @@ export default function AdminSecurityPage() {
                   className="h-24 animate-pulse rounded-2xl bg-white/5"
                 />
               ))
-            : data?.recentServerLogs.length ? (
-                data.recentServerLogs.map((item) => (
+            : visibleServerLogs.length ? (
+                visibleServerLogs.map((item) => {
+                  const fullContext = getServerLogContext(item);
+                  const expanded = expandedLogIds.has(item.id);
+
+                  return (
                   <div
                     key={item.id}
                     className="grid gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 md:grid-cols-[auto_1fr_auto]"
@@ -297,22 +314,55 @@ export default function AdminSecurityPage() {
                         {item.message}
                       </p>
                       <p className="mt-1 break-words text-xs text-white/40">
-                        {item.contextPreview || "ไม่มี context เพิ่มเติม"}
+                        {expanded
+                          ? fullContext || "ไม่มี context เพิ่มเติม"
+                          : item.contextPreview || "ไม่มี context เพิ่มเติม"}
                       </p>
+                      {fullContext && fullContext.length >= 140 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedLogIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(item.id)) {
+                                next.delete(item.id);
+                              } else {
+                                next.add(item.id);
+                              }
+                              return next;
+                            })
+                          }
+                          className="mt-2 text-xs font-semibold text-primary transition-colors hover:text-white"
+                        >
+                          {expanded ? "ย่อข้อมูล" : "ดูเพิ่มเติม"}
+                        </button>
+                      ) : null}
                     </div>
                     <div className="text-left md:text-right">
                       <p className="text-xs text-white/35">
-                        {formatDateTime(item.createdAt)}
+                        {formatAdminDateTime(item.createdAt)}
                       </p>
                     </div>
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-white/5 bg-white/5 p-8 text-center text-white/45">
                   ยังไม่มี server log ที่บันทึกไว้ในระบบ
                 </div>
               )}
         </div>
+        {!loading && data && data.recentServerLogs.length > visibleServerLogCount ? (
+          <div className="mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setVisibleServerLogCount((count) => count + 20)}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              โหลดเพิ่มเติม
+            </button>
+          </div>
+        ) : null}
       </GlassPanel>
     </AdminShell>
   );

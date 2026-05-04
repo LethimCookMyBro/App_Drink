@@ -1,18 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
 import { GlassPanel } from "@/frontend/components/ui";
+import {
+  formatAdminDateTime,
+  formatAdminNumber,
+  formatAdminTime,
+} from "@/frontend/admin/format";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminOverviewData } from "@/backend/adminData";
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("th-TH");
-}
 
 function getQuestionTone(type: string): "primary" | "blue" | "green" | "red" | "yellow" {
   switch (type) {
@@ -30,10 +30,19 @@ function getQuestionTone(type: string): "primary" | "blue" | "green" | "red" | "
 }
 
 export default function AdminOverviewPage() {
-  const { data, loading, error, refresh } = useAdminRouteData<AdminOverviewData>(
+  const { data, loading, error, refresh, lastUpdatedAt } =
+    useAdminRouteData<AdminOverviewData>(
     "/api/admin/dashboard",
     "ไม่สามารถโหลดภาพรวมแอดมินได้",
   );
+
+  useEffect(() => {
+    const refreshId = window.setInterval(() => {
+      void refresh();
+    }, 60_000);
+
+    return () => window.clearInterval(refreshId);
+  }, [refresh]);
 
   return (
     <AdminShell
@@ -50,13 +59,16 @@ export default function AdminOverviewPage() {
             <span className="material-symbols-outlined text-lg">refresh</span>
             รีเฟรช
           </button>
+          <span className="text-xs font-semibold text-white/40">
+            อัปเดตล่าสุด {formatAdminTime(lastUpdatedAt)}
+          </span>
           <AdminGoogleSheetsExportButton
             dataset="overview"
-            label="Export Overview"
+            label="ส่งออกภาพรวม"
           />
           <AdminGoogleSheetsExportButton
             dataset="all"
-            label="Export All"
+            label="ส่งออกทั้งหมด"
             icon="backup_table"
             variant="primary"
           />
@@ -85,14 +97,14 @@ export default function AdminOverviewPage() {
           tone="blue"
         />
         <AdminStatCard
-          label="Feedback ค้างอยู่"
+          label="ข้อเสนอแนะค้างอยู่"
           value={loading ? "..." : data?.summary.pendingFeedback ?? 0}
           description="รายการที่ยังไม่ถูกดำเนินการหรือปิดงาน"
           icon="chat_bubble"
           tone="yellow"
         />
         <AdminStatCard
-          label="วงที่ยัง active"
+          label="วงที่ยังเปิดอยู่"
           value={loading ? "..." : data?.summary.activeRooms ?? 0}
           description="ห้องที่ยังเปิดใช้งานอยู่ในระบบ"
           icon="groups"
@@ -106,7 +118,7 @@ export default function AdminOverviewPage() {
           tone="blue"
         />
         <AdminStatCard
-          label="Lockout ที่ยัง active"
+          label="บัญชีที่ถูกล็อก"
           value={loading ? "..." : data?.summary.activeLockouts ?? 0}
           description="สัญญาณความเสี่ยงฝั่งแอดมินที่ยังค้างอยู่"
           icon="lock_person"
@@ -119,7 +131,7 @@ export default function AdminOverviewPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                Recent Users
+                ผู้ใช้ล่าสุด
               </p>
               <h2 className="mt-2 text-xl font-black text-white">
                 ผู้ใช้ที่เพิ่งเข้ามาใช้งาน
@@ -161,36 +173,36 @@ export default function AdminOverviewPage() {
                               : "bg-white/10 text-white/55"
                           }`}
                         >
-                          {user.isVerified ? "Verified" : "ยังไม่ยืนยัน"}
+                          {user.isVerified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน"}
                         </span>
                       </div>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.14em] text-white/30">
-                        Last Login
+                        เข้าสู่ระบบล่าสุด
                       </p>
                       <p className="mt-2 text-sm text-white/75">
-                        {formatDateTime(user.lastLoginAt)}
+                        {formatAdminDateTime(user.lastLoginAt)}
                       </p>
                       <p className="mt-1 text-xs text-white/35">
-                        สมัครเมื่อ {formatDateTime(user.createdAt)}
+                        สมัครเมื่อ {formatAdminDateTime(user.createdAt)}
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:block">
                       <div>
                         <p className="text-xs uppercase tracking-[0.14em] text-white/30">
-                          Sessions
+                          เซสชัน
                         </p>
                         <p className="mt-2 text-xl font-bold text-white">
-                          {user.sessions}
+                          {formatAdminNumber(user.sessions)}
                         </p>
                       </div>
                       <div className="md:mt-3">
                         <p className="text-xs uppercase tracking-[0.14em] text-white/30">
-                          Games
+                          เกม
                         </p>
                         <p className="mt-2 text-xl font-bold text-primary">
-                          {user.gamesPlayed}
+                          {formatAdminNumber(user.gamesPlayed)}
                         </p>
                       </div>
                     </div>
@@ -203,7 +215,7 @@ export default function AdminOverviewPage() {
           <GlassPanel className="p-5 md:p-6">
             <div className="mb-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                Question Mix
+                สัดส่วนคำถาม
               </p>
               <h2 className="mt-2 text-xl font-black text-white">
                 ภาพรวมประเภทคำถาม
@@ -242,7 +254,7 @@ export default function AdminOverviewPage() {
                                   : "text-primary"
                         }`}
                       >
-                        {item.count}
+                        {formatAdminNumber(item.count)}
                       </p>
                     </div>
                   ))}
@@ -265,7 +277,7 @@ export default function AdminOverviewPage() {
                         {item.label}
                       </p>
                       <p className="mt-3 text-3xl font-black text-white">
-                        {item.count}
+                        {formatAdminNumber(item.count)}
                       </p>
                     </div>
                   ))}
@@ -276,7 +288,7 @@ export default function AdminOverviewPage() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                  Top Questions
+                  คำถามยอดนิยม
                 </p>
                 <h2 className="mt-2 text-xl font-black text-white">
                   คำถามที่ถูกใช้บ่อย
@@ -320,7 +332,7 @@ export default function AdminOverviewPage() {
                           {question.type}
                         </span>
                         <span className="text-xs text-white/35">
-                          ใช้ไป {question.usageCount} ครั้ง
+                          ใช้ไป {formatAdminNumber(question.usageCount)} ครั้ง
                         </span>
                       </div>
                       <p className="text-sm font-semibold text-white">
@@ -338,7 +350,7 @@ export default function AdminOverviewPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                Feedback Queue
+                คิวข้อเสนอแนะ
               </p>
               <h2 className="mt-2 text-xl font-black text-white">
                 feedback ล่าสุด
@@ -380,7 +392,7 @@ export default function AdminOverviewPage() {
                         {feedback.status}
                       </span>
                       <span className="text-xs text-white/30">
-                        {formatDateTime(feedback.createdAt)}
+                        {formatAdminDateTime(feedback.createdAt)}
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-white">
@@ -398,7 +410,7 @@ export default function AdminOverviewPage() {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                Audit Stream
+                บันทึกกิจกรรม
               </p>
               <h2 className="mt-2 text-xl font-black text-white">
                 ความเคลื่อนไหวล่าสุดของแอดมิน
@@ -408,7 +420,7 @@ export default function AdminOverviewPage() {
               href="/admin/security"
               className="inline-flex items-center gap-2 text-sm font-semibold text-primary transition-colors hover:text-white"
             >
-              เปิด Security
+              เปิดหน้าความปลอดภัย
               <span className="material-symbols-outlined text-lg">arrow_forward</span>
             </Link>
           </div>
@@ -448,7 +460,7 @@ export default function AdminOverviewPage() {
                         {item.status}
                       </span>
                       <p className="mt-2 text-xs text-white/35">
-                        {formatDateTime(item.createdAt)}
+                        {formatAdminDateTime(item.createdAt)}
                       </p>
                     </div>
                   </div>
