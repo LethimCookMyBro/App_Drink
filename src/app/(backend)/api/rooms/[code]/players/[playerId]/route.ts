@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import { toRoomSummary } from "@/backend/apiFilter";
 import {
@@ -73,9 +73,6 @@ export async function DELETE(
             kind: "removed" as const,
             room: removeResult.roomSummary,
           };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       ),
       "Could not remove player",

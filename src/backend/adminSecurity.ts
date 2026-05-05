@@ -423,9 +423,6 @@ export async function recordAdminLoginFailure(
           failedAttempts: nextFailedAttempts,
         };
       },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      },
     );
   });
 }

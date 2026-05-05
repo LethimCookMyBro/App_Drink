@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import { toRoomSummary } from "@/backend/apiFilter";
 import {
@@ -80,9 +80,6 @@ export async function DELETE(
 
           const room = await getRoomSummaryById(tx, access.room.id);
           return room ? { kind: "deleted" as const, room } : { kind: "room_missing" as const };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       ),
       "Could not remove room custom question",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   EMPTY_ACTIVE_GAME_SESSION_SNAPSHOT,
   GAME_SESSION_CHANGED_EVENT,
@@ -18,13 +18,21 @@ export function useActiveGameSession() {
   );
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // Guard against concurrent refresh calls to prevent request storms
+  const isRefreshing = useRef(false);
+
   const refreshActiveGame = useCallback(async () => {
+    // Skip if a refresh is already in-flight
+    if (isRefreshing.current) return;
+    isRefreshing.current = true;
+
     setActiveGame(getActiveGameSessionSnapshot());
 
     try {
       const nextSnapshot = await refreshStoredActiveGameSession();
       setActiveGame(nextSnapshot);
     } finally {
+      isRefreshing.current = false;
       setIsHydrated(true);
     }
   }, []);
@@ -34,18 +42,25 @@ export function useActiveGameSession() {
       void refreshActiveGame();
     }, 0);
 
-    const syncActiveGame = () => {
+    // For GAME_SESSION_CHANGED_EVENT, only read local snapshot (no fetch)
+    // to avoid triggering a re-fetch loop. The 5s poll handles remote sync.
+    const syncFromLocalStorage = () => {
+      setActiveGame(getActiveGameSessionSnapshot());
+    };
+
+    // For cross-tab sync via "storage" event, do a full refresh
+    const syncFromStorage = () => {
       void refreshActiveGame();
     };
 
-    window.addEventListener("storage", syncActiveGame);
-    window.addEventListener(GAME_SESSION_CHANGED_EVENT, syncActiveGame);
-    const pollId = window.setInterval(syncActiveGame, 5000);
+    window.addEventListener("storage", syncFromStorage);
+    window.addEventListener(GAME_SESSION_CHANGED_EVENT, syncFromLocalStorage);
+    const pollId = window.setInterval(() => void refreshActiveGame(), 5000);
 
     return () => {
       window.clearTimeout(initialRefreshId);
-      window.removeEventListener("storage", syncActiveGame);
-      window.removeEventListener(GAME_SESSION_CHANGED_EVENT, syncActiveGame);
+      window.removeEventListener("storage", syncFromStorage);
+      window.removeEventListener(GAME_SESSION_CHANGED_EVENT, syncFromLocalStorage);
       window.clearInterval(pollId);
     };
   }, [refreshActiveGame]);

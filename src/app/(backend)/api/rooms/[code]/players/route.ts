@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import { toRoomSummary } from "@/backend/apiFilter";
 import {
@@ -82,9 +82,6 @@ export async function POST(
             kind: "created" as const,
             room: createResult.roomSummary,
           };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       ),
       "Could not add player",

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import { toRoomPlayer, toRoomSummary } from "@/backend/apiFilter";
 import {
@@ -86,9 +86,6 @@ export async function POST(
             player: createResult.player,
             updatedRoom: createResult.roomSummary,
           };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       );
     }, "Could not join room");

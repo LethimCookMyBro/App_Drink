@@ -90,9 +90,6 @@ export async function POST(
             requestId,
           });
         },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        },
       ),
       "Could not persist round progress",
     );

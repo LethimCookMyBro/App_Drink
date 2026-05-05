@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import { toRoomSummary } from "@/backend/apiFilter";
 import {
@@ -99,9 +99,6 @@ export async function POST(
 
           const room = await getRoomSummaryById(tx, access.room.id);
           return room ? { kind: "created" as const, room } : { kind: "room_missing" as const };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       ),
       "Could not save room custom question",

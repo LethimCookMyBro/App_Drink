@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { NextRequest } from "next/server";
 import {
   enforceRateLimit,
@@ -292,9 +292,6 @@ export async function POST(
             kind: "created" as const,
             session: initializedSession,
           };
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       );
     }, "Could not start room session");

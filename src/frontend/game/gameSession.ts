@@ -391,7 +391,18 @@ export async function refreshStoredActiveGameSession(): Promise<ActiveGameSessio
   }
 
   const resumePath = room.activeSession.resumePath ?? snapshot.resumePath;
-  markGameSessionStarted(room.code, resumePath, room.activeSession.id);
+
+  // Silently update localStorage without dispatching to avoid infinite loop.
+  // The caller (useActiveGameSession) already reads the updated snapshot after
+  // this function resolves, so a broadcast is unnecessary.
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(GAME_SESSION_KEYS.started, "true");
+    window.localStorage.setItem(GAME_SESSION_KEYS.roomCode, room.code);
+    window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, room.activeSession.id);
+    if (isGameRoute(resumePath)) {
+      window.localStorage.setItem(GAME_SESSION_KEYS.resumePath, resumePath);
+    }
+  }
 
   return {
     isActive: true,
@@ -410,15 +421,29 @@ export function markGameSessionStarted(
 ): void {
   if (typeof window === "undefined") return;
 
-  window.localStorage.setItem(GAME_SESSION_KEYS.started, "true");
-  if (roomCode) {
+  // Track whether any value actually changed to avoid unnecessary event dispatch
+  let changed = false;
+
+  if (window.localStorage.getItem(GAME_SESSION_KEYS.started) !== "true") {
+    window.localStorage.setItem(GAME_SESSION_KEYS.started, "true");
+    changed = true;
+  }
+  if (roomCode && window.localStorage.getItem(GAME_SESSION_KEYS.roomCode) !== roomCode) {
     window.localStorage.setItem(GAME_SESSION_KEYS.roomCode, roomCode);
+    changed = true;
   }
-  if (sessionId) {
+  if (sessionId && window.localStorage.getItem(GAME_SESSION_KEYS.sessionId) !== sessionId) {
     window.localStorage.setItem(GAME_SESSION_KEYS.sessionId, sessionId);
+    changed = true;
   }
-  setGameResumePath(resumePath);
-  dispatchGameSessionChanged();
+  if (isGameRoute(resumePath) && window.localStorage.getItem(GAME_SESSION_KEYS.resumePath) !== resumePath) {
+    window.localStorage.setItem(GAME_SESSION_KEYS.resumePath, resumePath);
+    changed = true;
+  }
+
+  if (changed) {
+    dispatchGameSessionChanged();
+  }
 }
 
 export function clearActiveGameSession(): void {

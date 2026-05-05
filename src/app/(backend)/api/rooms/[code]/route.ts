@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import {
   attachPendingRoomQuestionsToSession,
@@ -8,7 +7,6 @@ import {
 import { toRoomSummary } from "@/backend/apiFilter";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
-import { withSerializableRetry } from "@/backend/prismaRetry";
 import { rateLimitConfigs } from "@/backend/rateLimit";
 import {
   getRoomSummaryById,
@@ -70,22 +68,20 @@ export async function GET(
       return jsonError("กรุณาเข้าร่วมห้องก่อนดูข้อมูลห้อง", 403);
     }
 
-    const room = await withSerializableRetry(async () =>
-      prisma.$transaction(
-        async (tx) => {
-          const currentRoom = await getRoomSummaryByCode(tx, roomCode);
-          if (!currentRoom) {
-            return null;
-          }
+    // Read room data directly — no transaction needed for read-only path
+    let currentRoom = await getRoomSummaryByCode(prisma, roomCode);
+    if (!currentRoom) {
+      return jsonError("ไม่พบห้อง", 404);
+    }
 
-          const activeSession = currentRoom.sessions[0] ?? null;
-          if (!sessionNeedsCurrentTurnHydration(activeSession)) {
-            return currentRoom;
-          }
-
+    // Only use a transaction if we need to hydrate the active session turn
+    const activeSession = currentRoom.sessions[0] ?? null;
+    if (sessionNeedsCurrentTurnHydration(activeSession)) {
+      try {
+        await prisma.$transaction(async (tx) => {
           await attachPendingRoomQuestionsToSession(
             tx,
-            currentRoom.id,
+            currentRoom!.id,
             activeSession.id,
           );
 
@@ -94,20 +90,19 @@ export async function GET(
             where: { id: activeSession.id },
             data: nextState,
           });
+        });
 
-          return (await getRoomSummaryById(tx, currentRoom.id)) ?? currentRoom;
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        },
-      ),
-      "Could not refresh room session state",
-    );
-    if (!room) {
-      return jsonError("ไม่พบห้อง", 404);
+        // Re-fetch room data after hydration
+        currentRoom = (await getRoomSummaryById(prisma, currentRoom.id)) ?? currentRoom;
+      } catch (hydrationError) {
+        // If hydration fails, still return the room data without hydrated turn
+        logger.warn("rooms.get.hydration_failed", {
+          message: hydrationError instanceof Error ? hydrationError.message : "unknown",
+        });
+      }
     }
 
-    const roomSummary = toRoomSummary(room);
+    const roomSummary = toRoomSummary(currentRoom);
 
     return jsonOk({
       room: roomSummary,
