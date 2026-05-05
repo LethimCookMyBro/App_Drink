@@ -65,16 +65,16 @@ export default function WelcomePage() {
       {/* Header */}
       <header className="flex items-center justify-end gap-2 px-4 pt-6 pb-2 sm:px-6 lg:px-8 lg:pt-8">
         {/* Feedback Button */}
-        <Link href="/feedback">
-          <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30">
-            <span className="material-symbols-outlined text-xl">
+        <Link href="/feedback" aria-label="แจ้งบัค">
+          <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30" aria-label="แจ้งบัค">
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">
               bug_report
             </span>
           </button>
         </Link>
-        <Link href="/settings">
-          <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10">
-            <span className="material-symbols-outlined">settings</span>
+        <Link href="/settings" aria-label="ตั้งค่า">
+          <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10" aria-label="ตั้งค่า">
+            <span className="material-symbols-outlined" aria-hidden="true">settings</span>
           </button>
         </Link>
       </header>

@@ -25,7 +25,7 @@ export function BottomNav() {
   const gameHref = hasStartedGame ? (activeGame?.resumePath ?? "/create") : "/create";
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/5 pb-safe md:bottom-6 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[min(calc(100%-2rem),56rem)] md:rounded-[2rem] md:border md:border-white/10 md:bg-black/20 md:backdrop-blur-2xl md:shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+    <nav aria-label="เมนูหลัก" className="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/5 pb-safe md:bottom-6 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[min(calc(100%-2rem),56rem)] md:rounded-[2rem] md:border md:border-white/10 md:bg-black/20 md:backdrop-blur-2xl md:shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
       <div className="flex items-center justify-around h-20 md:h-24 w-full px-4 md:px-6 lg:px-8">
         {navItems.map((item) => {
           const href = item.href === "/game/modes" ? gameHref : item.href;

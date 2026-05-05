@@ -145,7 +145,7 @@ export default function AdminLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:border-primary focus:outline-none transition-colors"
-                placeholder="เช่น SuperAdmin_3175! หรือ admin@email.com"
+                placeholder="ชื่อผู้ใช้หรืออีเมล"
                 required
                 autoComplete="username"
               />

@@ -89,9 +89,10 @@ export function AdminShell({
               {actions}
               <Link
                 href="/"
+                aria-label="กลับหน้าเกม"
                 className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
               >
-                <span className="material-symbols-outlined text-lg">home</span>
+                <span className="material-symbols-outlined text-lg" aria-hidden="true">home</span>
                 หน้าเกม
               </Link>
               <Button
@@ -106,7 +107,7 @@ export function AdminShell({
             </div>
           </div>
 
-          <nav className="flex flex-wrap gap-2">
+          <nav className="flex flex-wrap gap-2" aria-label="เมนูผู้ดูแลระบบ">
             {NAV_ITEMS.filter((item) =>
               canSeeAdminNavItem(admin, item.minRole),
             ).map((item) => {
@@ -135,8 +136,8 @@ export function AdminShell({
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-8">
-        <GlassPanel className="border-primary/10 bg-primary/5 p-4 text-sm text-white/65 md:p-5">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-4 md:px-8">
+        <GlassPanel className="border-primary/10 bg-primary/5 p-5 text-sm text-white/65 md:p-6">
           แดชบอร์ดชุดนี้แสดงข้อมูลที่จำเป็นต่อการดูแลระบบเท่านั้น และปิดบัง
           ข้อมูลติดต่อของผู้ใช้ไว้โดยค่าเริ่มต้นเพื่อลดการเปิดเผยข้อมูลเกินจำเป็น
         </GlassPanel>

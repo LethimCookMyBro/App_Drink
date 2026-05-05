@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
@@ -29,12 +29,17 @@ function getQuestionTone(type: string): "primary" | "blue" | "green" | "red" | "
   }
 }
 
+const PREVIEW_LIMIT = 5;
+
 export default function AdminOverviewPage() {
   const { data, loading, error, refresh, lastUpdatedAt } =
     useAdminRouteData<AdminOverviewData>(
-    "/api/admin/dashboard",
-    "ไม่สามารถโหลดภาพรวมแอดมินได้",
-  );
+      "/api/admin/dashboard",
+      "ไม่สามารถโหลดภาพรวมแอดมินได้",
+    );
+
+  const [expandedUsers, setExpandedUsers] = useState(false);
+  const [expandedFeedback, setExpandedFeedback] = useState(false);
 
   useEffect(() => {
     const refreshId = window.setInterval(() => {
@@ -53,6 +58,7 @@ export default function AdminOverviewPage() {
         <>
           <button
             type="button"
+            aria-label="รีเฟรช"
             onClick={() => void refresh()}
             className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
@@ -81,7 +87,7 @@ export default function AdminOverviewPage() {
         </GlassPanel>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         <AdminStatCard
           label="คำถามที่ใช้งานได้"
           value={loading ? "..." : data?.summary.totalQuestions ?? 0}
@@ -126,7 +132,7 @@ export default function AdminOverviewPage() {
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid items-start gap-6 xl:grid-cols-[1fr_1fr]">
         <GlassPanel className="p-5 md:p-6">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
@@ -154,7 +160,7 @@ export default function AdminOverviewPage() {
                     className="h-20 animate-pulse rounded-2xl bg-white/5"
                   />
                 ))
-              : data?.recentUsers.map((user) => (
+              : (expandedUsers ? data?.recentUsers : data?.recentUsers.slice(0, PREVIEW_LIMIT))?.map((user) => (
                   <div
                     key={user.id}
                     className="grid gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 md:grid-cols-[1.4fr_0.8fr_0.7fr]"
@@ -209,143 +215,96 @@ export default function AdminOverviewPage() {
                   </div>
                 ))}
           </div>
+          {!loading && (data?.recentUsers.length ?? 0) > PREVIEW_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setExpandedUsers((v) => !v)}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-2.5 text-sm font-semibold text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-lg">
+                {expandedUsers ? "expand_less" : "expand_more"}
+              </span>
+              {expandedUsers
+                ? "แสดงน้อยลง"
+                : `ดูเพิ่มเติม (${(data?.recentUsers.length ?? 0) - PREVIEW_LIMIT})`}
+            </button>
+          )}
         </GlassPanel>
 
-        <div className="grid gap-6">
-          <GlassPanel className="p-5 md:p-6">
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                สัดส่วนคำถาม
-              </p>
-              <h2 className="mt-2 text-xl font-black text-white">
-                ภาพรวมประเภทคำถาม
-              </h2>
-            </div>
+        <GlassPanel className="p-5 md:p-6">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+              สัดส่วนคำถาม
+            </p>
+            <h2 className="mt-2 text-xl font-black text-white">
+              ภาพรวมประเภทคำถาม
+            </h2>
+          </div>
 
-            <div className="space-y-3">
-              {loading
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="h-14 animate-pulse rounded-2xl bg-white/5"
-                    />
-                  ))
-                : data?.questionMix.map((item) => (
-                    <div
-                      key={item.type}
-                      className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-4 py-3"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {item.label}
-                        </p>
-                        <p className="text-xs text-white/35">{item.type}</p>
-                      </div>
-                      <p
-                        className={`text-2xl font-black ${
-                          getQuestionTone(item.type) === "blue"
-                            ? "text-neon-blue"
-                            : getQuestionTone(item.type) === "green"
-                              ? "text-neon-green"
-                              : getQuestionTone(item.type) === "red"
-                                ? "text-neon-red"
-                                : getQuestionTone(item.type) === "yellow"
-                                  ? "text-neon-yellow"
-                                  : "text-primary"
-                        }`}
-                      >
-                        {formatAdminNumber(item.count)}
-                      </p>
-                    </div>
-                  ))}
-            </div>
-
-            <div className="mt-6 grid grid-cols-3 gap-3">
-              {loading
-                ? Array.from({ length: 3 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="h-20 animate-pulse rounded-2xl bg-white/5"
-                    />
-                  ))
-                : data?.levelMix.map((item) => (
-                    <div
-                      key={item.level}
-                      className="rounded-2xl border border-white/5 bg-black/20 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.14em] text-white/30">
+          <div className="space-y-3">
+            {loading
+              ? Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-14 animate-pulse rounded-2xl bg-white/5"
+                  />
+                ))
+              : data?.questionMix.map((item) => (
+                  <div
+                    key={item.type}
+                    className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">
                         {item.label}
                       </p>
-                      <p className="mt-3 text-3xl font-black text-white">
-                        {formatAdminNumber(item.count)}
-                      </p>
+                      <p className="text-xs text-white/35">{item.type}</p>
                     </div>
-                  ))}
-            </div>
-          </GlassPanel>
-
-          <GlassPanel className="p-5 md:p-6">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                  คำถามยอดนิยม
-                </p>
-                <h2 className="mt-2 text-xl font-black text-white">
-                  คำถามที่ถูกใช้บ่อย
-                </h2>
-              </div>
-              <Link
-                href="/admin/questions"
-                className="text-sm font-semibold text-primary transition-colors hover:text-white"
-              >
-                จัดการคำถาม
-              </Link>
-            </div>
-
-            <div className="space-y-3">
-              {loading
-                ? Array.from({ length: 4 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="h-20 animate-pulse rounded-2xl bg-white/5"
-                    />
-                  ))
-                : data?.topQuestions.map((question) => (
-                    <div
-                      key={question.id}
-                      className="rounded-2xl border border-white/5 bg-white/5 p-4"
+                    <p
+                      className={`text-2xl font-black ${
+                        getQuestionTone(item.type) === "blue"
+                          ? "text-neon-blue"
+                          : getQuestionTone(item.type) === "green"
+                            ? "text-neon-green"
+                            : getQuestionTone(item.type) === "red"
+                              ? "text-neon-red"
+                              : getQuestionTone(item.type) === "yellow"
+                                ? "text-neon-yellow"
+                                : "text-primary"
+                      }`}
                     >
-                      <div className="mb-2 flex items-center gap-2">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            question.type === "TRUTH"
-                              ? "bg-neon-blue/15 text-neon-blue"
-                              : question.type === "DARE"
-                                ? "bg-neon-green/15 text-neon-green"
-                                : question.type === "CHAOS"
-                                  ? "bg-neon-red/15 text-neon-red"
-                                  : question.type === "VOTE"
-                                    ? "bg-neon-yellow/15 text-neon-yellow"
-                                    : "bg-primary/15 text-primary"
-                          }`}
-                        >
-                          {question.type}
-                        </span>
-                        <span className="text-xs text-white/35">
-                          ใช้ไป {formatAdminNumber(question.usageCount)} ครั้ง
-                        </span>
-                      </div>
-                      <p className="text-sm font-semibold text-white">
-                        {question.text}
-                      </p>
-                    </div>
-                  ))}
-            </div>
-          </GlassPanel>
-        </div>
+                      {formatAdminNumber(item.count)}
+                    </p>
+                  </div>
+                ))}
+          </div>
+
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            {loading
+              ? Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-20 animate-pulse rounded-2xl bg-white/5"
+                  />
+                ))
+              : data?.levelMix.map((item) => (
+                  <div
+                    key={item.level}
+                    className="rounded-2xl border border-white/5 bg-black/20 p-4"
+                  >
+                    <p className="text-xs uppercase tracking-[0.14em] text-white/30">
+                      {item.label}
+                    </p>
+                    <p className="mt-3 text-3xl font-black text-white">
+                      {formatAdminNumber(item.count)}
+                    </p>
+                  </div>
+                ))}
+          </div>
+        </GlassPanel>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <section className="grid items-start gap-6 xl:grid-cols-[1fr_1fr]">
         <GlassPanel className="p-5 md:p-6">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
@@ -373,7 +332,7 @@ export default function AdminOverviewPage() {
                     className="h-24 animate-pulse rounded-2xl bg-white/5"
                   />
                 ))
-              : data?.recentFeedback.map((feedback) => (
+              : (expandedFeedback ? data?.recentFeedback : data?.recentFeedback.slice(0, PREVIEW_LIMIT))?.map((feedback) => (
                   <div
                     key={feedback.id}
                     className="rounded-2xl border border-white/5 bg-white/5 p-4"
@@ -404,8 +363,83 @@ export default function AdminOverviewPage() {
                   </div>
                 ))}
           </div>
+          {!loading && (data?.recentFeedback.length ?? 0) > PREVIEW_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setExpandedFeedback((v) => !v)}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-2.5 text-sm font-semibold text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span className="material-symbols-outlined text-lg">
+                {expandedFeedback ? "expand_less" : "expand_more"}
+              </span>
+              {expandedFeedback
+                ? "แสดงน้อยลง"
+                : `ดูเพิ่มเติม (${(data?.recentFeedback.length ?? 0) - PREVIEW_LIMIT})`}
+            </button>
+          )}
         </GlassPanel>
 
+        <GlassPanel className="p-5 md:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+                คำถามยอดนิยม
+              </p>
+              <h2 className="mt-2 text-xl font-black text-white">
+                คำถามที่ถูกใช้บ่อย
+              </h2>
+            </div>
+            <Link
+              href="/admin/questions"
+              className="text-sm font-semibold text-primary transition-colors hover:text-white"
+            >
+              จัดการคำถาม
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {loading
+              ? Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-20 animate-pulse rounded-2xl bg-white/5"
+                  />
+                ))
+              : data?.topQuestions.slice(0, PREVIEW_LIMIT)?.map((question) => (
+                  <div
+                    key={question.id}
+                    className="rounded-2xl border border-white/5 bg-white/5 p-4"
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          question.type === "TRUTH"
+                            ? "bg-neon-blue/15 text-neon-blue"
+                            : question.type === "DARE"
+                              ? "bg-neon-green/15 text-neon-green"
+                              : question.type === "CHAOS"
+                                ? "bg-neon-red/15 text-neon-red"
+                                : question.type === "VOTE"
+                                  ? "bg-neon-yellow/15 text-neon-yellow"
+                                  : "bg-primary/15 text-primary"
+                        }`}
+                      >
+                        {question.type}
+                      </span>
+                      <span className="text-xs text-white/35">
+                        ใช้ไป {formatAdminNumber(question.usageCount)} ครั้ง
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-white">
+                      {question.text}
+                    </p>
+                  </div>
+                ))}
+          </div>
+        </GlassPanel>
+      </section>
+
+      <section className="grid gap-6">
         <GlassPanel className="p-5 md:p-6">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
@@ -433,7 +467,7 @@ export default function AdminOverviewPage() {
                     className="h-20 animate-pulse rounded-2xl bg-white/5"
                   />
                 ))
-              : data?.recentAudit.map((item) => (
+              : data?.recentAudit.slice(0, PREVIEW_LIMIT)?.map((item) => (
                   <div
                     key={item.id}
                     className="grid gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 md:grid-cols-[1fr_auto]"

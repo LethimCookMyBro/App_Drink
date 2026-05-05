@@ -80,9 +80,9 @@ export default function HistoryPage() {
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
-        <Link href="/">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-[28px]">
+        <Link href="/" aria-label="กลับ">
+          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
+            <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
               arrow_back
             </span>
           </button>

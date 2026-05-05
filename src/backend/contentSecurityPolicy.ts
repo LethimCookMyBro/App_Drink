@@ -45,6 +45,8 @@ export function buildContentSecurityPolicy(
 
   if (!isDevelopment) {
     directives.push("upgrade-insecure-requests");
+  } else {
+    directives.push("trusted-types *");
   }
 
   return directives.join("; ");

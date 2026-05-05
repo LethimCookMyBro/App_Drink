@@ -21,6 +21,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://wongtaek.app"),
   title: "วงแตก - เกมวงเหล้าเพื่อนสนิท",
   description:
     "Web App เกมวงเหล้า สำหรับกลุ่มเพื่อนผู้ชาย เล่นกันจริงในวงเหล้า",
@@ -33,6 +34,13 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Wong Taek Team" }],
   manifest: "/manifest.json",
+  openGraph: {
+    title: "วงแตก - เกมวงเหล้าเพื่อนสนิท",
+    description: "Web App เกมวงเหล้า สำหรับกลุ่มเพื่อนผู้ชาย เล่นกันจริงในวงเหล้า",
+    type: "website",
+    locale: "th_TH",
+    siteName: "วงแตก",
+  },
 };
 
 export const viewport: Viewport = {
@@ -58,6 +66,15 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link
+          rel="preconnect"
+          href="https://fonts.googleapis.com"
+        />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"

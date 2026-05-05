@@ -68,9 +68,9 @@ export default function CreateCirclePage() {
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-32 lg:pb-10">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
-        <Link href="/">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-[28px]">
+        <Link href="/" aria-label="กลับ">
+          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
+            <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
               arrow_back
             </span>
           </button>
@@ -80,9 +80,9 @@ export default function CreateCirclePage() {
             สร้างวงเหล้า
           </h2>
         </div>
-        <Link href="/settings">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white/60 hover:text-white">
-            <span className="material-symbols-outlined text-[24px]">
+        <Link href="/settings" aria-label="ตั้งค่า">
+          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white/60 hover:text-white" aria-label="ตั้งค่า">
+            <span className="material-symbols-outlined text-[24px]" aria-hidden="true">
               settings
             </span>
           </button>
@@ -175,11 +175,12 @@ export default function CreateCirclePage() {
           </label>
           <div className="flex items-center justify-between bg-black/20 rounded-xl p-1">
             <motion.button
+              aria-label="ลดจำนวนผู้เล่น"
               onClick={() => setPlayerCount(Math.max(2, playerCount - 1))}
               className="size-12 rounded-lg bg-white/5 hover:bg-white/10 active:bg-primary active:text-white flex items-center justify-center text-white/70 transition-all"
               whileTap={{ scale: 0.9 }}
             >
-              <span className="material-symbols-outlined">remove</span>
+              <span className="material-symbols-outlined" aria-hidden="true">remove</span>
             </motion.button>
             <div className="flex-1 text-center">
               <span className="text-2xl font-bold tracking-widest font-mono text-white sm:text-3xl">
@@ -187,11 +188,12 @@ export default function CreateCirclePage() {
               </span>
             </div>
             <motion.button
+              aria-label="เพิ่มจำนวนผู้เล่น"
               onClick={() => setPlayerCount(Math.min(20, playerCount + 1))}
               className="size-12 rounded-lg bg-white/5 hover:bg-white/10 active:bg-primary active:text-white flex items-center justify-center text-white/70 transition-all"
               whileTap={{ scale: 0.9 }}
             >
-              <span className="material-symbols-outlined">add</span>
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
             </motion.button>
           </div>
         </GlassPanel>

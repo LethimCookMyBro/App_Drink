@@ -406,16 +406,15 @@ export default function AdminQuestionsPage() {
       description={`ฐานคำถามสำหรับทุกโหมดเกม แสดงรายการที่ ${questionStart.toLocaleString("th-TH")}-${questionEnd.toLocaleString("th-TH")} จาก ${totalQuestions.toLocaleString("th-TH")} รายการ`}
       actions={
         <>
-          <button
-            type="button"
+          <Button
             onClick={handleRefresh}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white ${
-              refreshing ? "animate-pulse" : ""
-            }`}
+            variant="ghost"
+            size="sm"
+            icon="refresh"
+            className={refreshing ? "animate-pulse" : ""}
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
             รีเฟรช
-          </button>
+          </Button>
           {canManageQuestions && (
             <>
               <AdminGoogleSheetsExportButton
@@ -458,8 +457,9 @@ export default function AdminQuestionsPage() {
         </div>
       )}
 
+      <div className="space-y-3">
       {/* Filters */}
-      <section>
+      <section className="border-b border-white/5 pb-3">
         <div className="mb-4">
           <label className="mb-2 block text-sm font-semibold text-white/60" htmlFor="question-search">
             ค้นหาคำถาม
@@ -622,6 +622,7 @@ export default function AdminQuestionsPage() {
           </div>
         </div>
       </section>
+      </div>
 
       {/* Delete Confirmation */}
       <AnimatePresence>
