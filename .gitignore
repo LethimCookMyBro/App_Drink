@@ -25,6 +25,14 @@
 *.pem
 .cursor/
 *-output/
+audit-reports/
+lighthouse-reports/
+build_output.txt
+eslint.json
+npm_audit.json
+npm_outdated.json
+ts_prune.txt
+tsc_output.txt
 
 # debug
 npm-debug.log*
