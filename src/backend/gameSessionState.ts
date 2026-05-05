@@ -590,18 +590,8 @@ export async function writeAuthoritativeProgress(
     return { kind: "stale", session: sessionSnapshot };
   }
 
-  const nowMs = Date.now();
-  const turnExpiresAtMs = sessionSnapshot.currentTurnExpiresAt?.getTime();
-  if (!turnExpiresAtMs || nowMs < turnExpiresAtMs) {
-    return {
-      kind: "too_early",
-      session: sessionSnapshot,
-      retryAfterSeconds: Math.max(
-        1,
-        Math.ceil(((turnExpiresAtMs ?? nowMs + TURN_DURATION_MS) - nowMs) / 1000),
-      ),
-    };
-  }
+  // NOTE: The turn timer is purely cosmetic on the client side.
+  // Players can manually advance their turn at any time by clicking "next".
 
   const nextRoundNumber = sessionSnapshot.roundCount + 1;
   const eventData = buildProgressEventData({

@@ -98,15 +98,10 @@ export default function LobbyPage() {
       setCanManageLobby(nextCanManageLobby);
       setActiveSession(session);
 
-      if (session?.status === "ACTIVE") {
-        markGameSessionStarted(
-          roomCode,
-          session.resumePath ?? "/game/modes",
-          session.id,
-        );
-      } else {
-        clearActiveGameSession();
-      }
+      // NOTE: Do NOT call markGameSessionStarted here. This callback runs on
+      // every poll/refresh, and writing to shared localStorage would cause
+      // cross-tab conflicts when multiple lobby tabs are open. The explicit
+      // user actions (handleStartGame, handleEnterActiveGame) handle this.
     },
     [roomCode],
   );
