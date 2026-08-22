@@ -4,7 +4,7 @@ import {
   type PrismaClient,
   QuestionType,
 } from "@prisma/client";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isUniqueConstraintError } from "@/backend/prismaRetry";
 import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 
@@ -209,6 +209,69 @@ function tryParseCustomQuestionId(data: string | null): string | null {
   }
 }
 
+const QUESTION_FIELDS_SELECT = {
+  id: true,
+  text: true,
+  type: true,
+  level: true,
+  is18Plus: true,
+} satisfies Prisma.QuestionSelect;
+
+type QuestionFieldsPayload = Prisma.QuestionGetPayload<{
+  select: typeof QUESTION_FIELDS_SELECT;
+}>;
+
+const QUESTION_ORDER_BY: Prisma.QuestionOrderByWithRelationInput[] = [
+  { usageCount: "asc" },
+  { updatedAt: "asc" },
+  { createdAt: "asc" },
+];
+
+async function pickLeastUsedQuestion(
+  prisma: DbClient,
+  where: Prisma.QuestionWhereInput,
+): Promise<QuestionFieldsPayload | null> {
+  return prisma.question.findFirst({
+    where,
+    orderBy: QUESTION_ORDER_BY,
+    select: QUESTION_FIELDS_SELECT,
+  });
+}
+
+function seededShuffle<T>(items: T[], seed: string): T[] {
+  const hash = createHash("sha256").update(seed).digest();
+  let state = hash.readUInt32LE(0) || 1;
+  const rand = () => {
+    state |= 0; state = (state + 0x6D2B79F5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function toStandardQuestionChoice(
+  currentPlayerId: string | null,
+  question: QuestionFieldsPayload,
+): SessionChoice {
+  return {
+    currentPlayerId,
+    currentQuestionId: question.id,
+    currentQuestionText: question.text,
+    currentQuestionType: question.type,
+    currentQuestionLevel: question.level,
+    currentQuestionIs18Plus: question.is18Plus,
+    currentQuestionIsCustom: false,
+    currentTurnToken: createTurnToken(),
+    ...createTurnTiming(),
+  };
+}
+
 export function toSessionStateSnapshot(
   session: SessionStateRecord | null | undefined,
 ): SessionStateSnapshot | null {
@@ -326,8 +389,14 @@ export async function chooseNextSessionState(
     };
   }
 
-  const currentPlayerId =
-    playerIds[effectiveRoundCount % playerIds.length] ?? null;
+  const cycleLength = playerIds.length;
+  const cycleIndex = Math.floor(effectiveRoundCount / cycleLength);
+  const positionInCycle = effectiveRoundCount % cycleLength;
+  const shuffledForCycle = seededShuffle(
+    playerIds,
+    `${sessionId}:${cycleIndex}`,
+  );
+  const currentPlayerId = shuffledForCycle[positionInCycle] ?? null;
 
   // Optimized: Load only IDs of used questions instead of full events
   const [usedQuestionRows, customQuestionEventRows] = await Promise.all([
@@ -391,55 +460,35 @@ export async function chooseNextSessionState(
     isPublic: true,
     level: { lte: session.room.difficulty },
     ...(session.room.is18Plus ? {} : { is18Plus: false }),
+  } satisfies Prisma.QuestionWhereInput;
+
+  const unusedOnlyWhere = {
+    ...baseWhere,
     ...(usedQuestionIds.size > 0
       ? { id: { notIn: Array.from(usedQuestionIds) } }
       : {}),
   } satisfies Prisma.QuestionWhereInput;
 
   for (const questionType of preferredTypes) {
-    const question = await prisma.question.findFirst({
-      where: {
-        ...baseWhere,
-        type: questionType,
-      },
-      orderBy: [{ usageCount: "asc" }, { updatedAt: "asc" }, { createdAt: "asc" }],
-      select: {
-        id: true,
-        text: true,
-        type: true,
-        level: true,
-        is18Plus: true,
-      },
+    const question = await pickLeastUsedQuestion(prisma, {
+      ...unusedOnlyWhere,
+      type: questionType,
     });
 
     if (question) {
-      return {
-        currentPlayerId,
-        currentQuestionId: question.id,
-        currentQuestionText: question.text,
-        currentQuestionType: question.type,
-        currentQuestionLevel: question.level,
-        currentQuestionIs18Plus: question.is18Plus,
-        currentQuestionIsCustom: false,
-        currentTurnToken: createTurnToken(),
-        ...createTurnTiming(),
-      };
+      return toStandardQuestionChoice(currentPlayerId, question);
     }
   }
 
-  const fallbackQuestion = await prisma.question.findFirst({
-    where: baseWhere,
-    orderBy: [{ usageCount: "asc" }, { updatedAt: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      text: true,
-      type: true,
-      level: true,
-      is18Plus: true,
-    },
-  });
+  const fallbackQuestion = await pickLeastUsedQuestion(prisma, unusedOnlyWhere);
 
   if (!fallbackQuestion) {
+    const recycledQuestion = await pickLeastUsedQuestion(prisma, baseWhere);
+
+    if (recycledQuestion) {
+      return toStandardQuestionChoice(currentPlayerId, recycledQuestion);
+    }
+
     return {
       currentPlayerId,
       currentQuestionId: null,
@@ -453,17 +502,7 @@ export async function chooseNextSessionState(
     };
   }
 
-  return {
-    currentPlayerId,
-    currentQuestionId: fallbackQuestion.id,
-    currentQuestionText: fallbackQuestion.text,
-    currentQuestionType: fallbackQuestion.type,
-    currentQuestionLevel: fallbackQuestion.level,
-    currentQuestionIs18Plus: fallbackQuestion.is18Plus,
-    currentQuestionIsCustom: false,
-    currentTurnToken: createTurnToken(),
-    ...createTurnTiming(),
-  };
+  return toStandardQuestionChoice(currentPlayerId, fallbackQuestion);
 }
 
 export async function buildCompletedSessionSummary(
