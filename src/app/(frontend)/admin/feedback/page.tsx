@@ -43,25 +43,6 @@ function formatDateTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("th-TH");
 }
 
-function buildFeedbackSummaryFromItems(
-  items: Array<Pick<AdminFeedbackItem, "status">>,
-): AdminFeedbackData["summary"] {
-  const summary: AdminFeedbackData["summary"] = {
-    ALL: 0,
-    PENDING: 0,
-    IN_PROGRESS: 0,
-    RESOLVED: 0,
-    REJECTED: 0,
-  };
-
-  for (const item of items) {
-    summary[item.status] += 1;
-    summary.ALL += 1;
-  }
-
-  return summary;
-}
-
 export default function AdminFeedbackPage() {
   const router = useRouter();
   const { data, loading, error, refresh, setData } = useAdminRouteData<AdminFeedbackData>(
@@ -93,23 +74,23 @@ export default function AdminFeedbackPage() {
       ? feedbacks
       : feedbacks.filter((item) => item.status === activeFilter);
 
-  const applyStatusChange = (id: string, status: string, resolvedAt: string | null) => {
+  const applyStatusChange = (id: string, newStatus: string, resolvedAt: string | null) => {
     setData((current) => {
       if (!current) return current;
+      const oldItem = current.feedbacks.find((item) => item.id === id);
+      const oldStatus = oldItem?.status;
       const feedbacks = current.feedbacks.map((item) =>
         item.id === id
-          ? {
-              ...item,
-              status: status as AdminFeedbackItem["status"],
-              resolvedAt,
-            }
+          ? { ...item, status: newStatus as AdminFeedbackItem["status"], resolvedAt }
           : item,
       );
-      return {
-        ...current,
-        feedbacks,
-        summary: buildFeedbackSummaryFromItems(feedbacks),
-      };
+      // Preserve server-authoritative summary; only adjust the delta
+      const summary = { ...current.summary };
+      if (oldStatus && oldStatus !== newStatus) {
+        summary[oldStatus] = Math.max(0, (summary[oldStatus] ?? 0) - 1);
+        summary[newStatus as keyof typeof summary] = (summary[newStatus as keyof typeof summary] ?? 0) + 1;
+      }
+      return { ...current, feedbacks, summary };
     });
   };
 
@@ -172,12 +153,15 @@ export default function AdminFeedbackPage() {
 
       setData((current) => {
         if (!current) return current;
+        const deleted = current.feedbacks.find((item) => item.id === pendingDelete.id);
         const remaining = current.feedbacks.filter((item) => item.id !== pendingDelete.id);
-        return {
-          ...current,
-          feedbacks: remaining,
-          summary: buildFeedbackSummaryFromItems(remaining),
-        };
+        // Preserve server-authoritative summary; only decrement the deleted item's status
+        const summary = { ...current.summary };
+        if (deleted) {
+          summary[deleted.status] = Math.max(0, (summary[deleted.status] ?? 0) - 1);
+          summary.ALL = Math.max(0, (summary.ALL ?? 0) - 1);
+        }
+        return { ...current, feedbacks: remaining, summary };
       });
       setDetailItem((current) => (current?.id === pendingDelete.id ? null : current));
       setPendingDelete(null);

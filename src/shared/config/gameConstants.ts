@@ -1,8 +1,10 @@
+import { type IconName } from "@/frontend/components/ui/Icon";
+
 export interface GameModeConfig {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: IconName;
   color: string;
   borderColor: string;
   shadowClass: string;

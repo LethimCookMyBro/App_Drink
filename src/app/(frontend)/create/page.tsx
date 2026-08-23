@@ -19,7 +19,7 @@ export default function CreateCirclePage() {
   const { vibeLevel } = useGameStore();
   const { activeGame } = useActiveGameSession();
 
-  const [circleName, setCircleName] = useState("สายแข็ง 2024");
+  const [circleName, setCircleName] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [playerCount, setPlayerCount] = useState(8);
   const [error, setError] = useState("");
@@ -70,20 +70,16 @@ export default function CreateCirclePage() {
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-32 lg:pb-10">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
-        <Link href="/" aria-label="กลับ">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
-            <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
-          </button>
+        <Link href="/" aria-label="กลับ" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
+          <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
         </Link>
         <div className="flex flex-col items-center">
           <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
             สร้างวงเหล้า
           </h2>
         </div>
-        <Link href="/settings" aria-label="ตั้งค่า">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white/60 hover:text-white" aria-label="ตั้งค่า">
-            <Icon name="settings" className="text-[24px]" aria-hidden="true" />
-          </button>
+        <Link href="/settings" aria-label="ตั้งค่า" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white/60 hover:text-white">
+          <Icon name="settings" className="text-[24px]" aria-hidden="true" />
         </Link>
       </header>
 

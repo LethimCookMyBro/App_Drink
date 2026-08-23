@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import {
   Button,
   GamePauseButton,
@@ -22,6 +21,7 @@ import {
 import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 
 import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 
 export const dynamic = "force-dynamic";
 
@@ -324,16 +324,9 @@ function GamePlayContent() {
               เพื่อตั้งค่าผู้เล่นและเริ่มเกม
             </p>
           </div>
-          <Link href="/create">
-            <Button
-              variant="primary"
-              size="lg"
-              icon="play_arrow"
-              iconPosition="left"
-            >
+          <ButtonLink href="/create" variant="primary" size="lg" icon="play_arrow" iconPosition="left">
               เริ่มเกมเลย
-            </Button>
-          </Link>
+            </ButtonLink>
         </div>
       </main>
     );

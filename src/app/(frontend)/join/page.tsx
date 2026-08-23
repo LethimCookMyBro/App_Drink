@@ -35,7 +35,7 @@ export default function JoinCirclePage() {
 
   const handleJoin = async () => {
     if (roomCode.length !== ROOM_CODE_LENGTH) {
-      setError(`Please enter an ${ROOM_CODE_LENGTH}-character room code`);
+      setError(`กรุณาใส่รหัสห้อง ${ROOM_CODE_LENGTH} ตัวอักษร`);
       return;
     }
     if (!playerName.trim()) {
@@ -78,10 +78,8 @@ export default function JoinCirclePage() {
     <main className="container-mobile flex min-h-screen flex-col overflow-y-auto no-scrollbar pb-32 lg:pb-10">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
-        <Link href="/">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <Icon name="arrow_back" className="text-[28px]" />
-          </button>
+        <Link href="/" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับไปหน้าหลัก">
+          <Icon name="arrow_back" className="text-[28px]" />
         </Link>
         <div className="flex flex-col items-center">
           <span className="text-xs font-bold tracking-[0.1em] text-neon-blue uppercase mb-1">
@@ -152,20 +150,13 @@ export default function JoinCirclePage() {
               </motion.div>
             ))}
           </div>
-          <input
-            type="text"
-            value={roomCode}
-            onChange={(e) => handleCodeChange(e.target.value)}
-            placeholder={`Enter ${ROOM_CODE_LENGTH}-character code`}
-            className="opacity-0 absolute -z-10"
-            autoFocus
-          />
+
           {/* Visible input for typing */}
           <input
             type="text"
             value={roomCode}
             onChange={(e) => handleCodeChange(e.target.value)}
-            placeholder="Type room code here..."
+            placeholder="พิมพ์รหัสห้อง..."
             className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-lg font-bold uppercase tracking-[0.3em] text-white placeholder-white/30 transition-all focus:border-neon-blue focus:ring-0 focus:outline-none sm:text-xl sm:tracking-[0.5em]"
             maxLength={ROOM_CODE_LENGTH}
           />

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel } from "@/frontend/components/ui";
@@ -43,7 +42,6 @@ const questionTypes = [
 ] as const;
 
 export default function DeckBuilderPage() {
-  const router = useRouter();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
@@ -155,34 +153,12 @@ export default function DeckBuilderPage() {
     setCurrentDeck(updatedDeck);
   };
 
-  const handleUseDeck = () => {
-    if (!currentDeck || currentDeck.questions.length === 0) return;
-
-    // Save deck questions as custom questions for the game
-    localStorage.setItem(
-      "wongtaek-custom-questions",
-      JSON.stringify(currentDeck.questions),
-    );
-    router.push("/create");
-  };
-
-  const generateShareCode = () => {
-    if (!currentDeck) return;
-    const encoded = btoa(encodeURIComponent(JSON.stringify(currentDeck)));
-    navigator.clipboard.writeText(
-      `${window.location.origin}/decks?import=${encoded}`,
-    );
-    alert("คัดลอกลิงก์แชร์แล้ว!");
-  };
-
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-24">
       {/* Header */}
       <header className="flex items-center p-4 pt-8 justify-between">
-        <Link href="/">
-          <button className="flex size-12 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <Icon name="arrow_back" className="text-3xl" />
-          </button>
+        <Link href="/" aria-label="กลับ" className="flex size-12 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
+          <Icon name="arrow_back" className="text-3xl" />
         </Link>
         <h2 className="text-white text-xl font-bold">สร้างชุดคำถาม</h2>
         <button
@@ -208,8 +184,9 @@ export default function DeckBuilderPage() {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={generateShareCode}
-                  className="px-3 py-1.5 bg-white/5 rounded-lg text-white/60 text-sm flex items-center gap-1"
+                  disabled
+                  title="ยังไม่รองรับการแชร์ในขณะนี้"
+                  className="px-3 py-1.5 bg-white/5 rounded-lg text-white/30 text-sm flex items-center gap-1 cursor-not-allowed"
                 >
                   <Icon name="share" className="text-lg" />
                   แชร์
@@ -280,10 +257,11 @@ export default function DeckBuilderPage() {
               เพิ่มคำถาม
             </button>
 
-            {/* Use Deck Button */}
+            {/* Use Deck Button — disabled until gameplay integration */}
             {currentDeck.questions.length > 0 && (
               <Button
-                onClick={handleUseDeck}
+                disabled
+                title="ยังไม่เชื่อมต่อกับระบบเกมในขณะนี้"
                 variant="primary"
                 size="xl"
                 fullWidth
@@ -292,6 +270,9 @@ export default function DeckBuilderPage() {
                 ใช้ชุดนี้เล่นเกม
               </Button>
             )}
+            <p className="text-center text-xs text-white/30">
+              ฟีเจอร์นี้อยู่ระหว่างการพัฒนา
+            </p>
           </div>
         ) : (
           // Deck List
@@ -350,6 +331,9 @@ export default function DeckBuilderPage() {
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="สร้างชุดคำถามใหม่"
               className="w-full max-w-md bg-surface rounded-t-3xl p-6"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}

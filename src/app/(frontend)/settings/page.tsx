@@ -57,10 +57,8 @@ export default function SettingsPage() {
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
-        <Link href="/">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <Icon name="arrow_back" className="text-3xl" />
-          </button>
+        <Link href="/" aria-label="กลับ" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
+          <Icon name="arrow_back" className="text-3xl" />
         </Link>
         <h2 className="text-white text-xl font-bold leading-tight tracking-tight">
           ตั้งค่า
@@ -71,9 +69,12 @@ export default function SettingsPage() {
       {/* Settings List */}
       <div className="mx-auto w-full max-w-5xl space-y-4 px-4 sm:px-6 lg:px-0">
         {/* Avatar */}
-        <GlassPanel
-          className="flex cursor-pointer items-center justify-between transition-colors hover:bg-white/5 active:scale-[0.99]"
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] p-4 transition-colors hover:bg-white/5 active:scale-[0.99]"
           onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+          aria-expanded={showAvatarPicker}
+          aria-label="เปลี่ยนอวาตาร์"
         >
           <div className="flex flex-1 items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary/50 bg-gradient-to-br from-primary to-purple-800 text-3xl">
@@ -87,7 +88,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <Icon name="chevron_right" className="text-white/40" />
-        </GlassPanel>
+        </button>
 
         {/* Avatar Picker */}
         {showAvatarPicker && (
@@ -207,6 +208,7 @@ export default function SettingsPage() {
               checked={settings.soundEnabled}
               onChange={(e) => setSoundEnabled(e.target.checked)}
               className="sr-only peer"
+              aria-label="เปิด/ปิดเสียง"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-neon-purple" />
           </label>
@@ -231,6 +233,7 @@ export default function SettingsPage() {
               checked={settings.vibrationEnabled}
               onChange={(e) => setVibrationEnabled(e.target.checked)}
               className="sr-only peer"
+              aria-label="เปิด/ปิดการสั่น"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-neon-blue peer-checked:shadow-neon-blue" />
           </label>
@@ -266,6 +269,7 @@ export default function SettingsPage() {
               checked={settings.is18Plus}
               onChange={(e) => handle18PlusChange(e.target.checked)}
               className="sr-only peer"
+              aria-label="เปิด/ปิดโหมด 18+"
             />
             <div className="w-14 h-8 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-neon-red peer-checked:shadow-neon-red" />
           </label>
@@ -282,7 +286,7 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between py-2 border-b border-white/5">
             <span className="text-white/80">เวอร์ชัน</span>
-            <span className="text-primary font-mono">v3.0.0</span>
+            <span className="text-primary font-mono">v0.1.0</span>
           </div>
 
           <div className="flex items-center justify-between py-2 border-b border-white/5">

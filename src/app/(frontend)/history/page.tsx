@@ -68,24 +68,27 @@ export default function HistoryPage() {
 
   useEffect(() => {
     void checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    // Wait for auth to resolve before fetching
+    if (isAuthenticated === undefined) return;
+    if (!isAuthenticated) return;
 
     const fetchId = window.setTimeout(() => {
       void fetchHistory();
     }, 0);
-
     return () => {
       window.clearTimeout(fetchId);
     };
-  }, [checkAuth, fetchHistory]);
+  }, [isAuthenticated, fetchHistory]);
 
   return (
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
-        <Link href="/" aria-label="กลับ">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
-            <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
-          </button>
+        <Link href="/" aria-label="กลับ" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
+          <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
         </Link>
         <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
           ประวัติการเล่น
@@ -180,7 +183,7 @@ export default function HistoryPage() {
                   </span>
                 )}
               </div>
-              <Icon name="chevron_right" className="text-white/20" />
+
             </motion.div>
           ))
         ) : (

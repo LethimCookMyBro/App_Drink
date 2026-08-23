@@ -107,10 +107,8 @@ export default function FeedbackPage() {
     <main className="container-mobile min-h-screen overflow-y-auto no-scrollbar pb-28">
       {/* Header */}
       <header className="flex items-center gap-4 p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
-        <Link href="/">
-          <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <Icon name="arrow_back" className="text-3xl" />
-          </button>
+        <Link href="/" aria-label="กลับ" className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
+          <Icon name="arrow_back" className="text-3xl" />
         </Link>
         <div>
           <h1 className="text-white text-xl font-bold sm:text-2xl">
@@ -169,7 +167,7 @@ export default function FeedbackPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="เช่น อยากได้แผนที่แบบออฟไลน์"
+            placeholder={type === "BUG" ? "เกิดอะไรขึ้น" : "อยากให้มีอะไร"}
             className={`w-full px-4 py-3 bg-white/5 border rounded-xl text-white placeholder-white/30 focus:outline-none transition-colors ${
               titleError
                 ? "border-neon-red/60"

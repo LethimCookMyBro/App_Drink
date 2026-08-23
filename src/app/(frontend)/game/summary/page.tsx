@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { Button } from "@/frontend/components/ui";
 import { useSoundEffects } from "@/frontend/hooks";
 import {
@@ -12,6 +11,7 @@ import {
 } from "@/frontend/game/gameSession";
 
 import { Icon } from "@/frontend/components/ui/Icon";
+import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 
 interface PlayerStats {
   name: string;
@@ -56,7 +56,7 @@ export default function GameSummaryPage() {
     };
   }, [playCelebration]);
 
-  // Sort players by drink count (MVP = most drinks)
+  // Sort players by drink count for fun stats
   const sortedPlayers = [...playerStats].sort(
     (a, b) => b.drinkCount - a.drinkCount,
   );
@@ -65,13 +65,29 @@ export default function GameSummaryPage() {
     (a, b) => a.drinkCount - b.drinkCount,
   )[0];
 
+  const isEmpty = playerStats.length === 0;
+
   const handlePlayAgain = () => {
     clearGameSummary();
     router.push("/");
   };
 
+  // Empty state: no summary data
+  if (isEmpty) {
+    return (
+      <main className="container-mobile min-h-[100dvh] flex flex-col items-center justify-center px-6 text-center">
+        <Icon name="emoji_events" className="text-6xl text-white/20 mb-4" />
+        <h1 className="text-white text-2xl font-bold mb-2">ยังไม่มีผลการเล่น</h1>
+        <p className="text-white/50 text-sm mb-8">เริ่มเล่นเกมเพื่อดูผลสรุปที่นี่</p>
+        <ButtonLink href="/" variant="primary" size="lg" icon="home" iconPosition="left">
+          กลับหน้าหลัก
+        </ButtonLink>
+      </main>
+    );
+  }
+
   const handleShare = async () => {
-    const shareText = `🍺 วงแตกเกม!\n\n🏆 MVP: ${mvp?.name} (${mvp?.drinkCount} แก้ว)\n🛡️ Survivor: ${survivor?.name} (${survivor?.drinkCount} แก้ว)\n\nเล่นกันเถอะ!`;
+    const shareText = `🍺 วงแตกเกม!\n\n🏆 ตัวตึง: ${mvp?.name} (${mvp?.drinkCount} แก้ว)\n🛡️ ผู้รอด: ${survivor?.name} (${survivor?.drinkCount} แก้ว)\n\nเล่นกันเถอะ!`;
 
     if (navigator.share) {
       try {
@@ -138,11 +154,11 @@ export default function GameSummaryPage() {
               </div>
               <div className="flex-1">
                 <p className="text-neon-yellow text-xs font-bold tracking-widest uppercase">
-                  🏆 MVP ประจำวง
+                  🏆 ตัวตึงประจำวง
                 </p>
                 <h2 className="text-white text-2xl font-bold">{mvp.name}</h2>
                 <p className="text-white/60 text-sm">
-                  ดื่มไป {mvp.drinkCount} แก้ว
+                  จัดไป {mvp.drinkCount} แก้ว
                 </p>
               </div>
             </div>
@@ -169,7 +185,7 @@ export default function GameSummaryPage() {
                   {survivor.name}
                 </h3>
                 <p className="text-white/60 text-xs">
-                  แค่ {survivor.drinkCount} แก้ว
+                  รอดมาได้ {survivor.drinkCount} แก้ว
                 </p>
               </div>
             </div>
@@ -234,11 +250,9 @@ export default function GameSummaryPage() {
               เริ่มใหม่
             </Button>
           </div>
-          <Link href="/" className="block">
-            <Button variant="ghost" size="lg" fullWidth>
+          <ButtonLink href="/" variant="ghost" size="lg" fullWidth>
               กลับหน้าหลัก
-            </Button>
-          </Link>
+            </ButtonLink>
         </div>
       </footer>
     </main>

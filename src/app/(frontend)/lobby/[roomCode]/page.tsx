@@ -11,6 +11,7 @@ import {
 } from "@/frontend/game/gameSession";
 
 import { Icon } from "@/frontend/components/ui/Icon";
+import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 
 interface LocalPlayer {
   id: string;
@@ -414,16 +415,12 @@ export default function LobbyPage() {
           </h1>
           <p className="mt-3 text-sm text-white/60">{loadError}</p>
           <div className="mt-6 space-y-3">
-            <Link href="/join" className="block">
-              <Button variant="primary" fullWidth>
-                ลองเข้าห้องใหม่
-              </Button>
-            </Link>
-            <Link href="/create" className="block">
-              <Button variant="ghost" fullWidth>
-                สร้างห้องใหม่
-              </Button>
-            </Link>
+            <ButtonLink href="/join" variant="primary" fullWidth>
+              ลองเข้าห้องใหม่
+            </ButtonLink>
+            <ButtonLink href="/create" variant="ghost" fullWidth>
+              สร้างห้องใหม่
+            </ButtonLink>
           </div>
         </div>
       </main>
@@ -435,10 +432,8 @@ export default function LobbyPage() {
       <div className="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <header className="relative z-10 shrink-0 flex flex-col items-center justify-center pt-8 pb-4 px-2 lg:px-0 lg:pt-6">
-          <Link href="/" className="absolute top-8 left-6">
-            <button className="flex items-center justify-center size-12 text-white/40 hover:text-white hover:bg-white/5 rounded-full transition-all">
-              <Icon name="arrow_back" className="text-3xl" />
-            </button>
+          <Link href="/" aria-label="กลับ" className="absolute top-8 left-6 flex items-center justify-center size-12 text-white/40 hover:text-white hover:bg-white/5 rounded-full transition-all">
+            <Icon name="arrow_back" className="text-3xl" />
           </Link>
 
           <div className="flex flex-col items-center gap-2 mt-4">
@@ -721,6 +716,9 @@ export default function LobbyPage() {
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="เพิ่มเพื่อนเข้าวง"
               className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-t-3xl bg-surface p-6 sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}

@@ -20,7 +20,6 @@ import {
   AdminTableSkeleton,
 } from "@/frontend/components/admin/AdminStates";
 import { formatAdminDateTime, formatAdminNumber } from "@/frontend/admin/format";
-import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminIdentity, AdminUserItem, AdminUsersData } from "@/backend/adminData";
 
 import { Icon } from "@/frontend/components/ui/Icon";
@@ -50,16 +49,12 @@ function UserAvatar({ user }: { user: Pick<AdminUserItem, "name" | "avatarUrl"> 
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const { data, loading: routeLoading, error, refresh } = useAdminRouteData<AdminUsersData>(
-    "/api/admin/users",
-    "ไม่สามารถโหลดข้อมูลผู้ใช้ได้",
-  );
-
   const [adminUser, setAdminUser] = useState<AdminIdentity | null>(null);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<AdminUsersData["summary"] | null>(null);
 
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
@@ -111,6 +106,8 @@ export default function AdminUsersPage() {
         setTotalUsers(
           typeof payload.total === "number" ? payload.total : payload.users.length,
         );
+        if (payload.admin) setAdminUser(payload.admin);
+        if (payload.summary) setSummary(payload.summary);
         setListError(null);
       } else {
         setUsers([]);
@@ -141,7 +138,7 @@ export default function AdminUsersPage() {
   const currentPage = Math.min(page, totalPages);
   const rangeStart = totalUsers === 0 ? 0 : (currentPage - 1) * USERS_PER_PAGE + 1;
   const rangeEnd = Math.min(totalUsers, currentPage * USERS_PER_PAGE);
-  const summary = data?.summary;
+  // summary is now local state
 
   const handleCopyUserId = async (id: string) => {
     try {
@@ -155,7 +152,7 @@ export default function AdminUsersPage() {
 
   return (
     <AdminShell
-      admin={data?.admin ?? adminUser}
+      admin={adminUser}
       title="ผู้ใช้"
       description={
         totalUsers > 0
@@ -167,21 +164,20 @@ export default function AdminUsersPage() {
           <button
             type="button"
             onClick={() => {
-              void refresh();
               void fetchUsers();
             }}
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3.5 text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <Icon name="refresh" className={`text-base ${(routeLoading || listLoading) ? "animate-spin" : ""}`} />
+            <Icon name="refresh" className={`text-base ${listLoading ? "animate-spin" : ""}`} />
             รีเฟรช
           </button>
           <AdminGoogleSheetsExportButton dataset="users" label="ส่งออก" />
         </>
       }
     >
-      {error || listError ? (
+      {listError ? (
         <div className="mb-4">
-          <AdminErrorState message={error ?? listError ?? ""} />
+          <AdminErrorState message={listError} />
         </div>
       ) : null}
 
@@ -195,7 +191,7 @@ export default function AdminUsersPage() {
           <div key={stat.label} className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
             <p className="text-xs font-medium text-white/45">{stat.label}</p>
             <p className="mt-1.5 text-2xl font-bold tabular-nums text-white">
-              {routeLoading ? "-" : formatAdminNumber(stat.value)}
+              {listLoading ? "-" : formatAdminNumber(stat.value)}
             </p>
           </div>
         ))}

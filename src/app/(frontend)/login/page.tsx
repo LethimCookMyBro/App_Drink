@@ -39,7 +39,7 @@ export default function LoginPage() {
     }
 
     if (!looksLikeEmail(email)) {
-      setError("ถ้าเป็นบัญชีผู้ดูแล ให้เข้าสู่ระบบที่หน้าแอดมิน");
+      setError("อีเมลไม่ถูกต้อง");
       return;
     }
 

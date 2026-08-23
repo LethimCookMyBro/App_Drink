@@ -134,10 +134,8 @@ export default function PunishmentWheelPage() {
       {/* Header */}
       <header className="relative z-10 w-full">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8">
-          <Link href="/game/modes">
-            <button className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10">
-              <Icon name="arrow_back" className="text-[28px] text-white/80" />
-            </button>
+          <Link href="/game/modes" aria-label="กลับ" className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10">
+            <Icon name="arrow_back" className="text-[28px] text-white/80" />
           </Link>
           <div className="flex items-center gap-2">
             <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">

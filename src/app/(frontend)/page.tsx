@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button, GlassPanel, BottomNav } from "@/frontend/components/ui";
+import { GlassPanel, BottomNav } from "@/frontend/components/ui";
+import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 import { useGameStore } from "@/frontend/store/gameStore";
 import { useActiveGameSession, useUserSettings } from "@/frontend/hooks";
 import type { VibeLevel } from "@/shared/config/gameConstants";
@@ -67,15 +68,11 @@ export default function WelcomePage() {
       {/* Header */}
       <header className="flex items-center justify-end gap-2 px-4 pt-6 pb-2 sm:px-6 lg:px-8 lg:pt-8">
         {/* Feedback Button */}
-        <Link href="/feedback" aria-label="แจ้งบัค">
-          <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30" aria-label="แจ้งบัค">
-            <Icon name="bug_report" className="text-xl" aria-hidden="true" />
-          </button>
+        <Link href="/feedback" aria-label="แจ้งบัค" className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30">
+          <Icon name="bug_report" className="text-xl" aria-hidden="true" />
         </Link>
-        <Link href="/settings" aria-label="ตั้งค่า">
-          <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10" aria-label="ตั้งค่า">
-            <Icon name="settings" aria-hidden="true" />
-          </button>
+        <Link href="/settings" aria-label="ตั้งค่า" className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10">
+          <Icon name="settings" aria-hidden="true" />
         </Link>
       </header>
 
@@ -223,41 +220,22 @@ export default function WelcomePage() {
       <section className="mx-auto w-full px-4 sm:px-6 lg:max-w-xl lg:px-8">
         {activeGame.isActive ? (
           <div className="space-y-3">
-            <Link href={activeGame.resumePath} className="block">
-              <Button
-                variant="primary"
-                size="xl"
-                fullWidth
-                icon="sports_esports"
-                iconPosition="left"
-              >
-                เล่นต่อ
-              </Button>
-            </Link>
-            <Link href="/create" className="block">
-              <Button
-                variant="outline"
-                size="lg"
-                fullWidth
-                icon="refresh"
-                iconPosition="left"
-              >
-                เริ่มเกมใหม่
-              </Button>
-            </Link>
+            <ButtonLink href={activeGame.resumePath} variant="primary" size="xl" fullWidth icon="sports_esports" iconPosition="left">
+              เล่นต่อ
+            </ButtonLink>
+            <ButtonLink href="/create" variant="outline" size="lg" fullWidth icon="refresh" iconPosition="left">
+              เริ่มเกมใหม่
+            </ButtonLink>
           </div>
         ) : (
-          <Link href="/create" className="block">
-            <Button
-              variant="primary"
-              size="xl"
-              fullWidth
-              icon="play_arrow"
-              iconPosition="left"
-            >
-              เริ่มเกมเลย
-            </Button>
-          </Link>
+          <div className="space-y-3">
+            <ButtonLink href="/create" variant="primary" size="xl" fullWidth icon="play_arrow" iconPosition="left">
+              สร้างวง
+            </ButtonLink>
+            <ButtonLink href="/join" variant="outline" size="lg" fullWidth icon="login" iconPosition="left">
+              เข้าร่วมวง
+            </ButtonLink>
+          </div>
         )}
       </section>
 
@@ -265,7 +243,7 @@ export default function WelcomePage() {
       <footer className="mt-8 flex flex-col items-center gap-4 text-center pb-8 sm:pb-10">
         <div className="h-px w-12 bg-white/10" />
         <p className="text-[11px] font-medium text-white/30 tracking-wide">
-          v2.4.0 • ดื่มอย่างรับผิดชอบ
+          v0.1.0 • ดื่มอย่างรับผิดชอบ
         </p>
       </footer>
 

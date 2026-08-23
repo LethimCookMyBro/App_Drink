@@ -17,6 +17,7 @@ import {
 } from "@/frontend/game/gameSession";
 
 import { Icon } from "@/frontend/components/ui/Icon";
+import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 
 export default function GameModesPage() {
   const router = useRouter();
@@ -133,16 +134,9 @@ export default function GameModesPage() {
               เพื่อตั้งค่าผู้เล่นและเริ่มเกม
             </p>
           </div>
-          <Link href="/create">
-            <Button
-              variant="primary"
-              size="lg"
-              icon="play_arrow"
-              iconPosition="left"
-            >
+          <ButtonLink href="/create" variant="primary" size="lg" icon="play_arrow" iconPosition="left">
               เริ่มเกมเลย
-            </Button>
-          </Link>
+            </ButtonLink>
         </div>
       </main>
     );
@@ -156,23 +150,16 @@ export default function GameModesPage() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           {/* Back Button */}
-          <Link href="/">
-            <button
-              aria-label="กลับไปหน้าหลัก"
-              className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95"
-            >
-              <Icon name="arrow_back" className="text-white text-3xl" />
-            </button>
+          <Link href="/" aria-label="กลับไปหน้าหลัก" className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95">
+            <Icon name="arrow_back" className="text-white text-3xl" />
           </Link>
           <Icon name="local_bar" className="text-primary text-3xl sm:text-4xl" />
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-[0_0_8px_rgba(199,61,245,0.6)]">
             เลือกโหมดการเล่น
           </h1>
         </div>
-        <Link href="/settings">
-          <button className="flex items-center justify-center p-2.5 rounded-full hover:bg-white/5 transition-colors active:scale-95">
-            <Icon name="settings" className="text-white/80 text-3xl" />
-          </button>
+        <Link href="/settings" className="flex items-center justify-center p-2.5 rounded-full hover:bg-white/5 transition-colors active:scale-95" aria-label="ตั้งค่า">
+          <Icon name="settings" className="text-white/80 text-3xl" />
         </Link>
         </div>
       </header>
@@ -248,7 +235,7 @@ export default function GameModesPage() {
                   whileHover={{ scale: 1.1 }}
                   transition={{ type: "spring", stiffness: 400 }}
                 >
-                  {mode.icon}
+                  <Icon name={mode.icon} />
                 </motion.span>
               </div>
 
