@@ -4,7 +4,11 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button } from "@/frontend/components/ui";
+import {
+  Button,
+  GameFeedback,
+  type GameFeedbackState,
+} from "@/frontend/components/ui";
 import { GAME_MODES } from "@/shared/config/gameConstants";
 import { useActiveGameSession, useSoundEffects } from "@/frontend/hooks";
 import {
@@ -12,10 +16,13 @@ import {
   syncStoredGameSessionMode,
 } from "@/frontend/game/gameSession";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 export default function GameModesPage() {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [feedback, setFeedback] = useState<GameFeedbackState>(null);
   const { activeGame, isHydrated, refreshActiveGame } = useActiveGameSession();
   const isAtLastCard = currentIndex === GAME_MODES.length - 1;
   const isGameStarted = activeGame.isActive;
@@ -95,7 +102,7 @@ export default function GameModesPage() {
         error instanceof Error
           ? error.message
           : "ไม่สามารถยืนยัน session เกมกับเซิร์ฟเวอร์ได้";
-      window.alert(message);
+      setFeedback({ message, tone: "error" });
     }
   };
 
@@ -114,9 +121,7 @@ export default function GameModesPage() {
       <main className="h-screen flex flex-col items-center justify-center bg-[#141414] px-6">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-5xl text-primary">
-              sports_esports
-            </span>
+            <Icon name="sports_esports" className="text-5xl text-primary" />
           </div>
           <div>
             <h1 className="text-white text-2xl font-bold mb-2">
@@ -145,30 +150,28 @@ export default function GameModesPage() {
 
   return (
     <main className="min-h-[100dvh] flex flex-col overflow-hidden bg-[#141414]">
+      <GameFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       {/* Header */}
       <header className="glass-panel sticky top-0 z-50 w-full border-b border-white/5">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           {/* Back Button */}
           <Link href="/">
-            <button className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95">
-              <span className="material-symbols-outlined text-white text-3xl">
-                arrow_back
-              </span>
+            <button
+              aria-label="กลับไปหน้าหลัก"
+              className="flex items-center justify-center p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95"
+            >
+              <Icon name="arrow_back" className="text-white text-3xl" />
             </button>
           </Link>
-          <span className="material-symbols-outlined text-primary text-3xl sm:text-4xl">
-            local_bar
-          </span>
+          <Icon name="local_bar" className="text-primary text-3xl sm:text-4xl" />
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-[0_0_8px_rgba(199,61,245,0.6)]">
             เลือกโหมดการเล่น
           </h1>
         </div>
         <Link href="/settings">
           <button className="flex items-center justify-center p-2.5 rounded-full hover:bg-white/5 transition-colors active:scale-95">
-            <span className="material-symbols-outlined text-white/80 text-3xl">
-              settings
-            </span>
+            <Icon name="settings" className="text-white/80 text-3xl" />
           </button>
         </Link>
         </div>
@@ -230,14 +233,10 @@ export default function GameModesPage() {
                 </span>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((level) => (
-                    <span
-                      key={level}
-                      className={`material-symbols-outlined text-xl ${
+                    <Icon name="local_fire_department" filled={level <= mode.difficulty} key={level}
+                      className={`text-xl ${
                         level <= mode.difficulty ? mode.color : "text-white/10"
-                      } ${level <= mode.difficulty ? "material-symbols-filled" : ""}`}
-                    >
-                      local_fire_department
-                    </span>
+                      }`} />
                   ))}
                 </div>
               </div>
@@ -245,7 +244,7 @@ export default function GameModesPage() {
               {/* Icon */}
               <div className="flex-1 flex items-center justify-center mb-4 min-h-[9rem]">
                 <motion.span
-                  className={`material-symbols-outlined ${mode.color} text-[84px] sm:text-[96px] lg:text-[108px] drop-shadow-lg`}
+                  className={`${mode.color} text-[84px] sm:text-[96px] lg:text-[108px] drop-shadow-lg`}
                   whileHover={{ scale: 1.1 }}
                   transition={{ type: "spring", stiffness: 400 }}
                 >
@@ -324,7 +323,7 @@ export default function GameModesPage() {
               onClick={jumpToFirst}
               className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-full text-primary text-sm font-bold transition-colors"
             >
-              <span className="material-symbols-outlined text-lg">replay</span>
+              <Icon name="replay" className="text-lg" />
               กลับไปโหมดแรก
             </motion.button>
           )}
@@ -332,7 +331,7 @@ export default function GameModesPage() {
 
         {!isAtLastCard && (
           <div className="text-white/40 text-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">swipe</span>
+            <Icon name="swipe" className="text-lg" />
             เลื่อนทีละอัน →
           </div>
         )}

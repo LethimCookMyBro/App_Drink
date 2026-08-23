@@ -16,6 +16,8 @@ import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import type { AdminIdentity } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 // Local question type for admin
 interface AdminQuestion {
   id: string;
@@ -109,13 +111,9 @@ function CustomDropdown({
         className="flex items-center justify-between gap-2 bg-surface border border-white/10 rounded-xl px-4 py-3 text-white text-sm min-w-[120px] hover:border-primary/50 transition-colors"
       >
         <span className="truncate">{selectedOption?.label || label}</span>
-        <span
-          className={`material-symbols-outlined text-lg transition-transform ${
+        <Icon name="expand_more" className={`text-lg transition-transform ${
             isOpen ? "rotate-180" : ""
-          }`}
-        >
-          expand_more
-        </span>
+          }`} />
       </button>
 
       <AnimatePresence>
@@ -442,7 +440,7 @@ export default function AdminQuestionsPage() {
       {apiError && (
         <div>
           <div className="p-3 rounded-xl bg-neon-red/10 border border-neon-red/20 flex items-center gap-2 text-neon-red text-sm">
-            <span className="material-symbols-outlined text-lg">error</span>
+            <Icon name="error" className="text-lg" />
             <span>{apiError}</span>
           </div>
         </div>
@@ -451,7 +449,7 @@ export default function AdminQuestionsPage() {
       {!apiError && !dbConnected && (
         <div>
           <div className="p-3 rounded-xl bg-neon-yellow/10 border border-neon-yellow/20 flex items-center gap-2 text-neon-yellow text-sm">
-            <span className="material-symbols-outlined text-lg">info</span>
+            <Icon name="info" className="text-lg" />
             <span>กำลังเชื่อมต่อข้อมูลคำถามจากระบบจริง</span>
           </div>
         </div>
@@ -517,15 +515,11 @@ export default function AdminQuestionsPage() {
       <section>
         {loading ? (
           <div className="text-center py-12">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-              progress_activity
-            </span>
+            <Icon name="progress_activity" className="animate-spin text-4xl text-primary" />
           </div>
         ) : filteredQuestions.length === 0 ? (
           <div className="text-center py-12">
-            <span className="material-symbols-outlined text-6xl text-white/10 mb-4">
-              quiz
-            </span>
+            <Icon name="quiz" className="text-6xl text-white/10 mb-4" />
             <p className="text-white/40">ไม่พบคำถาม</p>
           </div>
         ) : (
@@ -573,9 +567,7 @@ export default function AdminQuestionsPage() {
                           }}
                           className="p-2 rounded-lg text-white/30 hover:text-primary hover:bg-primary/10 transition-colors"
                         >
-                          <span className="material-symbols-outlined text-lg">
-                            edit
-                          </span>
+                          <Icon name="edit" className="text-lg" />
                         </button>
                         <button
                           type="button"
@@ -583,9 +575,7 @@ export default function AdminQuestionsPage() {
                           onClick={() => setQuestionPendingDelete(q)}
                           className="p-2 rounded-lg text-white/30 hover:text-neon-red hover:bg-neon-red/10 transition-colors"
                         >
-                          <span className="material-symbols-outlined text-lg">
-                            delete
-                          </span>
+                          <Icon name="delete" className="text-lg" />
                         </button>
                       </div>
                       )}

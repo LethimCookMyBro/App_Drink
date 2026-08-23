@@ -3,6 +3,8 @@
 import { forwardRef } from "react";
 import { motion, HTMLMotionProps } from "framer-motion";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
 type ButtonVariant =
   | "primary"
   | "outline"
@@ -15,7 +17,7 @@ type ButtonSize = "sm" | "md" | "lg" | "xl";
 interface ButtonProps extends Omit<HTMLMotionProps<"button">, "ref"> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  icon?: string;
+  icon?: IconName;
   iconPosition?: "left" | "right";
   fullWidth?: boolean;
   loading?: boolean;
@@ -106,21 +108,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {/* Content */}
         <span className="relative z-10 flex items-center gap-2">
           {loading ? (
-            <span className="material-symbols-outlined animate-spin text-current">
-              progress_activity
-            </span>
+            <Icon name="progress_activity" className="animate-spin text-current" />
           ) : (
             <>
               {icon && iconPosition === "left" && (
-                <span className="material-symbols-outlined text-current">
-                  {icon}
-                </span>
+                <Icon name={icon} className="text-current" />
               )}
               {children}
               {icon && iconPosition === "right" && (
-                <span className="material-symbols-outlined text-current">
-                  {icon}
-                </span>
+                <Icon name={icon} className="text-current" />
               )}
             </>
           )}

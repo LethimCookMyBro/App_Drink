@@ -12,6 +12,8 @@ import {
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminUsersData } from "@/backend/adminData";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 const USERS_PER_PAGE = 20;
 
 export default function AdminUsersPage() {
@@ -71,7 +73,7 @@ export default function AdminUsersPage() {
             onClick={() => void refresh()}
             className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
+            <Icon name="refresh" className="text-lg" />
             รีเฟรช
           </button>
           <AdminGoogleSheetsExportButton
@@ -249,9 +251,7 @@ export default function AdminUsersPage() {
                         onClick={() => void handleCopyUserId(user.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/45 transition-colors hover:bg-white/10 hover:text-white"
                       >
-                        <span className="material-symbols-outlined text-base">
-                          {copiedUserId === user.id ? "done" : "content_copy"}
-                        </span>
+                        <Icon name={copiedUserId === user.id ? "done" : "content_copy"} className="text-base" />
                       </button>
                     </div>
                   </div>

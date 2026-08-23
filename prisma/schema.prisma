@@ -69,7 +69,7 @@ model Room {
   code        String   @unique
   name        String
   hostId      String
-  difficulty  Int      @default(3) // 1-5 stars
+  difficulty  Int      @default(3) // 1=chill, 2=mid, 3=spicy
   is18Plus    Boolean  @default(false)
   maxPlayers  Int      @default(8)
   isActive    Boolean  @default(true)

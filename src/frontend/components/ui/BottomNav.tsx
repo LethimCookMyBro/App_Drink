@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useActiveGameSession } from "@/frontend/hooks";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
 interface NavItem {
   href: string;
-  icon: string;
+  icon: IconName;
   label: string;
 }
 
@@ -49,15 +51,11 @@ export function BottomNav() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
-              <span
-                className={`material-symbols-outlined text-[28px] md:text-[30px] lg:text-[32px] transition-colors ${
+              <Icon name={item.icon} filled={isActive} className={`text-[28px] md:text-[30px] lg:text-[32px] transition-colors ${
                   isActive
-                    ? "text-primary material-symbols-filled"
+                    ? "text-primary"
                     : "text-white/40 hover:text-white"
-                }`}
-              >
-                {item.icon}
-              </span>
+                }`} />
               <span
                 className={`text-[11px] md:text-xs font-medium tracking-wide transition-colors ${
                   isActive ? "text-primary" : "text-white/40"

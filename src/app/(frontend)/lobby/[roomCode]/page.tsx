@@ -6,10 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, PlayerAvatar } from "@/frontend/components/ui";
 import {
-  clearActiveGameSession,
   markGameSessionStarted,
   startRoomGameSession,
 } from "@/frontend/game/gameSession";
+
+import { Icon } from "@/frontend/components/ui/Icon";
 
 interface LocalPlayer {
   id: string;
@@ -103,7 +104,7 @@ export default function LobbyPage() {
       // cross-tab conflicts when multiple lobby tabs are open. The explicit
       // user actions (handleStartGame, handleEnterActiveGame) handle this.
     },
-    [roomCode],
+    [],
   );
 
   useEffect(() => {
@@ -407,9 +408,7 @@ export default function LobbyPage() {
     return (
       <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 text-center sm:px-6">
         <div className="w-full max-w-sm rounded-3xl border border-neon-red/30 bg-neon-red/10 p-6 sm:max-w-md">
-          <span className="material-symbols-outlined text-5xl text-neon-red">
-            error
-          </span>
+          <Icon name="error" className="text-5xl text-neon-red" />
           <h1 className="mt-4 text-2xl font-bold text-white">
             เข้าห้องไม่สำเร็จ
           </h1>
@@ -438,9 +437,7 @@ export default function LobbyPage() {
         <header className="relative z-10 shrink-0 flex flex-col items-center justify-center pt-8 pb-4 px-2 lg:px-0 lg:pt-6">
           <Link href="/" className="absolute top-8 left-6">
             <button className="flex items-center justify-center size-12 text-white/40 hover:text-white hover:bg-white/5 rounded-full transition-all">
-              <span className="material-symbols-outlined text-3xl">
-                arrow_back
-              </span>
+              <Icon name="arrow_back" className="text-3xl" />
             </button>
           </Link>
 
@@ -503,9 +500,7 @@ export default function LobbyPage() {
                           {player.name}
                         </p>
                         {player.isHost && (
-                          <span className="material-symbols-outlined material-symbols-filled text-xl text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]">
-                            crown
-                          </span>
+                          <Icon name="crown" filled className="text-xl text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]" />
                         )}
                       </div>
                       <p className="text-xs font-medium uppercase tracking-wider text-white/40">
@@ -519,7 +514,7 @@ export default function LobbyPage() {
                         disabled={isMutatingPlayers}
                         className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white/40 transition-all hover:bg-neon-red/20 hover:text-neon-red"
                       >
-                        <span className="material-symbols-outlined">close</span>
+                        <Icon name="close" />
                       </button>
                     )}
                   </motion.div>
@@ -539,16 +534,12 @@ export default function LobbyPage() {
                     whileTap={{ scale: 0.98 }}
                     disabled={isMutatingPlayers}
                   >
-                    <span className="material-symbols-outlined text-2xl">
-                      person_add
-                    </span>
+                    <Icon name="person_add" className="text-2xl" />
                     <p className="text-lg font-bold">เพิ่มเพื่อน</p>
                   </motion.button>
                 ) : (
                   <div className="flex h-[76px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neon-yellow/30 p-4 text-neon-yellow/70">
-                    <span className="material-symbols-outlined text-2xl">
-                      group
-                    </span>
+                    <Icon name="group" className="text-2xl" />
                     <p className="text-lg font-bold">
                       เต็มแล้ว! ({maxPlayers} คน)
                     </p>
@@ -574,9 +565,7 @@ export default function LobbyPage() {
                     {displayRoomName}
                   </h3>
                 </div>
-                <span className="material-symbols-outlined text-primary">
-                  favorite
-                </span>
+                <Icon name="favorite" className="text-primary" />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-2xl bg-black/20 p-3">
@@ -623,9 +612,7 @@ export default function LobbyPage() {
                     onClick={() => setShowQuestionModal(true)}
                     className="flex items-center gap-1 text-sm font-bold text-primary hover:opacity-80"
                   >
-                    <span className="material-symbols-outlined text-sm">
-                      add
-                    </span>
+                    <Icon name="add" className="text-sm" />
                     เพิ่ม
                   </button>
                 )}
@@ -642,7 +629,7 @@ export default function LobbyPage() {
                     }`}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <span className="material-symbols-outlined">lightbulb</span>
+                    <Icon name="lightbulb" />
                     <span className="text-sm">เพิ่มคำถามของวง (ลับๆ)</span>
                   </motion.button>
                 ) : (
@@ -665,9 +652,7 @@ export default function LobbyPage() {
                             onClick={() => handleRemoveQuestion(q.id)}
                             className="text-white/30 hover:text-neon-red"
                           >
-                            <span className="material-symbols-outlined text-lg">
-                              close
-                            </span>
+                            <Icon name="close" className="text-lg" />
                           </button>
                         )}
                       </motion.div>
@@ -683,7 +668,7 @@ export default function LobbyPage() {
         <footer className="relative z-20 p-4 pb-6 bg-gradient-to-t from-[#160d1a] via-[#160d1a] to-transparent lg:mx-auto lg:w-full lg:max-w-7xl lg:px-6 lg:pb-8 lg:pt-2 lg:bg-transparent">
           {canManageLobby && players.length < 2 && (
             <div className="mb-4 flex items-center justify-center gap-2 text-neon-yellow text-sm">
-              <span className="material-symbols-outlined text-lg">warning</span>
+              <Icon name="warning" className="text-lg" />
               <span>ต้องมีอย่างน้อย 2 คน</span>
             </div>
           )}
@@ -769,17 +754,13 @@ export default function LobbyPage() {
                 />
                 {duplicateError && (
                   <p className="text-neon-red text-sm mt-2 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">
-                      error
-                    </span>
+                    <Icon name="error" className="text-sm" />
                     {duplicateError}
                   </p>
                 )}
                 {!duplicateError && playerMutationError && (
                   <p className="text-neon-red text-sm mt-2 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm">
-                      error
-                    </span>
+                    <Icon name="error" className="text-sm" />
                     {playerMutationError}
                   </p>
                 )}

@@ -46,7 +46,7 @@ export const createRoomSchema = z.object({
   roomName: safeString(1, 30, "ชื่อวงต้องมี 1-30 ตัวอักษร").optional(),
   maxPlayers: z.coerce.number().int().min(2).max(20).default(8),
   is18Plus: z.boolean().default(false),
-  difficulty: z.coerce.number().int().min(1).max(5).default(3),
+  difficulty: z.coerce.number().int().min(1).max(3).default(3),
 });
 
 export const roomJoinSchema = z.object({

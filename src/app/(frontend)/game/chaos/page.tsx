@@ -3,13 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GamePauseButton, Timer } from "@/frontend/components/ui";
+import {
+  GamePauseButton,
+  GameFeedback,
+  Timer,
+  type GameFeedbackState,
+} from "@/frontend/components/ui";
 import { useSoundEffects, useStoredGamePlayers } from "@/frontend/hooks";
 import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 import {
   finalizeStoredGameSummary,
   tryRecordCompletedGameRound,
 } from "@/frontend/game/gameSession";
+
+import { Icon } from "@/frontend/components/ui/Icon";
 
 export default function ChaosModePage() {
   const router = useRouter();
@@ -19,6 +26,7 @@ export default function ChaosModePage() {
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [isRoundSyncing, setIsRoundSyncing] = useState(false);
   const [isEndingGame, setIsEndingGame] = useState(false);
+  const [feedback, setFeedback] = useState<GameFeedbackState>(null);
   const activeSession = room?.activeSession ?? null;
   const activePlayer =
     room?.players.find((player) => player.id === activeSession?.currentPlayerId) ??
@@ -53,9 +61,16 @@ export default function ChaosModePage() {
       activeSession?.currentTurnToken ?? null,
     );
     if (!syncResult.ok) {
-      window.alert(syncResult.error);
+      setFeedback({ message: syncResult.error, tone: "error" });
       setIsRoundSyncing(false);
       return;
+    }
+
+    if (syncResult.outcome === "stale") {
+      setFeedback({
+        message: "ตานี้ถูกอัปเดตไปแล้ว ซิงก์สถานะใหม่ให้แล้ว",
+        tone: "info",
+      });
     }
 
     if (syncResult.outcome !== "applied") {
@@ -86,7 +101,10 @@ export default function ChaosModePage() {
     setIsEndingGame(true);
     const completion = await finalizeStoredGameSummary();
     if (!completion.ok) {
-      window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
+      setFeedback({
+        message: completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้",
+        tone: "error",
+      });
       setIsEndingGame(false);
       return;
     }
@@ -111,9 +129,7 @@ export default function ChaosModePage() {
       <main className="container-mobile min-h-screen flex flex-col items-center justify-center bg-[#0a050b] px-6">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="w-24 h-24 rounded-full bg-neon-red/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-5xl text-neon-red">
-              sports_esports
-            </span>
+            <Icon name="sports_esports" className="text-5xl text-neon-red" />
           </div>
           <div>
             <h1 className="text-white text-2xl font-bold mb-2">
@@ -148,6 +164,17 @@ export default function ChaosModePage() {
 
   return (
     <main className="container-mobile min-h-[100dvh] flex flex-col relative overflow-hidden bg-[#0a050b]">
+      {(isRoundSyncing || isEndingGame) && (
+        <div className="fixed inset-x-0 top-3 z-[65] mx-auto flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-[#1a0d22]/95 px-4 py-1.5 text-xs font-bold text-primary shadow-[0_0_20px_rgba(199,61,245,0.25)]">
+          <Icon
+            name="progress_activity"
+            filled
+            className="animate-spin text-sm"
+          />
+          {isEndingGame ? "กำลังปิดเกม..." : "กำลังซิงก์..."}
+        </div>
+      )}
+      <GameFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       <div className="fixed inset-0 z-50 pointer-events-none crt-overlay opacity-30 mix-blend-overlay" />
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-neon-red/20 rounded-full blur-[100px] pointer-events-none z-0" />
 
@@ -156,11 +183,10 @@ export default function ChaosModePage() {
           <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
             <button
               onClick={() => router.push("/game/modes")}
+              aria-label="กลับไปหน้าเลือกโหมด"
               className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
             >
-              <span className="material-symbols-outlined text-[28px]">
-                arrow_back
-              </span>
+              <Icon name="arrow_back" className="text-[28px]" />
             </button>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <div className="rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-bold tracking-[0.22em] text-primary">
@@ -175,17 +201,16 @@ export default function ChaosModePage() {
                 disabled={isEndingGame || isRoundSyncing}
                 className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
               >
-                <span className="material-symbols-outlined text-lg">stop</span>
+                <Icon name="stop" className="text-lg" />
                 จบเกม
               </button>
             </div>
             <Link
               href="/settings"
+              aria-label="ตั้งค่า"
               className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
             >
-              <span className="material-symbols-outlined text-[28px]">
-                settings
-              </span>
+              <Icon name="settings" className="text-[28px]" />
             </Link>
           </div>
           <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
@@ -213,12 +238,7 @@ export default function ChaosModePage() {
           <div className="w-full max-w-4xl rounded-[2rem] border border-neon-red/45 bg-[linear-gradient(180deg,rgba(49,10,18,0.96),rgba(22,7,12,0.98))] p-8 shadow-[0_0_80px_rgba(255,0,64,0.12)]">
             <div className="mb-6 flex items-center justify-center gap-2">
               {[1, 2, 3].map((item) => (
-                <span
-                  key={item}
-                  className="material-symbols-outlined text-3xl text-[#ffb400]"
-                >
-                  warning
-                </span>
+                <Icon name="warning" className="text-3xl text-[#ffb400]" key={item} />
               ))}
             </div>
             <h1 className="text-center text-[2.4rem] sm:text-[3.6rem] font-black uppercase leading-[0.95] tracking-[-0.05em] text-white drop-shadow-[3px_3px_0_rgba(0,255,255,0.9)]">

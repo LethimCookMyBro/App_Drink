@@ -26,7 +26,7 @@ interface TurnstileWidgetProps {
   className?: string;
   onTokenChange: (token: string) => void;
   resetKey?: number;
-  theme?: "auto" | "light" | "dark";
+  theme?: "auto" | "light" | "dark" ;
 }
 
 export function TurnstileWidget({

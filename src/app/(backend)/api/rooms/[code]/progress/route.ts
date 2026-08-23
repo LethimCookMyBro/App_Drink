@@ -1,4 +1,4 @@
-import { GameEventType, Prisma } from "@prisma/client";
+import { GameEventType } from "@prisma/client";
 import { NextRequest } from "next/server";
 import {
   enforceRateLimit,
@@ -117,15 +117,6 @@ export async function POST(
     if (result.kind === "stale") {
       return jsonError("ตาปัจจุบันถูกอัปเดตแล้ว", 409, {
         code: "STALE_TURN",
-        sessionId: result.session.id,
-        session: result.session,
-      });
-    }
-
-    if (result.kind === "too_early") {
-      return jsonError("Turn timer has not expired yet", 409, {
-        code: "TURN_TOO_EARLY",
-        retryAfterSeconds: result.retryAfterSeconds,
         sessionId: result.session.id,
         session: result.session,
       });

@@ -8,6 +8,8 @@ import { useUserSettings } from "@/frontend/hooks/useUserSettings";
 import { THEMES, AVATAR_EMOJIS, type ThemeId } from "@/shared/config/themes";
 import { applyTheme } from "@/frontend/components/ThemeProvider";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
 export default function SettingsPage() {
   const {
     settings,
@@ -33,7 +35,11 @@ export default function SettingsPage() {
     setIs18Plus(enabled);
   };
 
-  const hapticOptions = [
+  const hapticOptions: Array<{
+    value: "off" | "light" | "strong";
+    label: string;
+    icon: IconName;
+  }> = [
     { value: "off", label: "ปิด", icon: "do_not_disturb_on" },
     { value: "light", label: "เบา", icon: "vibration" },
     { value: "strong", label: "แรง", icon: "edgesensor_high" },
@@ -53,9 +59,7 @@ export default function SettingsPage() {
       <header className="flex items-center justify-between p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-3xl">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-3xl" />
           </button>
         </Link>
         <h2 className="text-white text-xl font-bold leading-tight tracking-tight">
@@ -82,9 +86,7 @@ export default function SettingsPage() {
               <span className="text-white/40 text-sm">กดเพื่อเปลี่ยน</span>
             </div>
           </div>
-          <span className="material-symbols-outlined text-white/40">
-            chevron_right
-          </span>
+          <Icon name="chevron_right" className="text-white/40" />
         </GlassPanel>
 
         {/* Avatar Picker */}
@@ -137,18 +139,14 @@ export default function SettingsPage() {
                       className="w-10 h-10 rounded-full"
                       style={{ background: t.colors.primary }}
                     />
-                    <span className="material-symbols-outlined text-white/60">
-                      {t.icon}
-                    </span>
+                    <Icon name={t.icon} className="text-white/60" />
                     <span className="text-white text-sm font-medium">
                       {t.name.split(" ")[0]}
                     </span>
                   </div>
                   {isActive && (
                     <div className="absolute top-2 right-2">
-                      <span className="material-symbols-outlined text-primary text-lg">
-                        check_circle
-                      </span>
+                      <Icon name="check_circle" className="text-primary text-lg" />
                     </div>
                   )}
                 </button>
@@ -175,11 +173,7 @@ export default function SettingsPage() {
                       : "border-white/10 bg-white/5 hover:border-white/20"
                   }`}
                 >
-                  <span
-                    className={`material-symbols-outlined text-2xl ${isActive ? "text-neon-blue" : "text-white/60"}`}
-                  >
-                    {opt.icon}
-                  </span>
+                  <Icon name={opt.icon} className={`text-2xl ${isActive ? "text-neon-blue" : "text-white/60"}`} />
                   <span
                     className={`text-sm font-medium ${isActive ? "text-neon-blue" : "text-white"}`}
                   >
@@ -198,9 +192,7 @@ export default function SettingsPage() {
         <GlassPanel className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <span className="material-symbols-outlined text-2xl">
-                volume_up
-              </span>
+              <Icon name="volume_up" className="text-2xl" />
             </div>
             <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight">
@@ -224,9 +216,7 @@ export default function SettingsPage() {
         <GlassPanel className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neon-blue/10 text-neon-blue">
-              <span className="material-symbols-outlined text-2xl">
-                vibration
-              </span>
+              <Icon name="vibration" className="text-2xl" />
             </div>
             <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight">
@@ -256,9 +246,7 @@ export default function SettingsPage() {
         >
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-neon-red/10 text-neon-red">
-              <span className="material-symbols-outlined text-2xl">
-                warning
-              </span>
+              <Icon name="warning" className="text-2xl" />
             </div>
             <div className="flex min-w-0 flex-col">
               <span className="text-white font-bold text-lg leading-tight flex items-center gap-2">

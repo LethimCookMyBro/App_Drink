@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { GlassPanel, BottomNav } from "@/frontend/components/ui";
 import { useAuthStore } from "@/frontend/store/authStore";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface HistoryItem {
   id: string;
   name: string;
@@ -82,9 +84,7 @@ export default function HistoryPage() {
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/" aria-label="กลับ">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
-            <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
           </button>
         </Link>
         <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
@@ -129,9 +129,7 @@ export default function HistoryPage() {
       {!isAuthenticated && !isLoading && (
         <div className="mx-auto mt-6 w-full max-w-5xl px-4 sm:px-6 lg:px-0">
           <GlassPanel className="p-6 text-center">
-            <span className="material-symbols-outlined text-4xl text-white/20 mb-2">
-              person_off
-            </span>
+            <Icon name="person_off" className="text-4xl text-white/20 mb-2" />
             <p className="text-white/40 text-sm mb-4">
               เข้าสู่ระบบเพื่อบันทึกและดูประวัติการเล่น
             </p>
@@ -169,7 +167,7 @@ export default function HistoryPage() {
               transition={{ delay: index * 0.1 }}
             >
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <span className="material-symbols-outlined">local_bar</span>
+                <Icon name="local_bar" />
               </div>
               <div className="flex-1">
                 <h4 className="text-white font-bold">{item.name}</h4>
@@ -182,16 +180,12 @@ export default function HistoryPage() {
                   </span>
                 )}
               </div>
-              <span className="material-symbols-outlined text-white/20">
-                chevron_right
-              </span>
+              <Icon name="chevron_right" className="text-white/20" />
             </motion.div>
           ))
         ) : (
           <div className="text-center py-12">
-            <span className="material-symbols-outlined text-6xl text-white/10 block mb-4">
-              history
-            </span>
+            <Icon name="history" className="text-6xl text-white/10 block mb-4" />
             <p className="text-white/40">ยังไม่มีประวัติการเล่น</p>
             <p className="text-white/30 text-sm mt-2">
               เริ่มเล่นเกมเพื่อบันทึกประวัติ

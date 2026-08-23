@@ -28,51 +28,59 @@ export function useStoredGamePlayers(
 
   useEffect(() => {
     let isCancelled = false;
+    let isSyncing = false;
 
     const syncStoredPlayers = async () => {
-      const activeGame = getActiveGameSessionSnapshot();
-      if (!activeGame.roomCode || !activeGame.sessionId) {
-        if (!isCancelled) {
-          setState({
-            hasStartedGame: false,
-            players: [],
-            isReady: false,
-            room: null,
-          });
+      if (isSyncing) return;
+      isSyncing = true;
+
+      try {
+        const activeGame = getActiveGameSessionSnapshot();
+        if (!activeGame.roomCode || !activeGame.sessionId) {
+          if (!isCancelled) {
+            setState({
+              hasStartedGame: false,
+              players: [],
+              isReady: false,
+              room: null,
+            });
+          }
+          return;
         }
-        return;
-      }
 
-      const room = await fetchRoomGameSnapshot(
-        activeGame.roomCode,
-        getStoredGameSessionId() || undefined,
-      );
+        const room = await fetchRoomGameSnapshot(
+          activeGame.roomCode,
+          getStoredGameSessionId() || undefined,
+        );
 
-      if (isCancelled) {
-        return;
-      }
+        if (isCancelled) {
+          return;
+        }
 
-      const hasActiveSession =
-        !!room?.activeSession && room.activeSession.status === "ACTIVE";
-      const nextResumePath = room?.activeSession?.resumePath;
-      const players = room?.players.map((player) => player.name) ?? [];
+        const hasActiveSession =
+          !!room?.activeSession && room.activeSession.status === "ACTIVE";
+        const nextResumePath = room?.activeSession?.resumePath;
+        const players = room?.players.map((player) => player.name) ?? [];
 
-      if (resumePath && nextResumePath && nextResumePath !== resumePath) {
+        if (resumePath && nextResumePath && nextResumePath !== resumePath) {
+          setState({
+            hasStartedGame: hasActiveSession,
+            players,
+            isReady: players.length > 0,
+            room,
+          });
+          return;
+        }
+
         setState({
           hasStartedGame: hasActiveSession,
           players,
           isReady: players.length > 0,
           room,
         });
-        return;
+      } finally {
+        isSyncing = false;
       }
-
-      setState({
-        hasStartedGame: hasActiveSession,
-        players,
-        isReady: players.length > 0,
-        room,
-      });
     };
 
     const handleSync = () => {
@@ -82,12 +90,23 @@ export function useStoredGamePlayers(
     void syncStoredPlayers();
     window.addEventListener("storage", handleSync);
     window.addEventListener(GAME_SESSION_CHANGED_EVENT, handleSync);
-    const pollId = window.setInterval(handleSync, 3000);
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      handleSync();
+    }, 3000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        handleSync();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isCancelled = true;
       window.removeEventListener("storage", handleSync);
       window.removeEventListener(GAME_SESSION_CHANGED_EVENT, handleSync);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(pollId);
     };
   }, [resumePath]);

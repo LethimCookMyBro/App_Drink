@@ -3,11 +3,13 @@
 import { formatAdminNumber } from "@/frontend/admin/format";
 import { GlassPanel } from "@/frontend/components/ui";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
 interface AdminStatCardProps {
   label: string;
   value: string | number;
   description?: string;
-  icon: string;
+  icon: IconName;
   tone?: "primary" | "blue" | "green" | "red" | "yellow";
 }
 
@@ -46,7 +48,7 @@ export function AdminStatCard({
         <div
           className={`flex h-12 w-12 items-center justify-center rounded-2xl ${TONE_STYLES[tone]}`}
         >
-          <span className="material-symbols-outlined text-2xl">{icon}</span>
+          <Icon name={icon} className="text-2xl" />
         </div>
       </div>
     </GlassPanel>

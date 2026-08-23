@@ -8,16 +8,20 @@ import { Button } from "@/frontend/components/ui";
 import { useSoundEffects, useStoredGamePlayers } from "@/frontend/hooks";
 import { clearActiveGameSession } from "@/frontend/game/gameSession";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
+type WheelSlice = { text: string; icon: IconName; color: string };
+
 // Punishments list
-const punishments = [
+const punishments: WheelSlice[] = [
   { text: "ดื่มหมดแก้ว!", icon: "local_bar", color: "text-neon-red" },
   { text: "ดื่ม 2 แก้ว!", icon: "sports_bar", color: "text-neon-red" },
   { text: "ทำหน้าตลกให้ทุกคนหัวเราะ", icon: "mood", color: "text-neon-yellow" },
   { text: "ร้องเพลง 1 ท่อน", icon: "mic", color: "text-neon-blue" },
   { text: "เต้นแบบเซ็กซี่", icon: "nightlife", color: "text-neon-pink" },
-  { text: "โทรหาแฟนเก่า", icon: "call", color: "text-neon-green" },
+  { text: "อวดความสามารถพิเศษ 1 อย่าง", icon: "star", color: "text-neon-green" },
   { text: "แชร์ความลับ 1 เรื่อง", icon: "lock_open", color: "text-primary" },
-  { text: "ให้คนข้างๆ ตบก้น", icon: "back_hand", color: "text-neon-yellow" },
+  { text: "จับมือคนข้างๆ ไว้ 10 วินาที", icon: "back_hand", color: "text-neon-yellow" },
   {
     text: "ดื่มด้วยมือซ้าย จนจบเกม",
     icon: "pan_tool",
@@ -94,9 +98,7 @@ export default function PunishmentWheelPage() {
       <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-5xl text-primary">
-              sports_esports
-            </span>
+            <Icon name="sports_esports" className="text-5xl text-primary" />
           </div>
           <div>
             <h1 className="text-white text-2xl font-bold mb-2">
@@ -134,9 +136,7 @@ export default function PunishmentWheelPage() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8">
           <Link href="/game/modes">
             <button className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10">
-              <span className="material-symbols-outlined text-[28px] text-white/80">
-                arrow_back
-              </span>
+              <Icon name="arrow_back" className="text-[28px] text-white/80" />
             </button>
           </Link>
           <div className="flex items-center gap-2">
@@ -147,7 +147,7 @@ export default function PunishmentWheelPage() {
               onClick={handleEndGame}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
-              <span className="material-symbols-outlined text-lg">stop</span>
+              <Icon name="stop" className="text-lg" />
               จบเกม
             </button>
           </div>
@@ -155,9 +155,7 @@ export default function PunishmentWheelPage() {
             href="/settings"
             className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all hover:bg-white/10"
           >
-            <span className="material-symbols-outlined text-[28px] text-white/80">
-              settings
-            </span>
+            <Icon name="settings" className="text-[28px] text-white/80" />
           </Link>
         </div>
       </header>
@@ -205,12 +203,7 @@ export default function PunishmentWheelPage() {
                   className="absolute left-1/2 top-0 w-12 h-1/2 origin-bottom flex items-start justify-center pt-4"
                   style={{ transform: "translateX(-50%)" }}
                 >
-                  <span
-                    className="material-symbols-outlined text-xl"
-                    style={{ color: `hsl(${hue}, 80%, 60%)` }}
-                  >
-                    {p.icon}
-                  </span>
+                  <Icon name={p.icon} className="text-xl" style={{ color: `hsl(${hue}, 80%, 60%)` }} />
                 </div>
               </div>
             );
@@ -219,9 +212,7 @@ export default function PunishmentWheelPage() {
           {/* Center */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-20 h-20 rounded-full bg-[#1a0f1a] border-4 border-primary/50 flex items-center justify-center shadow-lg">
-              <span className="material-symbols-outlined text-primary text-3xl">
-                {isSpinning ? "sync" : "casino"}
-              </span>
+              <Icon name={isSpinning ? "sync" : "casino"} className="text-primary text-3xl" />
             </div>
           </div>
         </motion.div>
@@ -235,11 +226,7 @@ export default function PunishmentWheelPage() {
               exit={{ opacity: 0, y: -20 }}
               className="mt-8 w-full p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-center max-w-sm"
             >
-              <span
-                className={`material-symbols-outlined text-5xl ${result.color} mb-3`}
-              >
-                {result.icon}
-              </span>
+              <Icon name={result.icon} className={`text-5xl ${result.color} mb-3`} />
               <h2 className="text-white text-2xl font-bold mb-2">
                 {result.text}
               </h2>

@@ -10,6 +10,8 @@ import {
   type AdminRoleName,
 } from "@/shared/adminRoles";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface AdminShellProps {
   admin: AdminIdentity | null;
   title: string;
@@ -67,9 +69,7 @@ export function AdminShell({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-900 shadow-lg shadow-primary/20">
-                <span className="material-symbols-outlined text-3xl text-white">
-                  admin_panel_settings
-                </span>
+                <Icon name="admin_panel_settings" className="text-3xl text-white" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">
@@ -92,7 +92,7 @@ export function AdminShell({
                 aria-label="กลับหน้าเกม"
                 className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
               >
-                <span className="material-symbols-outlined text-lg" aria-hidden="true">home</span>
+                <Icon name="home" className="text-lg" aria-hidden="true" />
                 หน้าเกม
               </Link>
               <Button
@@ -125,9 +125,7 @@ export function AdminShell({
                       : "border-white/10 bg-white/5 text-white/60 hover:border-white/20 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    {item.icon}
-                  </span>
+                  <Icon name={item.icon} className="text-lg" />
                   <span>{item.label}</span>
                 </Link>
               );

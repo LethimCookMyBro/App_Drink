@@ -6,3 +6,4 @@ export { Timer } from "./Timer";
 export { BottomNav } from "./BottomNav";
 export { GamePauseButton } from "./GamePauseButton";
 export { GoogleAuthButton } from "./GoogleAuthButton";
+export { GameFeedback, type GameFeedbackState } from "./GameFeedback";

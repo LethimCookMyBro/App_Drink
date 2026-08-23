@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
               code,
               name,
               hostId: "",
-              difficulty: Math.min(5, Math.max(1, difficulty)),
+              difficulty,
               is18Plus,
               maxPlayers,
               players: {

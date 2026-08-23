@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GameEventType, Prisma, QuestionType } from "@prisma/client";
-import { writeAuthoritativeProgress } from "../src/backend/gameSessionState";
+import {
+  selectPlayerForRound,
+  writeAuthoritativeProgress,
+} from "../src/backend/gameSessionState";
 
 type MutablePlayer = {
   id: string;
@@ -435,11 +438,76 @@ test("duplicate submit reuses the first authoritative write", async () => {
     requestId: "request_1",
   });
 
+  const expectedNextPlayer = selectPlayerForRound(
+    state.players.map((player) => player.id),
+    "session_1",
+    1,
+  );
+
   assert.equal(first.kind, "updated");
   assert.equal(second.kind, "duplicate");
   assert.equal(state.events.length, 1);
   assert.equal(state.session.roundCount, 1);
-  assert.equal(state.session.currentPlayerId, "player_2");
+  assert.equal(state.session.currentPlayerId, expectedNextPlayer);
+  assert.ok(expectedNextPlayer);
+});
+
+test("player selection is a fair permutation per cycle", () => {
+  const playerIds = ["a", "b", "c", "d"];
+  const cycleLength = playerIds.length;
+
+  for (let cycle = 0; cycle < 25; cycle += 1) {
+    const turns = Array.from({ length: cycleLength }, (_, offset) =>
+      selectPlayerForRound(playerIds, "session_fair", cycle * cycleLength + offset),
+    );
+
+    assert.deepEqual(
+      [...turns].sort(),
+      [...playerIds].sort(),
+      `cycle ${cycle} must contain every player exactly once`,
+    );
+  }
+});
+
+test("player selection never repeats the same player across a cycle boundary when avoidable", () => {
+  for (const sessionId of ["session_x", "session_y", "session_z"]) {
+    const playerIds = ["p1", "p2", "p3", "p4", "p5"];
+    const cycleLength = playerIds.length;
+
+    for (let cycle = 0; cycle < 40; cycle += 1) {
+      const lastOfCycle = selectPlayerForRound(
+        playerIds,
+        sessionId,
+        (cycle + 1) * cycleLength - 1,
+      );
+      const firstOfNextCycle = selectPlayerForRound(
+        playerIds,
+        sessionId,
+        (cycle + 1) * cycleLength,
+      );
+
+      assert.notEqual(
+        lastOfCycle,
+        firstOfNextCycle,
+        `${sessionId} cycle ${cycle}->${cycle + 1} boundary repeats the same player`,
+      );
+    }
+  }
+});
+
+test("player selection is deterministic and handles edge cases", () => {
+  const playerIds = ["x1", "x2", "x3"];
+
+  assert.equal(
+    selectPlayerForRound(playerIds, "session_d", 7),
+    selectPlayerForRound(playerIds, "session_d", 7),
+  );
+
+  for (let round = 0; round < 12; round += 1) {
+    assert.equal(selectPlayerForRound(["solo"], "session_solo", round), "solo");
+  }
+
+  assert.equal(selectPlayerForRound([], "session_empty", 0), null);
 });
 
 test("rapid double click with a stale turn token is rejected safely", async () => {
@@ -511,7 +579,7 @@ test("stale client requests cannot mutate the authoritative turn twice", async (
   assert.equal(result.session.currentTurnToken, "turn_2");
 });
 
-test("current turn cannot be advanced before server timer expiry", async () => {
+test("early manual advance is allowed before server timer expiry", async () => {
   const { db, state } = createProgressDb();
   state.session.currentTurnExpiresAt = new Date(Date.now() + 30_000);
 
@@ -524,9 +592,41 @@ test("current turn cannot be advanced before server timer expiry", async () => {
     requestId: "request_early",
   });
 
-  assert.equal(result.kind, "too_early");
-  assert.equal(state.events.length, 0);
-  assert.equal(state.session.roundCount, 0);
+  assert.equal(result.kind, "updated");
+  assert.equal(state.events.length, 1);
+  assert.equal(state.session.roundCount, 1);
+});
+
+test("timer timeout action is idempotent and cannot double-advance the turn", async () => {
+  const { db, state } = createProgressDb();
+  state.session.currentTurnExpiresAt = new Date(Date.now() - 1_000);
+
+  const timeoutAction = () => ({
+    roomId: "room_1",
+    sessionId: "session_1",
+    action: GameEventType.SKIPPED,
+    drinkDelta: 1,
+    turnToken: "turn_1",
+  });
+
+  const first = await writeAuthoritativeProgress(db, {
+    ...timeoutAction(),
+    requestId: "request_timeout_a",
+  });
+  const retrySameRequest = await writeAuthoritativeProgress(db, {
+    ...timeoutAction(),
+    requestId: "request_timeout_a",
+  });
+  const secondDeviceDifferentRequest = await writeAuthoritativeProgress(db, {
+    ...timeoutAction(),
+    requestId: "request_timeout_b",
+  });
+
+  assert.equal(first.kind, "updated");
+  assert.equal(retrySameRequest.kind, "duplicate");
+  assert.equal(secondDeviceDifferentRequest.kind, "stale");
+  assert.equal(state.events.length, 1);
+  assert.equal(state.session.roundCount, 1);
 });
 
 test("positive drink actions do not increment skip count unless skipped", async () => {

@@ -8,6 +8,8 @@ import { useGameStore } from "@/frontend/store/gameStore";
 import { useActiveGameSession, useUserSettings } from "@/frontend/hooks";
 import type { VibeLevel } from "@/shared/config/gameConstants";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 export default function WelcomePage() {
   const { vibeLevel, setVibeLevel } = useGameStore();
   const { activeGame } = useActiveGameSession();
@@ -67,14 +69,12 @@ export default function WelcomePage() {
         {/* Feedback Button */}
         <Link href="/feedback" aria-label="แจ้งบัค">
           <button className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary backdrop-blur-md transition hover:bg-primary/30" aria-label="แจ้งบัค">
-            <span className="material-symbols-outlined text-xl" aria-hidden="true">
-              bug_report
-            </span>
+            <Icon name="bug_report" className="text-xl" aria-hidden="true" />
           </button>
         </Link>
         <Link href="/settings" aria-label="ตั้งค่า">
           <button className="flex size-10 items-center justify-center rounded-full bg-white/5 text-white backdrop-blur-md transition hover:bg-white/10" aria-label="ตั้งค่า">
-            <span className="material-symbols-outlined" aria-hidden="true">settings</span>
+            <Icon name="settings" aria-hidden="true" />
           </button>
         </Link>
       </header>
@@ -87,12 +87,7 @@ export default function WelcomePage() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, type: "spring" }}
         >
-          <span
-            aria-hidden="true"
-            className="material-symbols-outlined absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[clamp(130px,26vw,180px)] text-primary/5 select-none"
-          >
-            local_bar
-          </span>
+          <Icon name="local_bar" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[clamp(130px,26vw,180px)] text-primary/5 select-none" aria-hidden="true" />
           <h1 className="relative text-[clamp(4.75rem,20vw,7.5rem)] font-black leading-[0.85] tracking-tight text-white drop-shadow-[0_0_15px_rgba(199,61,245,0.6)] sm:text-[clamp(5.5rem,18vw,8.5rem)] lg:text-[clamp(6.5rem,12vw,9rem)]">
             วง
             <br />
@@ -190,9 +185,7 @@ export default function WelcomePage() {
           <GlassPanel className="border border-primary/20 bg-primary/5 p-4 sm:p-5">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary shadow-[0_0_22px_rgba(199,61,245,0.18)]">
-                <span className="material-symbols-outlined text-3xl">
-                  sports_esports
-                </span>
+                <Icon name="sports_esports" className="text-3xl" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary/80">

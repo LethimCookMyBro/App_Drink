@@ -11,6 +11,8 @@ import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminFeedbackData } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 type FeedbackStatus = "ALL" | "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
 type FeedbackSummary = Record<FeedbackStatus, number>;
 
@@ -199,7 +201,7 @@ export default function AdminFeedbackPage() {
             onClick={() => void refresh()}
             className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
-            <span className="material-symbols-outlined text-lg">refresh</span>
+            <Icon name="refresh" className="text-lg" />
             รีเฟรช
           </button>
           {canDeleteFeedback && (

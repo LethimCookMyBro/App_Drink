@@ -3,7 +3,6 @@
  */
 
 export { usePlayerQueue } from "./usePlayerQueue";
-export { useQuestionPool, type GameQuestion } from "./useQuestionPool";
 export { useSoundEffects } from "./useSoundEffects";
 export { useUserSettings } from "./useUserSettings";
 export { useActiveGameSession } from "./useActiveGameSession";

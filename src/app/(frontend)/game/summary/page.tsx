@@ -11,6 +11,8 @@ import {
   getStoredGameSummary,
 } from "@/frontend/game/gameSession";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface PlayerStats {
   name: string;
   drinkCount: number;
@@ -107,9 +109,7 @@ export default function GameSummaryPage() {
           transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
           className="flex flex-col items-center"
         >
-          <span className="material-symbols-outlined text-neon-yellow text-6xl drop-shadow-[0_0_20px_rgba(251,255,0,0.5)] material-symbols-filled">
-            emoji_events
-          </span>
+          <Icon name="emoji_events" filled className="text-neon-yellow text-6xl drop-shadow-[0_0_20px_rgba(251,255,0,0.5)]" />
           <h1 className="text-white text-3xl font-bold mt-2 tracking-tight">
             จบเกม!
           </h1>

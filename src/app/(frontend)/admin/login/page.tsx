@@ -7,6 +7,8 @@ import { GlassPanel } from "@/frontend/components/ui";
 import { TurnstileWidget } from "@/frontend/integrations/cloudflare";
 import { TURNSTILE_ACTIONS } from "@/shared/integrations/cloudflareTurnstile";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 function getInitialSearchReason(): "expired" | "invalid" | null {
@@ -202,7 +204,7 @@ export default function AdminLoginPage() {
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined">login</span>
+                  <Icon name="login" />
                   เข้าสู่ระบบ
                 </>
               )}

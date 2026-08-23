@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface TimerProps {
   duration: number;
@@ -30,6 +30,8 @@ export function Timer({
 }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const hasTriggeredWarningRef = useRef(false);
+  const completedRef = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
   const circumference = 2 * Math.PI * 46; // radius = 46 for viewBox 0 0 100 100
   const progress = (timeLeft / duration) * circumference;
   const strokeDashoffset = circumference - progress;
@@ -50,9 +52,9 @@ export function Timer({
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Call onComplete when timer reaches 0
   useEffect(() => {
-    if (timeLeft === 0) {
+    if (timeLeft === 0 && !completedRef.current) {
+      completedRef.current = true;
       onComplete?.();
     }
 
@@ -78,11 +80,13 @@ export function Timer({
   return (
     <div className={`relative ${sizes[size].container} ${className}`}>
       {/* Glow effect */}
-      <motion.div
-        className="absolute inset-0 bg-primary/20 blur-xl rounded-full"
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      />
+      {!prefersReducedMotion && (
+        <motion.div
+          className="absolute inset-0 bg-primary/20 blur-xl rounded-full"
+          animate={{ opacity: [0.3, 0.6, 0.3] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      )}
 
       {/* Background circle */}
       <svg

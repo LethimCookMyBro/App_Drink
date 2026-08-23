@@ -55,12 +55,26 @@ export function useActiveGameSession() {
 
     window.addEventListener("storage", syncFromStorage);
     window.addEventListener(GAME_SESSION_CHANGED_EVENT, syncFromLocalStorage);
-    const pollId = window.setInterval(() => void refreshActiveGame(), 5000);
+    const pollId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void refreshActiveGame();
+    }, 5000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshActiveGame();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearTimeout(initialRefreshId);
       window.removeEventListener("storage", syncFromStorage);
-      window.removeEventListener(GAME_SESSION_CHANGED_EVENT, syncFromLocalStorage);
+      window.removeEventListener(
+        GAME_SESSION_CHANGED_EVENT,
+        syncFromLocalStorage,
+      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(pollId);
     };
   }, [refreshActiveGame]);

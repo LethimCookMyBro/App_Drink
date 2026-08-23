@@ -11,6 +11,8 @@ import {
   resetGameSessionForRestart,
 } from "@/frontend/game/gameSession";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 const ROOM_CODE_LENGTH = 8;
 
 export default function JoinCirclePage() {
@@ -78,9 +80,7 @@ export default function JoinCirclePage() {
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-[28px]">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-[28px]" />
           </button>
         </Link>
         <div className="flex flex-col items-center">
@@ -104,9 +104,7 @@ export default function JoinCirclePage() {
         >
           <div className="absolute inset-0 bg-neon-blue/20 blur-xl rounded-full" />
           <div className="relative flex items-center justify-center size-24 rounded-full border border-neon-blue/30 bg-gradient-to-b from-neon-blue/10 to-transparent shadow-neon-blue">
-            <span className="material-symbols-outlined text-[56px] text-neon-blue drop-shadow-[0_0_10px_rgba(0,255,255,0.8)]">
-              confirmation_number
-            </span>
+            <Icon name="confirmation_number" className="text-[56px] text-neon-blue drop-shadow-[0_0_10px_rgba(0,255,255,0.8)]" />
           </div>
         </motion.div>
       </div>
@@ -124,9 +122,7 @@ export default function JoinCirclePage() {
               href={activeGame.resumePath}
               className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-neon-blue hover:text-white"
             >
-              <span className="material-symbols-outlined text-base">
-                sports_esports
-              </span>
+              <Icon name="sports_esports" className="text-base" />
               เล่นต่อเกมเดิม
             </Link>
           </div>
@@ -199,7 +195,7 @@ export default function JoinCirclePage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span className="material-symbols-outlined text-lg">error</span>
+            <Icon name="error" className="text-lg" />
             {error}
           </motion.div>
         )}

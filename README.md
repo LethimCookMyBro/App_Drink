@@ -27,7 +27,7 @@
 - **Animation**: Framer Motion
 - **State**: Zustand
 - **Database**: Prisma + PostgreSQL (optional)
-- **Icons**: Google Material Symbols
+- **Icons**: Local SVG icon set (generated from Material Symbols outlines; no icon webfont)
 
 ## Getting Started
 

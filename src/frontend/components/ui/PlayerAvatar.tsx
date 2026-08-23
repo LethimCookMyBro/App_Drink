@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface PlayerAvatarProps {
   name: string;
   isHost?: boolean;
@@ -85,9 +87,7 @@ export function PlayerAvatar({
       {/* Host Crown */}
       {isHost && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="material-symbols-outlined text-neon-yellow drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] text-xl material-symbols-filled">
-            crown
-          </span>
+          <Icon name="crown" filled className="text-neon-yellow drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] text-xl" />
         </div>
       )}
 
@@ -95,9 +95,7 @@ export function PlayerAvatar({
       {isReady && !isHost && (
         <div className="absolute -bottom-1 -right-1">
           <div className="size-5 rounded-full bg-neon-green flex items-center justify-center shadow-neon-green">
-            <span className="material-symbols-outlined text-black text-sm">
-              check
-            </span>
+            <Icon name="check" className="text-black text-sm" />
           </div>
         </div>
       )}

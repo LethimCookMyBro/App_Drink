@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { formatAdminNumber } from "@/frontend/admin/format";
 import { Button } from "@/frontend/components/ui";
+import type { IconName } from "@/frontend/components/ui/Icon";
 import type { AdminExportDataset } from "@/backend/adminExportTypes";
 
 interface AdminGoogleSheetsExportButtonProps {
   dataset: AdminExportDataset;
   label: string;
-  icon?: string;
+  icon?: IconName;
   variant?: "primary" | "outline" | "ghost";
 }
 

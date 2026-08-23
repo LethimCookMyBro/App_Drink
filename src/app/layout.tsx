@@ -1,6 +1,5 @@
-/* eslint-disable @next/next/no-page-custom-font */
 import type { Metadata, Viewport } from "next";
-import { Kanit, Space_Grotesk } from "next/font/google";
+import { Kanit } from "next/font/google";
 import { headers } from "next/headers";
 import { SecurityNonceProvider } from "@/frontend/components/SecurityNonceProvider";
 import { ThemeProvider } from "@/frontend/components/ThemeProvider";
@@ -9,14 +8,7 @@ import "./globals.css";
 const kanit = Kanit({
   variable: "--font-kanit",
   subsets: ["latin", "thai"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "900"],
   display: "swap",
 });
 
@@ -46,8 +38,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#1e1022",
 };
 
@@ -65,23 +55,9 @@ export default async function RootLayout({
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
-      <head>
-        <link
-          rel="preconnect"
-          href="https://fonts.googleapis.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+      <head />
       <body
-        className={`${kanit.variable} ${spaceGrotesk.variable} font-[family-name:var(--font-kanit)] antialiased`}
+        className={`${kanit.variable} font-[family-name:var(--font-kanit)] antialiased`}
         suppressHydrationWarning
       >
         <SecurityNonceProvider nonce={nonce}>

@@ -8,6 +8,8 @@ import { TurnstileWidget } from "@/frontend/integrations/cloudflare";
 import { TURNSTILE_ACTIONS } from "@/shared/integrations/cloudflareTurnstile";
 import Link from "next/link";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 type FeedbackType = "BUG" | "FEATURE";
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
@@ -107,9 +109,7 @@ export default function FeedbackPage() {
       <header className="flex items-center gap-4 p-4 pt-8 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-3xl">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-3xl" />
           </button>
         </Link>
         <div>
@@ -140,9 +140,7 @@ export default function FeedbackPage() {
                   : "border-white/10 bg-white/5 hover:border-white/20"
               }`}
             >
-              <span className="material-symbols-outlined text-3xl text-neon-red">
-                bug_report
-              </span>
+              <Icon name="bug_report" className="text-3xl text-neon-red" />
               <span className="text-white font-medium">🐛 แจ้งบัค</span>
               <span className="text-white/40 text-xs">พบปัญหาในระบบ</span>
             </button>
@@ -155,9 +153,7 @@ export default function FeedbackPage() {
                   : "border-white/10 bg-white/5 hover:border-white/20"
               }`}
             >
-              <span className="material-symbols-outlined text-3xl text-neon-yellow">
-                lightbulb
-              </span>
+              <Icon name="lightbulb" className="text-3xl text-neon-yellow" />
               <span className="text-white font-medium">💡 ขอฟีเจอร์</span>
               <span className="text-white/40 text-xs">อยากให้มีสิ่งใหม่</span>
             </button>

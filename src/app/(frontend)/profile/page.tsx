@@ -7,6 +7,8 @@ import Link from "next/link";
 import { Button, GlassPanel, BottomNav } from "@/frontend/components/ui";
 import { useAuthStore } from "@/frontend/store/authStore";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface UserStats {
   totalGames: number;
   totalDrinks: number;
@@ -65,9 +67,7 @@ export default function ProfilePage() {
     return (
       <main className="container-mobile flex min-h-screen flex-col items-center justify-center px-4 py-8 sm:px-6">
         <GlassPanel className="mx-auto max-w-sm p-8 text-center sm:max-w-md">
-          <span className="material-symbols-outlined text-6xl text-white/20 mb-4">
-            person_off
-          </span>
+          <Icon name="person_off" className="text-6xl text-white/20 mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">
             ยังไม่ได้เข้าสู่ระบบ
           </h2>
@@ -98,9 +98,7 @@ export default function ProfilePage() {
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-10">
         <Link href="/" aria-label="กลับ">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
-            <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
           </button>
         </Link>
         <h2 className="text-white text-lg font-bold leading-tight tracking-tight">
@@ -174,15 +172,13 @@ export default function ProfilePage() {
             whileTap={{ scale: 0.98 }}
           >
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined">history</span>
+              <Icon name="history" />
             </div>
             <div className="flex-1">
               <h4 className="text-white font-bold">ประวัติการเล่น</h4>
               <p className="text-white/40 text-sm">ดูเกมที่เคยเล่น</p>
             </div>
-            <span className="material-symbols-outlined text-white/20">
-              chevron_right
-            </span>
+            <Icon name="chevron_right" className="text-white/20" />
           </motion.div>
         </Link>
 
@@ -193,15 +189,13 @@ export default function ProfilePage() {
             whileTap={{ scale: 0.98 }}
           >
             <div className="w-12 h-12 rounded-xl bg-neon-blue/10 flex items-center justify-center text-neon-blue">
-              <span className="material-symbols-outlined">settings</span>
+              <Icon name="settings" />
             </div>
             <div className="flex-1">
               <h4 className="text-white font-bold">ตั้งค่า</h4>
               <p className="text-white/40 text-sm">เสียง, สั่น, โหมด 18+</p>
             </div>
-            <span className="material-symbols-outlined text-white/20">
-              chevron_right
-            </span>
+            <Icon name="chevron_right" className="text-white/20" />
           </motion.div>
         </Link>
       </div>

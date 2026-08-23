@@ -7,6 +7,8 @@ import Link from "next/link";
 import { Button, GlassPanel } from "@/frontend/components/ui";
 import { validateCustomQuestion } from "@/shared/validation";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 interface DeckQuestion {
   id: string;
   text: string;
@@ -179,9 +181,7 @@ export default function DeckBuilderPage() {
       <header className="flex items-center p-4 pt-8 justify-between">
         <Link href="/">
           <button className="flex size-12 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white">
-            <span className="material-symbols-outlined text-3xl">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-3xl" />
           </button>
         </Link>
         <h2 className="text-white text-xl font-bold">สร้างชุดคำถาม</h2>
@@ -189,7 +189,7 @@ export default function DeckBuilderPage() {
           onClick={() => setShowCreateModal(true)}
           className="flex size-12 items-center justify-center rounded-full bg-primary/20 text-primary"
         >
-          <span className="material-symbols-outlined text-2xl">add</span>
+          <Icon name="add" className="text-2xl" />
         </button>
       </header>
 
@@ -203,9 +203,7 @@ export default function DeckBuilderPage() {
                 onClick={() => setCurrentDeck(null)}
                 className="text-white/60 text-sm flex items-center gap-1"
               >
-                <span className="material-symbols-outlined text-lg">
-                  arrow_back
-                </span>
+                <Icon name="arrow_back" className="text-lg" />
                 กลับ
               </button>
               <div className="flex gap-2">
@@ -213,9 +211,7 @@ export default function DeckBuilderPage() {
                   onClick={generateShareCode}
                   className="px-3 py-1.5 bg-white/5 rounded-lg text-white/60 text-sm flex items-center gap-1"
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    share
-                  </span>
+                  <Icon name="share" className="text-lg" />
                   แชร์
                 </button>
               </div>
@@ -250,11 +246,7 @@ export default function DeckBuilderPage() {
                       exit={{ opacity: 0, x: 20 }}
                       className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-start gap-3"
                     >
-                      <span
-                        className={`material-symbols-outlined ${typeInfo?.color} text-2xl`}
-                      >
-                        {typeInfo?.icon}
-                      </span>
+                      <Icon name={typeInfo?.icon ?? "quiz"} className={`${typeInfo?.color} text-2xl`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-sm">{q.text}</p>
                         <div className="flex items-center gap-2 mt-1">
@@ -271,9 +263,7 @@ export default function DeckBuilderPage() {
                         onClick={() => handleDeleteQuestion(q.id)}
                         className="text-white/30 hover:text-neon-red"
                       >
-                        <span className="material-symbols-outlined">
-                          delete
-                        </span>
+                        <Icon name="delete" />
                       </button>
                     </motion.div>
                   );
@@ -286,7 +276,7 @@ export default function DeckBuilderPage() {
               onClick={() => setShowAddQuestionModal(true)}
               className="w-full border-2 border-dashed border-white/10 hover:border-primary/50 rounded-xl p-4 flex items-center justify-center gap-2 text-white/40 hover:text-primary transition-all"
             >
-              <span className="material-symbols-outlined">add</span>
+              <Icon name="add" />
               เพิ่มคำถาม
             </button>
 
@@ -308,9 +298,7 @@ export default function DeckBuilderPage() {
           <div className="space-y-3">
             {decks.length === 0 ? (
               <div className="text-center py-12">
-                <span className="material-symbols-outlined text-white/20 text-6xl mb-4">
-                  folder_open
-                </span>
+                <Icon name="folder_open" className="text-white/20 text-6xl mb-4" />
                 <p className="text-white/40">ยังไม่มีชุดคำถาม</p>
                 <Button
                   onClick={() => setShowCreateModal(true)}
@@ -342,7 +330,7 @@ export default function DeckBuilderPage() {
                     onClick={() => handleDeleteDeck(deck.id)}
                     className="text-white/30 hover:text-neon-red p-2"
                   >
-                    <span className="material-symbols-outlined">delete</span>
+                    <Icon name="delete" />
                   </button>
                 </motion.div>
               ))
@@ -481,11 +469,7 @@ export default function DeckBuilderPage() {
                             : "border-white/10 bg-white/5"
                         }`}
                       >
-                        <span
-                          className={`material-symbols-outlined ${type.color}`}
-                        >
-                          {type.icon}
-                        </span>
+                        <Icon name={type.icon} className={`${type.color}`} />
                         <span className="text-[10px] text-white/60">
                           {type.label}
                         </span>
@@ -511,14 +495,10 @@ export default function DeckBuilderPage() {
                       >
                         <div className="flex">
                           {[1, 2, 3].map((i) => (
-                            <span
-                              key={i}
-                              className={`material-symbols-outlined text-lg ${
+                            <Icon name="local_fire_department" key={i}
+                              className={`text-lg ${
                                 i <= level ? "text-neon-red" : "text-white/20"
-                              }`}
-                            >
-                              local_fire_department
-                            </span>
+                              }`} />
                           ))}
                         </div>
                         <span className="text-xs text-white/60">

@@ -9,7 +9,7 @@ export interface Theme {
   id: ThemeId;
   name: string;
   description: string;
-  icon: string;
+  icon: "electric_bolt" | "dark_mode" | "palette";
   colors: {
     primary: string;
     primaryGlow: string;

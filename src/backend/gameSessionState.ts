@@ -115,7 +115,6 @@ export type ProgressWriteResult =
   | { kind: "not_found" }
   | { kind: "closed"; session: SessionStateSnapshot }
   | { kind: "invalid_state"; session: SessionStateSnapshot }
-  | { kind: "too_early"; session: SessionStateSnapshot; retryAfterSeconds: number }
   | { kind: "stale"; session: SessionStateSnapshot }
   | { kind: "duplicate"; session: SessionStateSnapshot }
   | { kind: "updated"; session: SessionStateSnapshot };
@@ -156,6 +155,29 @@ async function getSessionStateById(
   });
 
   return toSessionStateSnapshot(session);
+}
+
+export function getAllowedQuestionTypes(mode: string): QuestionType[] {
+  switch (mode) {
+    case "QUESTION":
+      return [QuestionType.QUESTION];
+    case "VOTE":
+      return [QuestionType.VOTE];
+    case "CHAOS":
+      return [QuestionType.CHAOS];
+    case "TRUTH_OR_DARE":
+      return [QuestionType.TRUTH, QuestionType.DARE];
+    default:
+      return [...MIXED_MODE_ROTATION];
+  }
+}
+
+export const MAX_QUESTION_LEVEL = 3;
+
+export function getEffectiveQuestionDifficulty(
+  roomDifficulty: number,
+): number {
+  return Math.min(MAX_QUESTION_LEVEL, Math.max(1, roomDifficulty));
 }
 
 function getPreferredQuestionTypes(
@@ -255,6 +277,54 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
   return arr;
 }
 
+function resolveShuffledCycle(
+  playerIds: string[],
+  sessionId: string,
+  cycleIndex: number,
+): string[] {
+  const cycleLength = playerIds.length;
+  let shuffledForCycle = seededShuffle(playerIds, `${sessionId}:${cycleIndex}`);
+
+  if (cycleIndex > 0 && cycleLength > 1) {
+    const previousCycleLast = resolveShuffledCycle(
+      playerIds,
+      sessionId,
+      cycleIndex - 1,
+    )[cycleLength - 1];
+    let attempt = 1;
+    while (
+      shuffledForCycle[0] === previousCycleLast &&
+      attempt <= cycleLength
+    ) {
+      shuffledForCycle = seededShuffle(
+        playerIds,
+        `${sessionId}:${cycleIndex}:${attempt}`,
+      );
+      attempt += 1;
+    }
+  }
+
+  return shuffledForCycle;
+}
+
+export function selectPlayerForRound(
+  playerIds: string[],
+  sessionId: string,
+  effectiveRoundCount: number,
+): string | null {
+  const cycleLength = playerIds.length;
+  if (cycleLength === 0) {
+    return null;
+  }
+
+  const cycleIndex = Math.floor(effectiveRoundCount / cycleLength);
+  const positionInCycle = effectiveRoundCount % cycleLength;
+
+  return resolveShuffledCycle(playerIds, sessionId, cycleIndex)[
+    positionInCycle
+  ] ?? null;
+}
+
 function toStandardQuestionChoice(
   currentPlayerId: string | null,
   question: QuestionFieldsPayload,
@@ -331,6 +401,7 @@ export async function chooseNextSessionState(
       roomId: true,
       mode: true,
       roundCount: true,
+      currentQuestionId: true,
       room: {
         select: {
           difficulty: true,
@@ -389,14 +460,11 @@ export async function chooseNextSessionState(
     };
   }
 
-  const cycleLength = playerIds.length;
-  const cycleIndex = Math.floor(effectiveRoundCount / cycleLength);
-  const positionInCycle = effectiveRoundCount % cycleLength;
-  const shuffledForCycle = seededShuffle(
+  const currentPlayerId = selectPlayerForRound(
     playerIds,
-    `${sessionId}:${cycleIndex}`,
+    sessionId,
+    effectiveRoundCount,
   );
-  const currentPlayerId = shuffledForCycle[positionInCycle] ?? null;
 
   // Optimized: Load only IDs of used questions instead of full events
   const [usedQuestionRows, customQuestionEventRows] = await Promise.all([
@@ -426,10 +494,16 @@ export async function chooseNextSessionState(
       .filter((id): id is string => id !== null),
   );
 
+  const allowedTypes = getAllowedQuestionTypes(session.mode);
+  const effectiveDifficulty = getEffectiveQuestionDifficulty(
+    session.room.difficulty,
+  );
+  const allowedTypeSet = new Set(allowedTypes);
   const availableCustomQuestions = session.room.questions.filter(
     (question) =>
+      allowedTypeSet.has(question.type as QuestionType) &&
       !usedCustomQuestionIds.has(question.id) &&
-      question.level <= session.room.difficulty &&
+      question.level <= effectiveDifficulty &&
       (session.room.is18Plus || !question.is18Plus),
   );
   const preferredTypes = getPreferredQuestionTypes(
@@ -458,8 +532,9 @@ export async function chooseNextSessionState(
   const baseWhere = {
     isActive: true,
     isPublic: true,
-    level: { lte: session.room.difficulty },
+    level: { lte: effectiveDifficulty },
     ...(session.room.is18Plus ? {} : { is18Plus: false }),
+    type: { in: allowedTypes },
   } satisfies Prisma.QuestionWhereInput;
 
   const unusedOnlyWhere = {
@@ -483,7 +558,18 @@ export async function chooseNextSessionState(
   const fallbackQuestion = await pickLeastUsedQuestion(prisma, unusedOnlyWhere);
 
   if (!fallbackQuestion) {
-    const recycledQuestion = await pickLeastUsedQuestion(prisma, baseWhere);
+    const recycleExcludingCurrentWhere = {
+      ...baseWhere,
+      ...(session.currentQuestionId
+        ? { id: { notIn: [session.currentQuestionId] } }
+        : {}),
+    } satisfies Prisma.QuestionWhereInput;
+
+    const recycledQuestion =
+      (await pickLeastUsedQuestion(prisma, recycleExcludingCurrentWhere)) ??
+      (session.currentQuestionId
+        ? await pickLeastUsedQuestion(prisma, baseWhere)
+        : null);
 
     if (recycledQuestion) {
       return toStandardQuestionChoice(currentPlayerId, recycledQuestion);
@@ -629,8 +715,10 @@ export async function writeAuthoritativeProgress(
     return { kind: "stale", session: sessionSnapshot };
   }
 
-  // NOTE: The turn timer is purely cosmetic on the client side.
-  // Players can manually advance their turn at any time by clicking "next".
+  // NOTE: The turn timer is a non-blocking gameplay timer. Players may answer,
+  // complete, skip, or advance to the next turn before it expires. When the
+  // timer expires, clients trigger the timeout action (skip) which is
+  // idempotent: duplicate/stale requests are rejected by turnToken/requestId.
 
   const nextRoundNumber = sessionSnapshot.roundCount + 1;
   const eventData = buildProgressEventData({

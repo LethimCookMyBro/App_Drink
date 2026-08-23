@@ -12,6 +12,8 @@ import {
   resetGameSessionForRestart,
 } from "@/frontend/game/gameSession";
 
+import { Icon } from "@/frontend/components/ui/Icon";
+
 export default function CreateCirclePage() {
   const router = useRouter();
   const { vibeLevel } = useGameStore();
@@ -70,9 +72,7 @@ export default function CreateCirclePage() {
       <header className="flex items-center justify-between p-4 pb-2 sm:px-6 lg:mx-auto lg:w-full lg:max-w-5xl lg:px-0 lg:pt-6">
         <Link href="/" aria-label="กลับ">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white" aria-label="กลับ">
-            <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-[28px]" aria-hidden="true" />
           </button>
         </Link>
         <div className="flex flex-col items-center">
@@ -82,9 +82,7 @@ export default function CreateCirclePage() {
         </div>
         <Link href="/settings" aria-label="ตั้งค่า">
           <button className="flex size-12 shrink-0 items-center justify-center rounded-full active:bg-white/10 transition-colors text-white/60 hover:text-white" aria-label="ตั้งค่า">
-            <span className="material-symbols-outlined text-[24px]" aria-hidden="true">
-              settings
-            </span>
+            <Icon name="settings" className="text-[24px]" aria-hidden="true" />
           </button>
         </Link>
       </header>
@@ -99,9 +97,7 @@ export default function CreateCirclePage() {
         >
           <div className="absolute inset-0 bg-yellow-400/30 blur-xl rounded-full opacity-50 animate-pulse" />
           <div className="relative flex items-center justify-center size-20 rounded-full border border-yellow-400/30 bg-gradient-to-b from-yellow-400/10 to-transparent shadow-[0_0_30px_rgba(250,204,21,0.2)]">
-            <span className="material-symbols-outlined text-[40px] text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] material-symbols-filled">
-              crown
-            </span>
+            <Icon name="crown" filled className="text-[40px] text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]" />
           </div>
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
             เจ้าของวง
@@ -122,9 +118,7 @@ export default function CreateCirclePage() {
               href={activeGame.resumePath}
               className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-white"
             >
-              <span className="material-symbols-outlined text-base">
-                sports_esports
-              </span>
+              <Icon name="sports_esports" className="text-base" />
               เล่นต่อเกมเดิม
             </Link>
           </div>
@@ -143,9 +137,7 @@ export default function CreateCirclePage() {
               placeholder="ใส่ชื่อของคุณ..."
               className="input-neon text-lg font-bold sm:text-xl"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
-              person
-            </span>
+            <Icon name="person" className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50" />
           </div>
         </div>
 
@@ -162,9 +154,7 @@ export default function CreateCirclePage() {
               placeholder="ตั้งชื่อวง..."
               className="input-neon text-lg font-bold sm:text-xl"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50 material-symbols-outlined">
-              edit
-            </span>
+            <Icon name="edit" className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/50" />
           </div>
         </div>
 
@@ -180,7 +170,7 @@ export default function CreateCirclePage() {
               className="size-12 rounded-lg bg-white/5 hover:bg-white/10 active:bg-primary active:text-white flex items-center justify-center text-white/70 transition-all"
               whileTap={{ scale: 0.9 }}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">remove</span>
+              <Icon name="remove" aria-hidden="true" />
             </motion.button>
             <div className="flex-1 text-center">
               <span className="text-2xl font-bold tracking-widest font-mono text-white sm:text-3xl">
@@ -193,16 +183,14 @@ export default function CreateCirclePage() {
               className="size-12 rounded-lg bg-white/5 hover:bg-white/10 active:bg-primary active:text-white flex items-center justify-center text-white/70 transition-all"
               whileTap={{ scale: 0.9 }}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              <Icon name="add" aria-hidden="true" />
             </motion.button>
           </div>
         </GlassPanel>
 
         {/* 18+ Info */}
         <div className="text-center text-white/30 text-sm">
-          <span className="material-symbols-outlined text-base align-middle mr-1">
-            info
-          </span>
+          <Icon name="info" className="text-base align-middle mr-1" />
           เปิดโหมด 18+ ได้ในหน้าตั้งค่า
         </div>
 

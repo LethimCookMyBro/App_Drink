@@ -4,7 +4,13 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Button, GamePauseButton, Timer } from "@/frontend/components/ui";
+import {
+  Button,
+  GamePauseButton,
+  GameFeedback,
+  Timer,
+  type GameFeedbackState,
+} from "@/frontend/components/ui";
 import {
   finalizeStoredGameSummary,
   tryRecordCompletedGameRound,
@@ -15,6 +21,8 @@ import {
 } from "@/frontend/hooks";
 import { GAME_SETTINGS } from "@/shared/config/gameConstants";
 
+import { Icon, type IconName } from "@/frontend/components/ui/Icon";
+
 export const dynamic = "force-dynamic";
 
 type GameCardType = "QUESTION" | "TRUTH" | "DARE" | "CHAOS" | "VOTE";
@@ -22,7 +30,7 @@ type GameCardType = "QUESTION" | "TRUTH" | "DARE" | "CHAOS" | "VOTE";
 interface QuestionVisualTheme {
   eyebrow: string;
   title: string;
-  icon: string;
+  icon: IconName;
   accentClass: string;
   pillClass: string;
   cardClass: string;
@@ -159,6 +167,7 @@ function GamePlayContent() {
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [isRoundSyncing, setIsRoundSyncing] = useState(false);
   const [isEndingGame, setIsEndingGame] = useState(false);
+  const [feedback, setFeedback] = useState<GameFeedbackState>(null);
 
   const {
     playNewQuestion,
@@ -197,9 +206,16 @@ function GamePlayContent() {
       activeSession?.currentTurnToken ?? null,
     );
     if (!syncResult.ok) {
-      window.alert(syncResult.error);
+      setFeedback({ message: syncResult.error, tone: "error" });
       setIsRoundSyncing(false);
       return;
+    }
+
+    if (syncResult.outcome === "stale") {
+      setFeedback({
+        message: "ตานี้ถูกอัปเดตไปแล้ว ซิงก์สถานะใหม่ให้แล้ว",
+        tone: "info",
+      });
     }
 
     if (syncResult.outcome !== "applied") {
@@ -227,9 +243,16 @@ function GamePlayContent() {
       activeSession?.currentTurnToken ?? null,
     );
     if (!syncResult.ok) {
-      window.alert(syncResult.error);
+      setFeedback({ message: syncResult.error, tone: "error" });
       setIsRoundSyncing(false);
       return;
+    }
+
+    if (syncResult.outcome === "stale") {
+      setFeedback({
+        message: "ตานี้ถูกอัปเดตไปแล้ว ซิงก์สถานะใหม่ให้แล้ว",
+        tone: "info",
+      });
     }
 
     if (syncResult.outcome !== "applied") {
@@ -259,7 +282,10 @@ function GamePlayContent() {
     setIsEndingGame(true);
     const completion = await finalizeStoredGameSummary();
     if (!completion.ok) {
-      window.alert(completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้");
+      setFeedback({
+        message: completion.error || "ไม่สามารถปิดเกมบนเซิร์ฟเวอร์ได้",
+        tone: "error",
+      });
       setIsEndingGame(false);
       return;
     }
@@ -286,9 +312,7 @@ function GamePlayContent() {
       <main className="container-mobile min-h-screen flex flex-col items-center justify-center px-6">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/20">
-            <span className="material-symbols-outlined text-5xl text-primary">
-              sports_esports
-            </span>
+            <Icon name="sports_esports" className="text-5xl text-primary" />
           </div>
           <div>
             <h1 className="mb-2 text-2xl font-bold text-white">
@@ -329,6 +353,17 @@ function GamePlayContent() {
 
   return (
     <main className="container-mobile relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#09050d]">
+      {(isRoundSyncing || isEndingGame) && (
+        <div className="fixed inset-x-0 top-3 z-[65] mx-auto flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-[#1a0d22]/95 px-4 py-1.5 text-xs font-bold text-primary shadow-[0_0_20px_rgba(199,61,245,0.25)]">
+          <Icon
+            name="progress_activity"
+            filled
+            className="animate-spin text-sm"
+          />
+          {isEndingGame ? "กำลังปิดเกม..." : "กำลังซิงก์..."}
+        </div>
+      )}
+      <GameFeedback feedback={feedback} onDismiss={() => setFeedback(null)} />
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div
           className={`absolute inset-x-0 top-0 h-[45vh] bg-gradient-to-b ${theme.heroClass}`}
@@ -341,11 +376,10 @@ function GamePlayContent() {
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
           <button
             onClick={() => router.push("/game/modes")}
+            aria-label="กลับไปหน้าเลือกโหมด"
             className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
           >
-            <span className="material-symbols-outlined text-[30px]">
-              arrow_back
-            </span>
+            <Icon name="arrow_back" className="text-[30px]" />
           </button>
 
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -361,18 +395,17 @@ function GamePlayContent() {
               disabled={isEndingGame || isRoundSyncing}
               className="flex items-center gap-2 rounded-full border border-neon-red/35 bg-neon-red/14 px-4 py-2 text-sm font-bold text-neon-red transition-colors hover:bg-neon-red/22"
             >
-              <span className="material-symbols-outlined text-lg">stop</span>
+              <Icon name="stop" className="text-lg" />
               จบเกม
             </button>
           </div>
 
           <button
             onClick={() => router.push("/settings")}
+            aria-label="ตั้งค่า"
             className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
           >
-            <span className="material-symbols-outlined text-[28px]">
-              settings
-            </span>
+            <Icon name="settings" className="text-[28px]" />
           </button>
         </div>
       </header>
@@ -431,9 +464,7 @@ function GamePlayContent() {
                         {theme.eyebrow}
                       </p>
                       <div className={`mt-2 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black ${theme.pillClass}`}>
-                        <span className="material-symbols-outlined text-[20px]">
-                          {theme.icon}
-                        </span>
+                        <Icon name={theme.icon} className="text-[20px]" />
                         <span>{theme.title}</span>
                         {activeSession.currentQuestionIs18Plus && (
                           <span className="rounded-full bg-neon-red px-2 py-0.5 text-[10px] font-black text-white">
@@ -453,12 +484,7 @@ function GamePlayContent() {
                   {showHazardStyle && (
                     <div className="mt-5 flex items-center justify-center gap-2">
                       {[1, 2, 3].map((item) => (
-                        <span
-                          key={item}
-                          className="material-symbols-outlined text-3xl text-[#ffb400]"
-                        >
-                          warning
-                        </span>
+                        <Icon name="warning" className="text-3xl text-[#ffb400]" key={item} />
                       ))}
                     </div>
                   )}
@@ -479,9 +505,7 @@ function GamePlayContent() {
                           </h1>
                         </div>
                         <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/65">
-                          <span className="material-symbols-outlined text-neon-red">
-                            lock
-                          </span>
+                          <Icon name="lock" className="text-neon-red" />
                           กฎบังคับ
                         </div>
                       </>
@@ -531,9 +555,7 @@ function GamePlayContent() {
               className="flex min-h-[5.6rem] flex-col items-center justify-center"
               disabled={isRoundSyncing || isEndingGame}
             >
-              <span className="material-symbols-outlined mb-1 text-3xl text-white">
-                local_bar
-              </span>
+              <Icon name="local_bar" className="mb-1 text-3xl text-white" />
               <span className="text-xl font-black tracking-tight text-white">
                 {theme.skipLabel}
               </span>
@@ -551,13 +573,9 @@ function GamePlayContent() {
               className="flex min-h-[5.6rem] flex-col items-center justify-center"
               disabled={isRoundSyncing || isEndingGame}
             >
-              <span
-                className={`material-symbols-outlined mb-1 text-3xl ${
+              <Icon name={questionType === "CHAOS" ? "arrow_forward" : "check_circle"} className={`mb-1 text-3xl ${
                   questionType === "CHAOS" ? "text-white" : "text-black"
-                }`}
-              >
-                {questionType === "CHAOS" ? "arrow_forward" : "check_circle"}
-              </span>
+                }`} />
               <span
                 className={`text-xl font-black tracking-tight ${
                   questionType === "CHAOS" ? "text-white" : "text-black"
