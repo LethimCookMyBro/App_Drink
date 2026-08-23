@@ -1,70 +1,83 @@
 "use client";
 
 import {
-  useState,
-  useEffect,
   useCallback,
-  useMemo,
-  type Dispatch,
-  type SetStateAction,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
-import { Button, GlassPanel } from "@/frontend/components/ui";
 import { useRouter } from "next/navigation";
+import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
+import { AdminDialog } from "@/frontend/components/admin/AdminDialog";
+import { AdminSelect } from "@/frontend/components/admin/AdminSelect";
+import { AdminSearchInput, useDebouncedValue } from "@/frontend/components/admin/AdminSearchInput";
+import { RowActionsMenu } from "@/frontend/components/admin/RowActionsMenu";
+import { StatusBadge } from "@/frontend/components/admin/StatusBadge";
+import { AdminTable } from "@/frontend/components/admin/AdminTable";
+import {
+  AdminEmptyState,
+  AdminErrorState,
+  AdminTableSkeleton,
+} from "@/frontend/components/admin/AdminStates";
+import { Button } from "@/frontend/components/ui";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
 import type { AdminIdentity } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
 
-import { Icon } from "@/frontend/components/ui/Icon";
-
-// Local question type for admin
 interface AdminQuestion {
   id: string;
   text: string;
   type: string;
   level: number;
   is18Plus: boolean;
-  usageCount: number;
+  isActive?: boolean;
+  usageCount?: number;
 }
 
-const typeOptions = [
-  { value: "", label: "ทุกประเภท" },
+const QUESTIONS_PER_PAGE = 50;
+
+const TYPE_OPTIONS = [
   { value: "QUESTION", label: "คำถาม" },
   { value: "TRUTH", label: "ความจริง" },
   { value: "DARE", label: "ท้า" },
-  { value: "CHAOS", label: "โกลาหล" },
   { value: "VOTE", label: "โหวต" },
+  { value: "CHAOS", label: "โกลาหล" },
 ];
 
-const levelOptions = [
-  { value: "", label: "ทุกระดับ" },
-  { value: "1", label: "ชิลล์" },
-  { value: "2", label: "กลาง" },
-  { value: "3", label: "แรง" },
-];
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  TYPE_OPTIONS.map((option) => [option.value, option.label]),
+);
 
-const ratingOptions = [
-  { value: "", label: "ทุกการจัดระดับ" },
-  { value: "false", label: "ทั่วไป" },
-  { value: "true", label: "18+" },
-];
+const LEVEL_LABELS: Record<number, string> = {
+  1: "เบา",
+  2: "กลาง",
+  3: "แรง",
+};
 
-const typeLabels: Record<string, { label: string; color: string; bg: string }> =
-  {
-    QUESTION: { label: "คำถาม", color: "text-primary", bg: "bg-primary/20" },
-    TRUTH: {
-      label: "ความจริง",
-      color: "text-neon-blue",
-      bg: "bg-neon-blue/20",
-    },
-    DARE: { label: "ท้า", color: "text-neon-green", bg: "bg-neon-green/20" },
-    CHAOS: { label: "โกลาหล", color: "text-neon-red", bg: "bg-neon-red/20" },
-    VOTE: { label: "โหวต", color: "text-neon-yellow", bg: "bg-neon-yellow/20" },
-  };
+const LEVEL_HELPER =
+  "ความเข้มเป็นอิสระจากเรต — คำถามระดับแรงไม่จำเป็นต้องเป็น 18+";
 
-const levelLabels = ["", "ชิลล์", "กลาง", "แรง"];
-const QUESTIONS_PER_PAGE = 20;
+interface QuestionFilterState {
+  type: string;
+  level: string;
+  rating: string;
+  status: string;
+}
+
+const EMPTY_FILTERS: QuestionFilterState = {
+  type: "",
+  level: "",
+  rating: "",
+  status: "",
+};
+
+interface QuestionFormValues {
+  text: string;
+  type: string;
+  level: number;
+  is18Plus: boolean;
+  isActive: boolean;
+}
 
 function getQuestionTextError(text: string): string | null {
   const trimmed = text.trim();
@@ -76,81 +89,207 @@ function getQuestionTextError(text: string): string | null {
   return null;
 }
 
-interface DropdownOption {
+interface SegmentedFieldProps {
+  legend: string;
+  name: string;
   value: string;
-  label: string;
-}
-
-interface CustomDropdownProps {
-  id: string;
-  value: string;
-  options: DropdownOption[];
+  options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
-  label: string;
-  openDropdown: string | null;
-  setOpenDropdown: Dispatch<SetStateAction<string | null>>;
+  helper?: string;
 }
 
-function CustomDropdown({
-  id,
+function SegmentedField({
+  legend,
+  name,
   value,
   options,
   onChange,
-  label,
-  openDropdown,
-  setOpenDropdown,
-}: CustomDropdownProps) {
-  const isOpen = openDropdown === id;
-  const selectedOption = options.find((o) => o.value === value) || options[0];
+  helper,
+}: SegmentedFieldProps) {
+  return (
+    <fieldset>
+      <legend className="mb-1.5 text-xs font-semibold text-white/50">{legend}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const checked = value === option.value;
+          return (
+            <label
+              key={option.value}
+              className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                checked
+                  ? "border-primary/60 bg-primary/20 text-white"
+                  : "border-white/10 bg-white/[0.04] text-white/55 hover:border-white/25 hover:text-white"
+              }`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.value}
+                checked={checked}
+                onChange={() => onChange(option.value)}
+                className="sr-only"
+              />
+              {option.label}
+            </label>
+          );
+        })}
+      </div>
+      {helper ? <p className="mt-1.5 text-xs leading-relaxed text-white/35">{helper}</p> : null}
+    </fieldset>
+  );
+}
+
+interface QuestionFormDialogProps {
+  open: boolean;
+  title: string;
+  isEdit: boolean;
+  values: QuestionFormValues;
+  saving: boolean;
+  serverError: string | null;
+  onChange: (values: QuestionFormValues) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}
+
+function QuestionFormDialog({
+  open,
+  title,
+  isEdit,
+  values,
+  saving,
+  serverError,
+  onChange,
+  onSubmit,
+  onClose,
+}: QuestionFormDialogProps) {
+  const textError = getQuestionTextError(values.text);
+  const charCount = values.text.trim().length;
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpenDropdown(isOpen ? null : id)}
-        className="flex items-center justify-between gap-2 bg-surface border border-white/10 rounded-xl px-4 py-3 text-white text-sm min-w-[120px] hover:border-primary/50 transition-colors"
+    <AdminDialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      description="แต่ละมิติตั้งค่าได้อิสระจากกัน"
+      closeOnEscape={!saving}
+      closeOnBackdrop={!saving}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+        className="space-y-4"
       >
-        <span className="truncate">{selectedOption?.label || label}</span>
-        <Icon name="expand_more" className={`text-lg transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`} />
-      </button>
+        <div>
+          <label htmlFor="question-text" className="mb-1.5 block text-xs font-semibold text-white/50">
+            ข้อความคำถาม
+          </label>
+          <textarea
+            id="question-text"
+            value={values.text}
+            onChange={(event) => onChange({ ...values, text: event.target.value })}
+            placeholder="พิมพ์ข้อความ..."
+            rows={3}
+            maxLength={600}
+            className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-white placeholder-white/30 transition-colors focus:border-primary/60 focus:outline-none"
+          />
+          <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+            <span className={textError ? "text-neon-red" : "text-white/35"}>
+              {textError || "รองรับ 5–500 ตัวอักษร"}
+            </span>
+            <span className={charCount > 500 ? "text-neon-red" : "text-white/30"}>
+              {charCount}/500
+            </span>
+          </div>
+        </div>
 
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setOpenDropdown(null)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute z-50 mt-2 w-full min-w-[150px] bg-surface border border-white/10 rounded-xl overflow-hidden shadow-2xl"
-            >
-              {options.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpenDropdown(null);
-                  }}
-                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                    value === option.value
-                      ? "bg-primary text-white"
-                      : "text-white/80 hover:bg-white/5"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+        <SegmentedField
+          legend="รูปแบบเกม — สิ่งที่ผู้เล่นต้องทำ"
+          name="question-type"
+          value={values.type}
+          options={TYPE_OPTIONS}
+          onChange={(type) => onChange({ ...values, type })}
+        />
+
+        <SegmentedField
+          legend="ความเข้ม"
+          name="question-level"
+          value={String(values.level)}
+          options={[
+            { value: "1", label: "เบา" },
+            { value: "2", label: "กลาง" },
+            { value: "3", label: "แรง" },
+          ]}
+          onChange={(level) => onChange({ ...values, level: Number(level) })}
+          helper={LEVEL_HELPER}
+        />
+
+        <SegmentedField
+          legend="เรตเนื้อหา — ผู้เล่นกลุ่มที่เห็นได้"
+          name="question-rating"
+          value={values.is18Plus ? "true" : "false"}
+          options={[
+            { value: "false", label: "ทั่วไป" },
+            { value: "true", label: "18+" },
+          ]}
+          onChange={(rating) => onChange({ ...values, is18Plus: rating === "true" })}
+        />
+
+        {isEdit ? (
+          <SegmentedField
+            legend="สถานะ"
+            name="question-status"
+            value={values.isActive ? "active" : "inactive"}
+            options={[
+              { value: "active", label: "เปิดใช้งาน" },
+              { value: "inactive", label: "ปิดใช้งาน" },
+            ]}
+            onChange={(status) => onChange({ ...values, isActive: status === "active" })}
+          />
+        ) : null}
+
+        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+          <p className="mb-2 text-xs font-semibold text-white/40">ตัวอย่าง</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge tone="primary">{TYPE_LABELS[values.type] ?? values.type}</StatusBadge>
+            <StatusBadge tone="neutral">{LEVEL_LABELS[values.level]}</StatusBadge>
+            {values.is18Plus ? (
+              <StatusBadge tone="red">18+</StatusBadge>
+            ) : null}
+            {!isEdit || values.isActive ? null : (
+              <StatusBadge tone="yellow">ปิดใช้</StatusBadge>
+            )}
+          </div>
+          <p className="mt-2 line-clamp-2 text-sm text-white/70">
+            {values.text.trim() || "—"}
+          </p>
+        </div>
+
+        {serverError ? <AdminErrorState message={serverError} /> : null}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={onClose}
+            disabled={saving}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            disabled={saving || Boolean(textError)}
+            loading={saving}
+          >
+            {saving ? "กำลังบันทึก..." : "บันทึก"}
+          </Button>
+        </div>
+      </form>
+    </AdminDialog>
   );
 }
 
@@ -159,92 +298,91 @@ export default function AdminQuestionsPage() {
   const [adminUser, setAdminUser] = useState<AdminIdentity | null>(null);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
-  const [questionPage, setQuestionPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState({ type: "", level: "", is18Plus: "" });
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [rowActionError, setRowActionError] = useState<string | null>(null);
+
   const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(
-    null
-  );
-  const [questionPendingDelete, setQuestionPendingDelete] =
-    useState<AdminQuestion | null>(null);
-  const [newQuestion, setNewQuestion] = useState({
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
+  const [filters, setFilters] = useState<QuestionFilterState>(EMPTY_FILTERS);
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<QuestionFormValues>({
     text: "",
     type: "QUESTION",
     level: 2,
     is18Plus: false,
+    isActive: true,
   });
-  const [dbConnected, setDbConnected] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
-  // Custom dropdown state
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(null);
+  const [editForm, setEditForm] = useState<QuestionFormValues>({
+    text: "",
+    type: "QUESTION",
+    level: 2,
+    is18Plus: false,
+    isActive: true,
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const [pendingDelete, setPendingDelete] = useState<AdminQuestion | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const requestIdRef = useRef(0);
+
+  const canManageQuestions = hasAdminRole(adminUser?.role, "ADMIN");
 
   const fetchQuestions = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
     try {
-      setLoading(true);
-      setApiError(null);
       const params = new URLSearchParams();
-      if (filter.type) params.set("type", filter.type);
-      if (filter.level) params.set("level", filter.level);
-      if (filter.is18Plus) params.set("is18Plus", filter.is18Plus);
-      params.set("limit", QUESTIONS_PER_PAGE.toString());
-      params.set("offset", ((questionPage - 1) * QUESTIONS_PER_PAGE).toString());
+      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (filters.type) params.set("type", filters.type);
+      if (filters.level) params.set("level", filters.level);
+      if (filters.rating) params.set("is18Plus", filters.rating);
+      if (filters.status) params.set("status", filters.status);
+      if (sort !== "newest") params.set("sort", sort);
+      params.set("limit", String(QUESTIONS_PER_PAGE));
+      params.set("offset", String((page - 1) * QUESTIONS_PER_PAGE));
 
-      const res = await fetch(`/api/questions?${params}`);
+      const res = await fetch(`/api/questions?${params}`, { cache: "no-store" });
+      if (requestId !== requestIdRef.current) return;
+
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
+
       const data = await res.json().catch(() => null);
-      if (res.ok) {
-        if (Array.isArray(data)) {
-          setQuestions(data);
-          setTotalQuestions(data.length);
-          setDbConnected(true);
-          setApiError(null);
-        } else if (data.questions && Array.isArray(data.questions)) {
-          setQuestions(data.questions);
-          setTotalQuestions(
-            typeof data.total === "number" ? data.total : data.questions.length,
-          );
-          setDbConnected(true);
-          setApiError(null);
-        } else {
-          setQuestions([]);
-          setTotalQuestions(0);
-          setDbConnected(true);
-        }
+      if (requestId !== requestIdRef.current) return;
+
+      if (res.ok && data?.questions) {
+        setQuestions(data.questions);
+        setTotalQuestions(typeof data.total === "number" ? data.total : data.questions.length);
+        setApiError(null);
       } else {
         setQuestions([]);
         setTotalQuestions(0);
-        setDbConnected(false);
-        setApiError(data?.error || "ไม่สามารถโหลดคำถามจาก API ได้");
+        setApiError(data?.error || "ไม่สามารถโหลดคำถามได้");
       }
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setQuestions([]);
       setTotalQuestions(0);
-      setDbConnected(false);
       setApiError("ไม่สามารถเชื่อมต่อ API เพื่อโหลดคำถามได้");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filter, questionPage, router]);
-
-  useEffect(() => {
-    const debounceId = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim().toLowerCase());
-      setQuestionPage(1);
-    }, 300);
-
-    return () => window.clearTimeout(debounceId);
-  }, [searchInput]);
+  }, [debouncedSearch, filters, page, router, sort]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -256,173 +394,224 @@ export default function AdminQuestionsPage() {
           return;
         }
         setAdminUser(data.admin ?? null);
-        fetchQuestions();
       } catch {
         router.push("/admin/login");
-      } finally {
-        setIsCheckingAuth(false);
       }
     };
-    checkAuth();
-  }, [fetchQuestions, router]);
+    void checkAuth();
+  }, [router]);
 
-  // Pull to refresh
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchQuestions();
+  useEffect(() => {
+    const fetchId = window.setTimeout(() => {
+      void fetchQuestions();
+    }, 0);
+
+    return () => window.clearTimeout(fetchId);
+  }, [fetchQuestions]);
+
+  const totalPages = Math.max(1, Math.ceil(totalQuestions / QUESTIONS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const rangeStart = totalQuestions === 0 ? 0 : (currentPage - 1) * QUESTIONS_PER_PAGE + 1;
+  const rangeEnd = Math.min(totalQuestions, currentPage * QUESTIONS_PER_PAGE);
+  const hasActiveFilters =
+    Boolean(debouncedSearch) ||
+    Boolean(filters.type) ||
+    Boolean(filters.level) ||
+    Boolean(filters.rating) ||
+    Boolean(filters.status) ||
+    sort !== "newest";
+
+  const handleToggleActive = async (question: AdminQuestion) => {
+    if (!canManageQuestions) return;
+    const nextActive = !question.isActive;
+    setRowActionError(null);
+    try {
+      const res = await fetch(`/api/questions/${question.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      if (res.status === 401) {
+        router.push("/admin/login");
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRowActionError(data?.error || "ไม่สามารถเปลี่ยนสถานะคำถามได้");
+        return;
+      }
+      setQuestions((current) =>
+        current.map((item) =>
+          item.id === question.id
+            ? { ...item, isActive: data.question?.isActive ?? nextActive }
+            : item,
+        ),
+      );
+    } catch {
+      setRowActionError("ไม่สามารถเชื่อมต่อเพื่อเปลี่ยนสถานะคำถามได้");
+    }
   };
 
-  const newQuestionTextError = getQuestionTextError(newQuestion.text);
-  const editingQuestionTextError = editingQuestion
-    ? getQuestionTextError(editingQuestion.text)
-    : null;
-  const canManageQuestions = hasAdminRole(adminUser?.role, "ADMIN");
+  const handleOpenEdit = (question: AdminQuestion) => {
+    setEditError(null);
+    setEditingQuestion(question);
+    setEditForm({
+      text: question.text,
+      type: question.type,
+      level: question.level,
+      is18Plus: question.is18Plus,
+      isActive: question.isActive ?? true,
+    });
+  };
 
-  const filteredQuestions = useMemo(() => {
-    if (!debouncedSearch) return questions;
+  const handleDuplicate = (question: AdminQuestion) => {
+    setCreateError(null);
+    const suffix = " (คัดลอก)";
+    const baseText =
+      question.text.length + suffix.length <= 500
+        ? `${question.text}${suffix}`
+        : question.text.slice(0, Math.max(0, 500 - suffix.length)) + suffix;
+    setCreateForm({
+      text: baseText.slice(0, 500),
+      type: question.type,
+      level: question.level,
+      is18Plus: question.is18Plus,
+      isActive: true,
+    });
+    setCreateOpen(true);
+  };
 
-    return questions.filter((question) =>
-      question.text.toLowerCase().includes(debouncedSearch),
-    );
-  }, [debouncedSearch, questions]);
-  const totalPages = Math.max(1, Math.ceil(totalQuestions / QUESTIONS_PER_PAGE));
-  const currentQuestionPage = Math.min(questionPage, totalPages);
-  const questionStart =
-    totalQuestions === 0 ? 0 : (currentQuestionPage - 1) * QUESTIONS_PER_PAGE + 1;
-  const questionEnd = Math.min(
-    totalQuestions,
-    questionStart + questions.length - 1,
-  );
+  const handleCreateSubmit = async () => {
+    if (!canManageQuestions || createSaving) return;
+    if (getQuestionTextError(createForm.text)) return;
 
-  const handleAddQuestion = async () => {
-    if (!canManageQuestions) return;
-    if (newQuestionTextError) return;
-
+    setCreateSaving(true);
+    setCreateError(null);
     try {
-      setApiError(null);
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newQuestion),
+        body: JSON.stringify({
+          text: createForm.text,
+          type: createForm.type,
+          level: createForm.level,
+          is18Plus: createForm.is18Plus,
+        }),
       });
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
-      if (res.ok) {
-        const data = await res.json();
-        setQuestions((current) =>
-          [data.question, ...current].slice(0, QUESTIONS_PER_PAGE),
-        );
-        setTotalQuestions((current) => current + 1);
-        setDbConnected(true);
-      } else {
-        const data = await res.json().catch(() => null);
-        setApiError(data?.error || "ไม่สามารถเพิ่มคำถามได้");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setCreateError(data?.error || "ไม่สามารถเพิ่มคำถามได้");
         return;
       }
-    } catch {
-      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อเพิ่มคำถามได้");
-      return;
-    }
 
-    setNewQuestion({ text: "", type: "QUESTION", level: 2, is18Plus: false });
-    setShowAddModal(false);
+      setCreateOpen(false);
+      setCreateForm({ text: "", type: "QUESTION", level: 2, is18Plus: false, isActive: true });
+      setPage(1);
+      await fetchQuestions();
+    } catch {
+      setCreateError("ไม่สามารถเชื่อมต่อ API เพื่อเพิ่มคำถามได้");
+    } finally {
+      setCreateSaving(false);
+    }
   };
 
-  const handleEditQuestion = async () => {
-    if (!canManageQuestions) return;
-    if (!editingQuestion || editingQuestionTextError) return;
+  const handleEditSubmit = async () => {
+    if (!canManageQuestions || !editingQuestion || editSaving) return;
+    if (getQuestionTextError(editForm.text)) return;
 
+    setEditSaving(true);
+    setEditError(null);
     try {
-      setApiError(null);
       const res = await fetch(`/api/questions/${editingQuestion.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingQuestion),
+        body: JSON.stringify({
+          text: editForm.text,
+          type: editForm.type,
+          level: editForm.level,
+          is18Plus: editForm.is18Plus,
+          isActive: editForm.isActive,
+        }),
       });
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
-      if (res.ok) {
-        const data = await res.json();
-        setQuestions((current) =>
-          current.map((q) =>
-            q.id === editingQuestion.id ? data.question : q
-          )
-        );
-      } else {
-        const data = await res.json().catch(() => null);
-        setApiError(data?.error || "ไม่สามารถแก้ไขคำถามได้");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setEditError(data?.error || "ไม่สามารถแก้ไขคำถามได้");
         return;
       }
-    } catch {
-      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อแก้ไขคำถามได้");
-      return;
-    }
 
-    setEditingQuestion(null);
-    setShowEditModal(false);
+      setEditingQuestion(null);
+      await fetchQuestions();
+    } catch {
+      setEditError("ไม่สามารถเชื่อมต่อ API เพื่อแก้ไขคำถามได้");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
-  const handleDeleteQuestion = async (id: string) => {
-    if (!canManageQuestions) return;
+  const handleConfirmPermanentDelete = async () => {
+    if (!canManageQuestions || !pendingDelete || deleteSaving) return;
 
+    setDeleteSaving(true);
+    setDeleteError(null);
     try {
-      setApiError(null);
-      const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/questions/${pendingDelete.id}?permanent=true`, {
+        method: "DELETE",
+      });
       if (res.status === 401) {
         router.push("/admin/login");
         return;
       }
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setApiError(data?.error || "ไม่สามารถลบคำถามได้");
+        setDeleteError(data?.error || "ไม่สามารถลบคำถามถาวรได้");
         return;
       }
-    } catch {
-      setApiError("ไม่สามารถเชื่อมต่อ API เพื่อลบคำถามได้");
-      return;
-    }
-    setQuestions((current) => current.filter((q) => q.id !== id));
-    setTotalQuestions((current) => Math.max(0, current - 1));
-  };
 
-  if (isCheckingAuth) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-[#0d0a10]">
-        <div className="animate-pulse text-white/40">กำลังตรวจสอบสิทธิ์...</div>
-      </main>
-    );
-  }
+      setPendingDelete(null);
+      await fetchQuestions();
+    } catch {
+      setDeleteError("ไม่สามารถเชื่อมต่อ API เพื่อลบคำถามถาวรได้");
+    } finally {
+      setDeleteSaving(false);
+    }
+  };
 
   return (
     <AdminShell
       admin={adminUser}
       title="จัดการคำถาม"
-      description={`ฐานคำถามสำหรับทุกโหมดเกม แสดงรายการที่ ${questionStart.toLocaleString("th-TH")}-${questionEnd.toLocaleString("th-TH")} จาก ${totalQuestions.toLocaleString("th-TH")} รายการ`}
+      description={
+        totalQuestions > 0
+          ? `ฐานคำถามทั้งหมด ${totalQuestions.toLocaleString("th-TH")} รายการ • แสดง ${rangeStart.toLocaleString("th-TH")}–${rangeEnd.toLocaleString("th-TH")}`
+          : "ฐานคำถามสำหรับทุกโหมดเกม"
+      }
       actions={
         <>
           <Button
-            onClick={handleRefresh}
+            onClick={() => void fetchQuestions()}
             variant="ghost"
             size="sm"
             icon="refresh"
-            className={refreshing ? "animate-pulse" : ""}
+            loading={loading}
           >
             รีเฟรช
           </Button>
-          {canManageQuestions && (
+          {canManageQuestions ? (
             <>
-              <AdminGoogleSheetsExportButton
-                dataset="questions"
-                label="ส่งออกคำถาม"
-              />
+              <AdminGoogleSheetsExportButton dataset="questions" label="ส่งออก" />
               <Button
                 onClick={() => {
-                  setApiError(null);
-                  setShowAddModal(true);
+                  setCreateError(null);
+                  setCreateForm({ text: "", type: "QUESTION", level: 2, is18Plus: false, isActive: true });
+                  setCreateOpen(true);
                 }}
                 variant="primary"
                 size="sm"
@@ -431,501 +620,309 @@ export default function AdminQuestionsPage() {
                 เพิ่มคำถาม
               </Button>
             </>
-          )}
+          ) : null}
         </>
       }
     >
+      {apiError ? <div className="mb-4"><AdminErrorState message={apiError} /></div> : null}
+      {rowActionError ? <div className="mb-4"><AdminErrorState message={rowActionError} /></div> : null}
 
-      {/* DB Status */}
-      {apiError && (
-        <div>
-          <div className="p-3 rounded-xl bg-neon-red/10 border border-neon-red/20 flex items-center gap-2 text-neon-red text-sm">
-            <Icon name="error" className="text-lg" />
-            <span>{apiError}</span>
-          </div>
-        </div>
-      )}
-
-      {!apiError && !dbConnected && (
-        <div>
-          <div className="p-3 rounded-xl bg-neon-yellow/10 border border-neon-yellow/20 flex items-center gap-2 text-neon-yellow text-sm">
-            <Icon name="info" className="text-lg" />
-            <span>กำลังเชื่อมต่อข้อมูลคำถามจากระบบจริง</span>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-      {/* Filters */}
-      <section className="border-b border-white/5 pb-3">
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-semibold text-white/60" htmlFor="question-search">
-            ค้นหาคำถาม
-          </label>
-          <input
+      <section className="mb-4 space-y-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
+          <AdminSearchInput
             id="question-search"
-            type="search"
+            label="ค้นหาทั้งฐานคำถาม"
             value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="พิมพ์ข้อความในคำถาม..."
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 transition-colors focus:border-primary focus:outline-none"
-          />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <CustomDropdown
-            id="type"
-            value={filter.type}
-            openDropdown={openDropdown}
-            setOpenDropdown={setOpenDropdown}
-            options={typeOptions}
             onChange={(value) => {
-              setQuestionPage(1);
-              setFilter({ ...filter, type: value });
+              setSearchInput(value);
+              setPage(1);
             }}
-            label="ประเภท"
+            placeholder="ค้นหาจากข้อความคำถาม..."
           />
-          <CustomDropdown
-            id="level"
-            value={filter.level}
-            openDropdown={openDropdown}
-            setOpenDropdown={setOpenDropdown}
-            options={levelOptions}
+          <AdminSelect
+            id="filter-type"
+            ariaLabel="กรองตามรูปแบบ"
+            value={filters.type}
             onChange={(value) => {
-              setQuestionPage(1);
-              setFilter({ ...filter, level: value });
+              setFilters({ ...filters, type: value });
+              setPage(1);
             }}
-            label="ระดับ"
+            options={[
+              { value: "", label: "รูปแบบ: ทั้งหมด" },
+              ...TYPE_OPTIONS,
+            ]}
           />
-          <CustomDropdown
-            id="rating"
-            value={filter.is18Plus}
-            openDropdown={openDropdown}
-            setOpenDropdown={setOpenDropdown}
-            options={ratingOptions}
+          <AdminSelect
+            id="filter-level"
+            ariaLabel="กรองตามความเข้ม"
+            value={filters.level}
             onChange={(value) => {
-              setQuestionPage(1);
-              setFilter({ ...filter, is18Plus: value });
+              setFilters({ ...filters, level: value });
+              setPage(1);
             }}
-            label="การจัดระดับ"
+            options={[
+              { value: "", label: "ความเข้ม: ทั้งหมด" },
+              { value: "1", label: "เบา" },
+              { value: "2", label: "กลาง" },
+              { value: "3", label: "แรง" },
+            ]}
           />
+          <AdminSelect
+            id="filter-rating"
+            ariaLabel="กรองตามเรตเนื้อหา"
+            value={filters.rating}
+            onChange={(value) => {
+              setFilters({ ...filters, rating: value });
+              setPage(1);
+            }}
+            options={[
+              { value: "", label: "เรต: ทั้งหมด" },
+              { value: "false", label: "ทั่วไป" },
+              { value: "true", label: "18+" },
+            ]}
+          />
+          <AdminSelect
+            id="filter-status"
+            ariaLabel="กรองตามสถานะ"
+            value={filters.status}
+            onChange={(value) => {
+              setFilters({ ...filters, status: value });
+              setPage(1);
+            }}
+            options={[
+              { value: "", label: "สถานะ: เปิดใช้" },
+              { value: "all", label: "สถานะ: ทั้งหมด" },
+              { value: "inactive", label: "สถานะ: ปิดใช้" },
+            ]}
+          />
+          <AdminSelect
+            id="sort-order"
+            ariaLabel="เรียงลำดับ"
+            value={sort}
+            onChange={(value) => {
+              setSort(value);
+              setPage(1);
+            }}
+            options={[
+              { value: "newest", label: "ใหม่ล่าสุด" },
+              { value: "usage", label: "ใช้บ่อยสุด" },
+            ]}
+          />
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setFilters(EMPTY_FILTERS);
+                setSort("newest");
+                setPage(1);
+              }}
+              className="h-10 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 hover:text-white"
+            >
+              ล้างตัวกรอง
+            </button>
+          ) : null}
         </div>
       </section>
 
-      {/* Question List */}
-      <section>
-        {loading ? (
-          <div className="text-center py-12">
-            <Icon name="progress_activity" className="animate-spin text-4xl text-primary" />
-          </div>
-        ) : filteredQuestions.length === 0 ? (
-          <div className="text-center py-12">
-            <Icon name="quiz" className="text-6xl text-white/10 mb-4" />
-            <p className="text-white/40">ไม่พบคำถาม</p>
-          </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            <AnimatePresence>
-              {filteredQuestions.map((q, index) => (
-                <motion.div
-                  key={q.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: index * 0.02 }}
-                >
-                  <GlassPanel className="p-4 h-full flex flex-col">
-                    <p className="text-white text-sm leading-relaxed flex-1">
-                      {q.text}
+      {loading ? (
+        <AdminTableSkeleton rows={8} />
+      ) : questions.length === 0 && !apiError ? (
+        <div className="rounded-xl border border-white/8 bg-white/[0.02]">
+          <AdminEmptyState
+            icon="quiz"
+            title={hasActiveFilters ? "ไม่พบคำถามที่ตรงกับตัวกรอง" : "ยังไม่มีคำถามในระบบ"}
+            description={
+              hasActiveFilters
+                ? "ลองปรับคำค้นหาหรือล้างตัวกรองเพื่อดูรายการทั้งหมด"
+                : undefined
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <AdminTable
+            caption="รายการคำถามทั้งหมด"
+            minWidth={900}
+            headers={[
+              { label: "คำถาม", className: "w-full min-w-[280px]" },
+              { label: "รูปแบบ" },
+              { label: "ความเข้ม" },
+              { label: "เรต" },
+              { label: "ใช้แล้ว", className: "text-right" },
+              { label: "สถานะ" },
+              { label: "", className: "w-12" },
+            ]}
+          >
+            {questions.map((question) => {
+              const isActive = question.isActive ?? true;
+              return (
+                <tr key={question.id} className={`transition-colors hover:bg-white/[0.03] ${isActive ? "" : "opacity-55"}`}>
+                  <td className="max-w-[420px] px-3 py-2.5 align-middle">
+                    <p className="line-clamp-2 text-sm leading-snug text-white/90">
+                      {question.text}
                     </p>
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
-                            typeLabels[q.type]?.bg || "bg-gray-500/20"
-                          } ${typeLabels[q.type]?.color || "text-gray-400"}`}
-                        >
-                          {typeLabels[q.type]?.label || q.type}
-                        </span>
-                        <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-white/5 text-white/60">
-                          {levelLabels[q.level]}
-                        </span>
-                        {q.is18Plus && (
-                          <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-neon-red/20 text-neon-red">
-                            18+
-                          </span>
-                        )}
-                      </div>
-                      {canManageQuestions && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          aria-label="แก้ไขคำถาม"
-                          onClick={() => {
-                            setApiError(null);
-                            setEditingQuestion(q);
-                            setShowEditModal(true);
-                          }}
-                          className="p-2 rounded-lg text-white/30 hover:text-primary hover:bg-primary/10 transition-colors"
-                        >
-                          <Icon name="edit" className="text-lg" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="ลบคำถาม"
-                          onClick={() => setQuestionPendingDelete(q)}
-                          className="p-2 rounded-lg text-white/30 hover:text-neon-red hover:bg-neon-red/10 transition-colors"
-                        >
-                          <Icon name="delete" className="text-lg" />
-                        </button>
-                      </div>
-                      )}
-                    </div>
-                  </GlassPanel>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-        <div className="mt-5 flex flex-col items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/5 p-3 text-sm text-white/60 sm:flex-row">
-          <span>
-            หน้า {currentQuestionPage.toLocaleString("th-TH")} / {totalPages.toLocaleString("th-TH")}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setQuestionPage((current) => Math.max(1, current - 1))}
-              disabled={currentQuestionPage <= 1 || loading}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
-            >
-              ก่อนหน้า
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setQuestionPage((current) => Math.min(totalPages, current + 1))
-              }
-              disabled={currentQuestionPage >= totalPages || loading}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 disabled:opacity-40"
-            >
-              ถัดไป
-            </button>
-          </div>
-        </div>
-      </section>
-      </div>
+                  </td>
+                  <td className="px-3 py-2.5 align-middle">
+                    <StatusBadge tone="neutral">{TYPE_LABELS[question.type] ?? question.type}</StatusBadge>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 align-middle text-sm text-white/70">
+                    {LEVEL_LABELS[question.level] ?? `ระดับ ${question.level}`}
+                  </td>
+                  <td className="px-3 py-2.5 align-middle">
+                    {question.is18Plus ? (
+                      <StatusBadge tone="red">18+</StatusBadge>
+                    ) : (
+                      <span className="text-sm text-white/40">ทั่วไป</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right align-middle text-sm tabular-nums text-white/60">
+                    {(question.usageCount ?? 0).toLocaleString("th-TH")}
+                  </td>
+                  <td className="px-3 py-2.5 align-middle">
+                    <StatusBadge tone={isActive ? "green" : "neutral"} dot>
+                      {isActive ? "เปิดใช้" : "ปิดใช้"}
+                    </StatusBadge>
+                  </td>
+                  <td className="px-3 py-2.5 align-middle">
+                    {canManageQuestions ? (
+                      <RowActionsMenu
+                        label={`การกระทำสำหรับคำถาม: ${question.text.slice(0, 40)}`}
+                        actions={[
+                          { label: "แก้ไข", icon: "edit", onSelect: () => handleOpenEdit(question) },
+                          { label: "ทำสำเนา", icon: "content_copy", onSelect: () => handleDuplicate(question) },
+                          {
+                            label: isActive ? "ปิดใช้งาน" : "เปิดใช้งาน",
+                            icon: isActive ? "do_not_disturb_on" : "check_circle",
+                            onSelect: () => void handleToggleActive(question),
+                          },
+                          { kind: "divider" },
+                          {
+                            label: "ลบถาวร",
+                            icon: "delete",
+                            danger: true,
+                            onSelect: () => {
+                              setDeleteError(null);
+                              setPendingDelete(question);
+                            },
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </AdminTable>
 
-      {/* Delete Confirmation */}
-      <AnimatePresence>
-        {questionPendingDelete && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setQuestionPendingDelete(null)}
+          <nav
+            aria-label="แบ่งหน้าคำถาม"
+            className="mt-3 flex items-center justify-between gap-3 text-sm text-white/50"
           >
-            <motion.div
-              className="w-full max-w-lg rounded-2xl bg-surface p-6"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(event) => event.stopPropagation()}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-question-title"
-            >
-              <h2 id="delete-question-title" className="text-xl font-bold text-white">
-                ยืนยันการลบคำถาม
-              </h2>
-              <p className="mt-3 text-sm text-white/60">
-                การลบคำถามนี้ไม่สามารถย้อนกลับได้
-              </p>
-              <div className="mt-4 rounded-2xl border border-neon-red/20 bg-neon-red/10 p-4 text-sm text-white">
-                {questionPendingDelete.text}
-              </div>
-              <div className="mt-6 flex gap-3">
-                <Button
-                  onClick={() => setQuestionPendingDelete(null)}
-                  variant="ghost"
-                  size="lg"
-                  fullWidth
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  onClick={() => {
-                    void handleDeleteQuestion(questionPendingDelete.id);
-                    setQuestionPendingDelete(null);
-                  }}
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                >
-                  ลบคำถาม
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <span>
+              หน้า {currentPage.toLocaleString("th-TH")} / {totalPages.toLocaleString("th-TH")}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={currentPage <= 1 || loading}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+              >
+                ก่อนหน้า
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={currentPage >= totalPages || loading}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+              >
+                ถัดไป
+              </button>
+            </div>
+          </nav>
+        </>
+      )}
 
-      {/* Add Modal */}
-      <AnimatePresence>
-        {showAddModal && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowAddModal(false)}
+      <QuestionFormDialog
+        open={createOpen}
+        title="เพิ่มคำถามใหม่"
+        isEdit={false}
+        values={createForm}
+        saving={createSaving}
+        serverError={createError}
+        onChange={setCreateForm}
+        onSubmit={() => void handleCreateSubmit()}
+        onClose={() => {
+          if (!createSaving) setCreateOpen(false);
+        }}
+      />
+
+      <QuestionFormDialog
+        open={Boolean(editingQuestion)}
+        title="แก้ไขคำถาม"
+        isEdit
+        values={editForm}
+        saving={editSaving}
+        serverError={editError}
+        onChange={setEditForm}
+        onSubmit={() => void handleEditSubmit()}
+        onClose={() => {
+          if (!editSaving) setEditingQuestion(null);
+        }}
+      />
+
+      <AdminDialog
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          if (!deleteSaving) setPendingDelete(null);
+        }}
+        title="ยืนยันการลบถาวร"
+        description="การลบถาวรไม่สามารถย้อนกลับได้ หากต้องการเพียงซ่อนออกจากเกม ให้ใช้ “ปิดใช้งาน” แทน"
+        size="sm"
+        closeOnEscape={!deleteSaving}
+        closeOnBackdrop={!deleteSaving}
+      >
+        {pendingDelete ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleConfirmPermanentDelete();
+            }}
+            className="space-y-4"
           >
-            <motion.div
-              className="w-full max-w-lg bg-surface rounded-2xl p-6"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">
-                เพิ่มคำถามใหม่
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-white/60 text-sm mb-2 block">
-                    คำถาม
-                  </label>
-                  <textarea
-                    value={newQuestion.text}
-                    onChange={(e) =>
-                      setNewQuestion({ ...newQuestion, text: e.target.value })
-                    }
-                    placeholder="พิมพ์คำถาม..."
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/30 focus:outline-none focus:border-primary resize-none h-24"
-                  />
-                  <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                    <span
-                      className={
-                        newQuestionTextError ? "text-neon-red" : "text-white/40"
-                      }
-                    >
-                      {newQuestionTextError || "รองรับ 5-500 ตัวอักษร"}
-                    </span>
-                    <span className="text-white/30">
-                      {newQuestion.text.trim().length}/500
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-white/60 text-sm mb-2 block">
-                      ประเภท
-                    </label>
-                    <CustomDropdown
-                      id="add-type"
-                      value={newQuestion.type}
-                      openDropdown={openDropdown}
-                      setOpenDropdown={setOpenDropdown}
-                      options={typeOptions.slice(1)}
-                      onChange={(value) =>
-                        setNewQuestion({ ...newQuestion, type: value })
-                      }
-                      label="ประเภท"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-white/60 text-sm mb-2 block">
-                      ระดับ
-                    </label>
-                    <CustomDropdown
-                      id="add-level"
-                      value={newQuestion.level.toString()}
-                      openDropdown={openDropdown}
-                      setOpenDropdown={setOpenDropdown}
-                      options={levelOptions.slice(1)}
-                      onChange={(value) =>
-                        setNewQuestion({
-                          ...newQuestion,
-                          level: parseInt(value),
-                        })
-                      }
-                      label="ระดับ"
-                    />
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-3 cursor-pointer p-3 bg-white/5 rounded-xl">
-                  <input
-                    type="checkbox"
-                    checked={newQuestion.is18Plus}
-                    onChange={(e) =>
-                      setNewQuestion({
-                        ...newQuestion,
-                        is18Plus: e.target.checked,
-                      })
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-10 h-6 bg-white/10 rounded-full peer peer-checked:bg-neon-red relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4" />
-                  <span className="text-white">เนื้อหา 18+</span>
-                </label>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <Button
-                  onClick={() => setShowAddModal(false)}
-                  variant="ghost"
-                  size="lg"
-                  fullWidth
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  onClick={handleAddQuestion}
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  disabled={Boolean(newQuestionTextError)}
-                >
-                  บันทึก
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Edit Modal */}
-      <AnimatePresence>
-        {showEditModal && editingQuestion && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowEditModal(false)}
-          >
-            <motion.div
-              className="w-full max-w-lg bg-surface rounded-2xl p-6"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-xl font-bold text-white mb-6">แก้ไขคำถาม</h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-white/60 text-sm mb-2 block">
-                    คำถาม
-                  </label>
-                  <textarea
-                    value={editingQuestion.text}
-                    onChange={(e) =>
-                      setEditingQuestion({
-                        ...editingQuestion,
-                        text: e.target.value,
-                      })
-                    }
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/30 focus:outline-none focus:border-primary resize-none h-24"
-                  />
-                  <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                    <span
-                      className={
-                        editingQuestionTextError
-                          ? "text-neon-red"
-                          : "text-white/40"
-                      }
-                    >
-                      {editingQuestionTextError || "รองรับ 5-500 ตัวอักษร"}
-                    </span>
-                    <span className="text-white/30">
-                      {editingQuestion.text.trim().length}/500
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-white/60 text-sm mb-2 block">
-                      ประเภท
-                    </label>
-                    <CustomDropdown
-                      id="edit-type"
-                      value={editingQuestion.type}
-                      openDropdown={openDropdown}
-                      setOpenDropdown={setOpenDropdown}
-                      options={typeOptions.slice(1)}
-                      onChange={(value) =>
-                        setEditingQuestion({ ...editingQuestion, type: value })
-                      }
-                      label="ประเภท"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-white/60 text-sm mb-2 block">
-                      ระดับ
-                    </label>
-                    <CustomDropdown
-                      id="edit-level"
-                      value={editingQuestion.level.toString()}
-                      openDropdown={openDropdown}
-                      setOpenDropdown={setOpenDropdown}
-                      options={levelOptions.slice(1)}
-                      onChange={(value) =>
-                        setEditingQuestion({
-                          ...editingQuestion,
-                          level: parseInt(value),
-                        })
-                      }
-                      label="ระดับ"
-                    />
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-3 cursor-pointer p-3 bg-white/5 rounded-xl">
-                  <input
-                    type="checkbox"
-                    checked={editingQuestion.is18Plus}
-                    onChange={(e) =>
-                      setEditingQuestion({
-                        ...editingQuestion,
-                        is18Plus: e.target.checked,
-                      })
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-10 h-6 bg-white/10 rounded-full peer peer-checked:bg-neon-red relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4" />
-                  <span className="text-white">เนื้อหา 18+</span>
-                </label>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <Button
-                  onClick={() => setShowEditModal(false)}
-                  variant="ghost"
-                  size="lg"
-                  fullWidth
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  onClick={handleEditQuestion}
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  disabled={Boolean(editingQuestionTextError)}
-                >
-                  บันทึก
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <blockquote className="rounded-xl border border-neon-red/25 bg-neon-red/5 p-3.5 text-sm leading-relaxed text-white/85">
+              {pendingDelete.text}
+            </blockquote>
+            <div className="flex flex-wrap gap-1.5">
+              <StatusBadge tone="primary">{TYPE_LABELS[pendingDelete.type] ?? pendingDelete.type}</StatusBadge>
+              <StatusBadge tone="neutral">{LEVEL_LABELS[pendingDelete.level]}</StatusBadge>
+              {pendingDelete.is18Plus ? <StatusBadge tone="red">18+</StatusBadge> : null}
+            </div>
+            {deleteError ? <AdminErrorState message={deleteError} /> : null}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleteSaving}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="neon-red"
+                size="md"
+                disabled={deleteSaving}
+                loading={deleteSaving}
+              >
+                {deleteSaving ? "กำลังลบ..." : "ลบถาวร"}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </AdminDialog>
     </AdminShell>
   );
 }

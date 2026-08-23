@@ -3,25 +3,38 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminGoogleSheetsExportButton } from "@/frontend/components/admin/AdminGoogleSheetsExportButton";
+import { AdminDialog } from "@/frontend/components/admin/AdminDialog";
+import { AdminDrawer } from "@/frontend/components/admin/AdminDrawer";
 import { AdminShell } from "@/frontend/components/admin/AdminShell";
-import { AdminStatCard } from "@/frontend/components/admin/AdminStatCard";
-import { GlassPanel } from "@/frontend/components/ui";
+import { RowActionsMenu } from "@/frontend/components/admin/RowActionsMenu";
+import { StatusBadge } from "@/frontend/components/admin/StatusBadge";
+import {
+  AdminEmptyState,
+  AdminErrorState,
+  AdminNotice,
+  AdminTableSkeleton,
+} from "@/frontend/components/admin/AdminStates";
 import { formatAdminNumber } from "@/frontend/admin/format";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
-import type { AdminFeedbackData } from "@/backend/adminData";
+import type { AdminFeedbackData, AdminFeedbackItem } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
 
 import { Icon } from "@/frontend/components/ui/Icon";
 
-type FeedbackStatus = "ALL" | "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
-type FeedbackSummary = Record<FeedbackStatus, number>;
+type FeedbackStatusFilter = "ALL" | "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
 
-const EMPTY_FEEDBACK_SUMMARY: FeedbackSummary = {
-  ALL: 0,
-  PENDING: 0,
-  IN_PROGRESS: 0,
-  RESOLVED: 0,
-  REJECTED: 0,
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "รอดำเนินการ",
+  IN_PROGRESS: "กำลังดำเนินการ",
+  RESOLVED: "แก้ไขแล้ว",
+  REJECTED: "ปฏิเสธ",
+};
+
+const STATUS_TONES: Record<string, "neutral" | "blue" | "green" | "red"> = {
+  PENDING: "neutral",
+  IN_PROGRESS: "blue",
+  RESOLVED: "green",
+  REJECTED: "red",
 };
 
 function formatDateTime(value: string | null): string {
@@ -30,57 +43,23 @@ function formatDateTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("th-TH");
 }
 
-function getFeedbackTypeMeta(type: string) {
-  return type === "BUG"
-    ? {
-        label: "บัค",
-        badgeClass: "bg-neon-red/15 text-neon-red",
-      }
-    : {
-        label: "ฟีเจอร์",
-        badgeClass: "bg-neon-yellow/15 text-neon-yellow",
-      };
-}
+function buildFeedbackSummaryFromItems(
+  items: Array<Pick<AdminFeedbackItem, "status">>,
+): AdminFeedbackData["summary"] {
+  const summary: AdminFeedbackData["summary"] = {
+    ALL: 0,
+    PENDING: 0,
+    IN_PROGRESS: 0,
+    RESOLVED: 0,
+    REJECTED: 0,
+  };
 
-function getStatusClass(status: string) {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "bg-neon-blue/15 text-neon-blue";
-    case "RESOLVED":
-      return "bg-neon-green/15 text-neon-green";
-    case "REJECTED":
-      return "bg-neon-red/15 text-neon-red";
-    default:
-      return "bg-white/10 text-white/65";
-  }
-}
-
-function buildFeedbackSummary(
-  feedbacks: AdminFeedbackData["feedbacks"],
-): FeedbackSummary {
-  const summary = { ...EMPTY_FEEDBACK_SUMMARY };
-
-  for (const item of feedbacks) {
+  for (const item of items) {
     summary[item.status] += 1;
     summary.ALL += 1;
   }
 
   return summary;
-}
-
-function withUpdatedFeedbacks(
-  current: AdminFeedbackData | null,
-  feedbacks: AdminFeedbackData["feedbacks"],
-) {
-  if (!current) {
-    return current;
-  }
-
-  return {
-    ...current,
-    feedbacks,
-    summary: buildFeedbackSummary(feedbacks),
-  };
 }
 
 export default function AdminFeedbackPage() {
@@ -89,20 +68,50 @@ export default function AdminFeedbackPage() {
     "/api/admin/feedback",
     "ไม่สามารถโหลด feedback ได้",
   );
-  const [activeFilter, setActiveFilter] = useState<FeedbackStatus>("ALL");
+
+  const [activeFilter, setActiveFilter] = useState<FeedbackStatusFilter>("ALL");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailItem, setDetailItem] = useState<AdminFeedbackItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AdminFeedbackItem | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const feedbacks = data?.feedbacks ?? [];
-  const summary = data?.summary ?? EMPTY_FEEDBACK_SUMMARY;
+  const summary = data?.summary ?? {
+    ALL: 0,
+    PENDING: 0,
+    IN_PROGRESS: 0,
+    RESOLVED: 0,
+    REJECTED: 0,
+  };
   const canDeleteFeedback = hasAdminRole(data?.admin.role, "ADMIN");
 
   const filteredFeedbacks =
     activeFilter === "ALL"
       ? feedbacks
       : feedbacks.filter((item) => item.status === activeFilter);
+
+  const applyStatusChange = (id: string, status: string, resolvedAt: string | null) => {
+    setData((current) => {
+      if (!current) return current;
+      const feedbacks = current.feedbacks.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: status as AdminFeedbackItem["status"],
+              resolvedAt,
+            }
+          : item,
+      );
+      return {
+        ...current,
+        feedbacks,
+        summary: buildFeedbackSummaryFromItems(feedbacks),
+      };
+    });
+  };
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
@@ -123,26 +132,17 @@ export default function AdminFeedbackPage() {
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setActionError(
-          payload?.error || "ไม่สามารถอัปเดตสถานะ feedback ได้",
-        );
+        setActionError(payload?.error || "ไม่สามารถอัปเดตสถานะ feedback ได้");
         return;
       }
 
-      setData((current) =>
-        withUpdatedFeedbacks(
-          current,
-          current?.feedbacks.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  status: status as Exclude<FeedbackStatus, "ALL">,
-                  resolvedAt:
-                    status === "RESOLVED" ? new Date().toISOString() : null,
-                }
-              : item,
-          ) ?? [],
-        ),
+      applyStatusChange(
+        id,
+        status,
+        status === "RESOLVED" ? new Date().toISOString() : null,
+      );
+      setDetailItem((current) =>
+        current && current.id === id ? { ...current, status: status as AdminFeedbackItem["status"], resolvedAt: status === "RESOLVED" ? new Date().toISOString() : null } : current,
       );
       setNotice("อัปเดตสถานะ feedback แล้ว");
     } catch {
@@ -152,16 +152,13 @@ export default function AdminFeedbackPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!canDeleteFeedback) return;
-    if (!window.confirm("ต้องการลบ feedback นี้ใช่ไหม")) return;
+  const handleConfirmDelete = async () => {
+    if (!canDeleteFeedback || !pendingDelete || deleteSaving) return;
 
+    setDeleteSaving(true);
+    setDeleteError(null);
     try {
-      setBusyId(id);
-      setNotice("");
-      setActionError("");
-
-      const response = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/feedback/${pendingDelete.id}`, { method: "DELETE" });
       if (response.status === 401) {
         router.push("/admin/login");
         return;
@@ -169,22 +166,26 @@ export default function AdminFeedbackPage() {
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setActionError(payload?.error || "ไม่สามารถลบ feedback ได้");
+        setDeleteError(payload?.error || "ไม่สามารถลบ feedback ได้");
         return;
       }
 
-      setData((current) =>
-        withUpdatedFeedbacks(
-          current,
-          current?.feedbacks.filter((item) => item.id !== id) ?? [],
-        ),
-      );
-      setExpandedId((current) => (current === id ? null : current));
+      setData((current) => {
+        if (!current) return current;
+        const remaining = current.feedbacks.filter((item) => item.id !== pendingDelete.id);
+        return {
+          ...current,
+          feedbacks: remaining,
+          summary: buildFeedbackSummaryFromItems(remaining),
+        };
+      });
+      setDetailItem((current) => (current?.id === pendingDelete.id ? null : current));
+      setPendingDelete(null);
       setNotice("ลบ feedback สำเร็จ");
     } catch {
-      setActionError("ไม่สามารถเชื่อมต่อเพื่อลบ feedback ได้");
+      setDeleteError("ไม่สามารถเชื่อมต่อเพื่อลบ feedback ได้");
     } finally {
-      setBusyId(null);
+      setDeleteSaving(false);
     }
   };
 
@@ -192,227 +193,298 @@ export default function AdminFeedbackPage() {
     <AdminShell
       admin={data?.admin ?? null}
       title="ข้อเสนอแนะ"
-      description="ดู queue ของบัคและฟีเจอร์รีเควสต์ในหน้าจัดการเดียว พร้อม mask ข้อมูลติดต่อไว้โดยค่าเริ่มต้น"
+      description="คิวงานบัคและคำขอฟีเจอร์ — ข้อมูลติดต่อถูกปิดบังโดยค่าเริ่มต้น"
       actions={
         <>
           <button
             type="button"
-            aria-label="รีเฟรช"
+            aria-label="รีเฟรชรายการ"
             onClick={() => void refresh()}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3.5 text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <Icon name="refresh" className="text-lg" />
+            <Icon name="refresh" className={`text-base ${loading ? "animate-spin" : ""}`} />
             รีเฟรช
           </button>
-          {canDeleteFeedback && (
-            <AdminGoogleSheetsExportButton
-              dataset="feedback"
-              label="ส่งออกข้อเสนอแนะ"
-            />
-          )}
+          {canDeleteFeedback ? (
+            <AdminGoogleSheetsExportButton dataset="feedback" label="ส่งออก" />
+          ) : null}
         </>
       }
     >
-      {error ? (
-        <GlassPanel variant="red" className="p-5 text-neon-red">
-          {error}
-        </GlassPanel>
-      ) : null}
-      {actionError ? (
-        <GlassPanel variant="red" className="p-5 text-neon-red">
-          {actionError}
-        </GlassPanel>
-      ) : null}
-      {notice ? (
-        <GlassPanel variant="green" className="p-5 text-neon-green">
-          {notice}
-        </GlassPanel>
-      ) : null}
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <AdminStatCard
-          label="ทั้งหมด"
-          value={loading ? "..." : summary.ALL}
-          icon="inbox"
-          tone="primary"
-        />
-        <AdminStatCard
-          label="รอดำเนินการ"
-          value={loading ? "..." : summary.PENDING}
-          icon="pending_actions"
-          tone="yellow"
-        />
-        <AdminStatCard
-          label="กำลังดำเนินการ"
-          value={loading ? "..." : summary.IN_PROGRESS}
-          icon="progress_activity"
-          tone="blue"
-        />
-        <AdminStatCard
-          label="แก้ไขแล้ว"
-          value={loading ? "..." : summary.RESOLVED}
-          icon="task_alt"
-          tone="green"
-        />
-        <AdminStatCard
-          label="ปฏิเสธ"
-          value={loading ? "..." : summary.REJECTED}
-          icon="block"
-          tone="red"
-        />
-      </section>
-
-      <GlassPanel className="p-5 md:p-6">
-        <div className="mb-5 flex flex-col gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-              คิวงาน
-            </p>
-            <h2 className="mt-2 text-2xl font-black text-white">
-              จัดการ feedback แบบละเอียด
-            </h2>
-          </div>
-
-          <div className="flex flex-wrap gap-2 rounded-xl border border-purple-800/40 bg-purple-950/80 p-1.5 shadow-xl shadow-purple-900/30 backdrop-blur-md">
-            {([
-              ["ALL", `ทั้งหมด (${formatAdminNumber(summary.ALL)})`],
-              ["PENDING", `รอดำเนินการ (${formatAdminNumber(summary.PENDING)})`],
-              ["IN_PROGRESS", `กำลังดำเนินการ (${formatAdminNumber(summary.IN_PROGRESS)})`],
-              ["RESOLVED", `แก้ไขแล้ว (${formatAdminNumber(summary.RESOLVED)})`],
-              ["REJECTED", `ปฏิเสธ (${formatAdminNumber(summary.REJECTED)})`],
-            ] as Array<[FeedbackStatus, string]>).map(([status, label]) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setActiveFilter(status)}
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 ${
-                  activeFilter === status
-                    ? "bg-purple-600/50 text-purple-200 shadow-lg shadow-purple-900/30"
-                    : "hover:bg-purple-500/20 hover:text-white"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      {error || actionError ? (
+        <div className="mb-4">
+          <AdminErrorState message={error ?? actionError} />
         </div>
+      ) : null}
+      {notice && !actionError ? (
+        <div className="mb-4">
+          <AdminNotice message={notice} />
+        </div>
+      ) : null}
 
-        <div className="space-y-4">
-          {loading
-            ? Array.from({ length: 6 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-32 animate-pulse rounded-2xl bg-white/5"
-                />
-              ))
-            : filteredFeedbacks.map((feedback) => {
-                const typeMeta = getFeedbackTypeMeta(feedback.type);
-                const expanded = expandedId === feedback.id;
-                const isBusy = busyId === feedback.id;
+      <div
+        role="tablist"
+        aria-label="กรองตามสถานะ"
+        className="mb-4 flex flex-wrap gap-1 rounded-xl border border-white/8 bg-white/[0.03] p-1"
+      >
+        {([
+          ["ALL", `ทั้งหมด (${formatAdminNumber(summary.ALL)})`],
+          ["PENDING", `รอดำเนินการ (${formatAdminNumber(summary.PENDING)})`],
+          ["IN_PROGRESS", `กำลังดำเนินการ (${formatAdminNumber(summary.IN_PROGRESS)})`],
+          ["RESOLVED", `แก้ไขแล้ว (${formatAdminNumber(summary.RESOLVED)})`],
+          ["REJECTED", `ปฏิเสธ (${formatAdminNumber(summary.REJECTED)})`],
+        ] as Array<[FeedbackStatusFilter, string]>).map(([status, label], tabIndex) => {
+          const selected = activeFilter === status;
+          const allTabs: FeedbackStatusFilter[] = ["ALL", "PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"];
+          return (
+            <button
+              key={status}
+              role="tab"
+              type="button"
+              tabIndex={selected ? 0 : -1}
+              aria-selected={selected}
+              onClick={() => setActiveFilter(status)}
+              onKeyDown={(event) => {
+                let nextIndex = tabIndex;
+                if (event.key === "ArrowRight") {
+                  nextIndex = (tabIndex + 1) % allTabs.length;
+                } else if (event.key === "ArrowLeft") {
+                  nextIndex = (tabIndex - 1 + allTabs.length) % allTabs.length;
+                } else if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = allTabs.length - 1;
+                } else {
+                  return;
+                }
+                event.preventDefault();
+                setActiveFilter(allTabs[nextIndex]);
+                (event.currentTarget.parentElement?.children[nextIndex] as HTMLElement | undefined)?.focus();
+              }}
+              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                selected
+                  ? "bg-primary/20 text-white"
+                  : "text-white/50 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
-                return (
-                  <div
-                    key={feedback.id}
-                    className="rounded-2xl border border-white/5 bg-white/5 p-4"
+      {loading ? (
+        <AdminTableSkeleton rows={7} />
+      ) : filteredFeedbacks.length === 0 ? (
+        <div className="rounded-xl border border-white/8 bg-white/[0.02]">
+          <AdminEmptyState
+            icon="inbox"
+            title={
+              activeFilter === "ALL"
+                ? "ยังไม่มีข้อเสนอแนะในระบบ"
+                : `ไม่มีรายการในสถานะ “${STATUS_LABELS[activeFilter]}”`
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <p className="mb-2 text-xs text-white/35">
+            แสดง {formatAdminNumber(filteredFeedbacks.length)} รายการล่าสุด
+          </p>
+          <ul className="divide-y divide-white/5 rounded-xl border border-white/8 bg-white/[0.02]">
+            {filteredFeedbacks.map((feedback) => {
+              const isBusy = busyId === feedback.id;
+              return (
+                <li
+                  key={feedback.id}
+                  className={`flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 ${
+                    isBusy ? "opacity-60" : ""
+                  }`}
+                >
+                  <StatusBadge tone={feedback.type === "BUG" ? "red" : "yellow"}>
+                    {feedback.type === "BUG" ? "บัค" : "ฟีเจอร์"}
+                  </StatusBadge>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailItem(feedback)}
+                    className="min-w-0 flex-1 text-left"
+                    title="เปิดดูรายละเอียด"
                   >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${typeMeta.badgeClass}`}
-                          >
-                            {typeMeta.label}
-                          </span>
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(
-                              feedback.status,
-                            )}`}
-                          >
-                            {feedback.status}
-                          </span>
-                          <span className="text-xs text-white/30">
-                            {formatDateTime(feedback.createdAt)}
-                          </span>
-                          {feedback.status === "RESOLVED" && feedback.resolvedAt ? (
-                            <span className="text-xs font-semibold text-neon-green">
-                              แก้ไขเมื่อ {formatDateTime(feedback.resolvedAt)}
-                            </span>
-                          ) : null}
-                        </div>
+                    <span className="block truncate text-sm font-semibold text-white/90 hover:text-white">
+                      {feedback.title}
+                    </span>
+                  </button>
 
-                        <h3 className="text-lg font-bold text-white">
-                          {feedback.title}
-                        </h3>
+                  <StatusBadge tone={STATUS_TONES[feedback.status] ?? "neutral"} dot>
+                    {STATUS_LABELS[feedback.status] ?? feedback.status}
+                  </StatusBadge>
 
-                        <div className="mt-3 grid gap-2 text-sm text-white/55 md:grid-cols-2">
-                          <p>
-                            ติดต่อกลับ:{" "}
-                            <span className="text-white/75">
-                              {feedback.contactMasked ?? "ไม่ระบุ"}
-                            </span>
-                          </p>
-                          <p>
-                            รายการ:{" "}
-                            <span className="text-white/75">#{feedback.id.slice(0, 8)}</span>
-                          </p>
-                        </div>
+                  <span className="w-36 shrink-0 text-xs tabular-nums text-white/40">
+                    {formatDateTime(feedback.createdAt)}
+                  </span>
 
-                        {expanded ? (
-                          <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-white/75">
-                            {feedback.details || "ไม่มีรายละเอียดเพิ่มเติม"}
-                          </div>
-                        ) : null}
-                      </div>
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-xs text-white/45"
+                    title={feedback.hasContact ? `ติดต่อกลับ: ${feedback.contactMasked}` : "ไม่มีช่องทางติดต่อ"}
+                  >
+                    <Icon name={feedback.hasContact ? "chat_bubble" : "do_not_disturb_on"} className="text-sm" />
+                    <span>{feedback.hasContact ? "มีช่องทางติดต่อ" : "ไม่มี"}</span>
+                  </span>
 
-                      <div className="flex flex-wrap items-center gap-2 lg:w-[280px] lg:justify-end">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedId((current) =>
-                              current === feedback.id ? null : feedback.id,
-                            )
-                          }
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/60 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white"
-                        >
-                          {expanded ? "ซ่อนรายละเอียด" : "ดูรายละเอียด"}
-                        </button>
-                        <select
-                          aria-label="เปลี่ยนสถานะข้อเสนอแนะ"
-                          value={feedback.status}
-                          onChange={(event) =>
-                            void handleStatusChange(feedback.id, event.target.value)
-                          }
-                          disabled={isBusy}
-                          className="rounded-full border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold text-white"
-                        >
-                          <option value="PENDING">รอดำเนินการ</option>
-                          <option value="IN_PROGRESS">กำลังดำเนินการ</option>
-                          <option value="RESOLVED">แก้ไขแล้ว</option>
-                          <option value="REJECTED">ปฏิเสธ</option>
-                        </select>
-                        {canDeleteFeedback && (
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void handleDelete(feedback.id)}
-                            className="rounded-full border border-neon-red/20 bg-neon-red/10 px-3 py-2 text-xs font-semibold text-neon-red transition-colors hover:bg-neon-red/20 disabled:opacity-60"
-                          >
-                            ลบ feedback
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  <RowActionsMenu
+                    label={`การกระทำสำหรับ: ${feedback.title}`}
+                    actions={[
+                      { label: "ดูรายละเอียด", icon: "visibility", onSelect: () => setDetailItem(feedback) },
+                      ...(["PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"] as const)
+                        .filter((status) => status !== feedback.status)
+                        .map((status) => ({
+                          label: `เปลี่ยนเป็น: ${STATUS_LABELS[status]}`,
+                          icon: "sync" as const,
+                          onSelect: () => void handleStatusChange(feedback.id, status),
+                        })),
+                      ...(canDeleteFeedback
+                        ? [
+                            { kind: "divider" as const },
+                            {
+                              label: "ลบ feedback",
+                              icon: "delete" as const,
+                              danger: true,
+                              disabled: isBusy,
+                              onSelect: () => {
+                                setDeleteError(null);
+                                setPendingDelete(feedback);
+                              },
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
 
-          {!loading && filteredFeedbacks.length === 0 ? (
-            <div className="rounded-2xl border border-white/5 bg-white/5 p-8 text-center text-white/45">
-              ไม่มี feedback ในสถานะที่เลือก
+      {/* Detail drawer */}
+      <AdminDrawer
+        open={Boolean(detailItem)}
+        onClose={() => setDetailItem(null)}
+        title="รายละเอียด feedback"
+      >
+        {detailItem ? (
+          <div className="space-y-5">
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <StatusBadge tone={detailItem.type === "BUG" ? "red" : "yellow"}>
+                  {detailItem.type === "BUG" ? "บัค" : "ฟีเจอร์"}
+                </StatusBadge>
+                <StatusBadge tone={STATUS_TONES[detailItem.status] ?? "neutral"} dot>
+                  {STATUS_LABELS[detailItem.status] ?? detailItem.status}
+                </StatusBadge>
+                <span className="text-xs text-white/30">#{detailItem.id.slice(0, 8)}</span>
+              </div>
+              <h3 className="text-lg font-bold leading-snug text-white">{detailItem.title}</h3>
             </div>
-          ) : null}
-        </div>
-      </GlassPanel>
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-white/40">รายละเอียด</p>
+              <p className="whitespace-pre-wrap rounded-xl border border-white/8 bg-white/[0.02] p-3 text-sm leading-relaxed text-white/75">
+                {detailItem.details || "ไม่มีรายละเอียดเพิ่มเติม"}
+              </p>
+            </div>
+
+            <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-2 text-sm">
+              <dt className="text-white/40">ติดต่อกลับ</dt>
+              <dd className="text-white/80">{detailItem.contactMasked ?? "ไม่ระบุ"}</dd>
+              <dt className="text-white/40">แจ้งเมื่อ</dt>
+              <dd className="text-white/80">{formatDateTime(detailItem.createdAt)}</dd>
+              <dt className="text-white/40">แก้ไขเมื่อ</dt>
+              <dd className="text-white/80">{formatDateTime(detailItem.resolvedAt)}</dd>
+            </dl>
+
+            <div>
+              <label htmlFor="feedback-status-control" className="mb-1.5 block text-xs font-semibold text-white/50">
+                เปลี่ยนสถานะ
+              </label>
+              <select
+                id="feedback-status-control"
+                value={detailItem.status}
+                disabled={busyId === detailItem.id}
+                onChange={(event) => void handleStatusChange(detailItem.id, event.target.value)}
+                className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white transition-colors focus:border-primary/60 focus:outline-none disabled:opacity-50"
+              >
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value} className="bg-[#161219]">
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {canDeleteFeedback ? (
+              <button
+                type="button"
+                disabled={busyId === detailItem.id}
+                onClick={() => {
+                  setDeleteError(null);
+                  setPendingDelete(detailItem);
+                }}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-neon-red/25 bg-neon-red/10 px-4 text-sm font-semibold text-neon-red transition-colors hover:bg-neon-red/20 disabled:opacity-60"
+              >
+                <Icon name="delete" className="text-base" />
+                ลบ feedback
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </AdminDrawer>
+
+      {/* Delete confirmation */}
+      <AdminDialog
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          if (!deleteSaving) setPendingDelete(null);
+        }}
+        title="ยืนยันการลบ feedback"
+        description="การลบไม่สามารถย้อนกลับได้"
+        size="sm"
+        closeOnEscape={!deleteSaving}
+        closeOnBackdrop={!deleteSaving}
+      >
+        {pendingDelete ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleConfirmDelete();
+            }}
+            className="space-y-4"
+          >
+            <blockquote className="rounded-xl border border-neon-red/25 bg-neon-red/5 p-3.5 text-sm leading-relaxed text-white/85">
+              {pendingDelete.title}
+            </blockquote>
+            {deleteError ? <AdminErrorState message={deleteError} /> : null}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleteSaving}
+                className="inline-flex h-11 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={deleteSaving}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-neon-red px-4 text-sm font-bold text-white shadow-[0_4px_0_#990026] transition-all active:translate-y-[3px] active:shadow-none disabled:opacity-60"
+              >
+                {deleteSaving ? "กำลังลบ..." : "ลบ"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </AdminDialog>
     </AdminShell>
   );
 }

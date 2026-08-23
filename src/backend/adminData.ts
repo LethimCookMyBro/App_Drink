@@ -18,6 +18,11 @@ import {
 } from "@/backend/privacy";
 import { listServerLogs } from "@/backend/serverLogs";
 import { redactPotentialPII } from "@/backend/dataProtection";
+import {
+  ADMIN_USERS_DEFAULT_LIMIT,
+  type AdminUsersListQuery,
+} from "@/backend/adminUsersQuery";
+import { buildSecurityPosture } from "@/backend/securityPosture";
 
 export interface AdminIdentity {
   username: string;
@@ -44,6 +49,17 @@ export interface AdminOverviewData {
   levelMix: Array<{
     level: number;
     label: string;
+    count: number;
+  }>;
+  /** Active question counts per gameplay type × intensity level */
+  inventoryMatrix: Array<{
+    type: QuestionType;
+    level: number;
+    count: number;
+  }>;
+  /** Active 18+ question counts per gameplay type */
+  typeAdultCounts: Array<{
+    type: QuestionType;
     count: number;
   }>;
   topQuestions: Array<{
@@ -83,6 +99,9 @@ export interface AdminUsersData {
     totalGameSessions: number;
   };
   users: AdminUserItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface AdminFeedbackItem {
@@ -116,9 +135,14 @@ export interface AdminAuditItem {
 export interface AdminSecurityData {
   admin: AdminIdentity;
   posture: Array<{
-    label: string;
-    value: string;
-    tone: "default" | "good" | "warn";
+    group: "auth" | "web" | "integrations";
+    items: Array<{
+      label: string;
+      value: string;
+      tone: "default" | "good" | "warn";
+      /** true only when the app actually verified this at runtime/startup */
+      checked: boolean;
+    }>;
   }>;
   metrics: {
     failedLogins24h: number;
@@ -133,6 +157,8 @@ export interface AdminSecurityData {
     lockedUntil: string | null;
     lastAttemptAt: string;
     lastIpMasked: string | null;
+    /** computed server-side at request time */
+    isActiveLockout: boolean;
   }>;
   recentAudit: AdminAuditItem[];
   recentServerLogs: AdminServerLogItem[];
@@ -153,6 +179,14 @@ const QUESTION_LABELS: Record<QuestionType, string> = {
   CHAOS: "โกลาหล",
   VOTE: "โหวต",
 };
+
+const QUESTION_TYPES_ORDER: QuestionType[] = [
+  "QUESTION",
+  "TRUTH",
+  "DARE",
+  "VOTE",
+  "CHAOS",
+];
 
 const LEVEL_LABELS: Record<number, string> = {
   1: "ชิลล์",
@@ -306,7 +340,7 @@ export function buildFeedbackSummaryFromItems(
 }
 
 export async function getAdminOverviewData(admin: Pick<Admin, "email" | "name" | "role" | "lastLoginAt">): Promise<AdminOverviewData> {
-  const [questionCount, activeRooms, totalUsers, verifiedUsers, feedbackPending, activeLockouts, questionMixRows, levelMixRows, topQuestions, recentUsers, recentFeedback, recentAudit] =
+  const [questionCount, activeRooms, totalUsers, verifiedUsers, feedbackPending, activeLockouts, inventoryRows, ratingRows, topQuestions, recentUsers, recentFeedback, recentAudit] =
     await Promise.all([
       prisma.question.count({ where: { isActive: true } }),
       prisma.room.count({ where: { isActive: true } }),
@@ -315,12 +349,12 @@ export async function getAdminOverviewData(admin: Pick<Admin, "email" | "name" |
       prisma.feedback.count({ where: { status: "PENDING" } }),
       prisma.adminLockout.count({ where: { lockedUntil: { gt: new Date() } } }),
       prisma.question.groupBy({
-        by: ["type"],
+        by: ["type", "level"],
         where: { isActive: true },
         _count: { _all: true },
       }),
       prisma.question.groupBy({
-        by: ["level"],
+        by: ["type", "is18Plus"],
         where: { isActive: true },
         _count: { _all: true },
       }),
@@ -405,18 +439,32 @@ export async function getAdminOverviewData(admin: Pick<Admin, "email" | "name" |
       pendingFeedback: feedbackPending,
       activeLockouts,
     },
-    questionMix: questionMixRows.map((row) => ({
+    inventoryMatrix: inventoryRows.map((row) => ({
       type: row.type,
-      label: QUESTION_LABELS[row.type],
+      level: row.level,
       count: row._count._all,
     })),
-    levelMix: levelMixRows
+    typeAdultCounts: ratingRows
+      .filter((row) => row.is18Plus)
       .map((row) => ({
-        level: row.level,
-        label: LEVEL_LABELS[row.level] || `ระดับ ${row.level}`,
+        type: row.type,
         count: row._count._all,
-      }))
-      .sort((a, b) => a.level - b.level),
+      })),
+    questionMix: QUESTION_TYPES_ORDER.map((type) => ({
+      type,
+      label: QUESTION_LABELS[type],
+      count: inventoryRows
+        .filter((row) => row.type === type)
+        .reduce((sum, row) => sum + row._count._all, 0),
+    })),
+    levelMix: [1, 2, 3]
+      .map((level) => ({
+        level,
+        label: LEVEL_LABELS[level],
+        count: inventoryRows
+          .filter((row) => row.level === level)
+          .reduce((sum, row) => sum + row._count._all, 0),
+      })),
     topQuestions: topQuestions.map((question) => ({
       id: question.id,
       text: question.text,
@@ -431,11 +479,22 @@ export async function getAdminOverviewData(admin: Pick<Admin, "email" | "name" |
   };
 }
 
-export async function getAdminUsersData(admin: Pick<Admin, "email" | "name" | "role" | "lastLoginAt">): Promise<AdminUsersData> {
+export async function getAdminUsersData(
+  admin: Pick<Admin, "email" | "name" | "role" | "lastLoginAt">,
+  listQuery: AdminUsersListQuery = { q: "", limit: ADMIN_USERS_DEFAULT_LIMIT, offset: 0 },
+): Promise<AdminUsersData> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [totalUsers, verifiedUsers, googleLinkedUsers, recentLogins7d, activeLegacySessions, activeOAuthSessions, totalGameSessions, users] =
+  const userWhere: Record<string, unknown> = {};
+  if (listQuery.q) {
+    userWhere.OR = [
+      { name: { contains: listQuery.q, mode: "insensitive" } },
+      { email: { contains: listQuery.q, mode: "insensitive" } },
+    ];
+  }
+
+  const [totalUsers, verifiedUsers, googleLinkedUsers, recentLogins7d, activeLegacySessions, activeOAuthSessions, totalGameSessions, matchedUsers] =
     await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { OR: [{ isVerified: true }, { emailVerified: { not: null } }] } }),
@@ -445,7 +504,9 @@ export async function getAdminUsersData(admin: Pick<Admin, "email" | "name" | "r
       prisma.session.count({ where: { expires: { gt: now } } }),
       prisma.gameSession.count(),
       prisma.user.findMany({
-        take: 50,
+        where: userWhere,
+        take: listQuery.limit,
+        skip: listQuery.offset,
         orderBy: [{ lastLoginAt: "desc" }, { createdAt: "desc" }],
         select: {
           id: true,
@@ -480,7 +541,10 @@ export async function getAdminUsersData(admin: Pick<Admin, "email" | "name" | "r
       activeSessions: activeLegacySessions + activeOAuthSessions,
       totalGameSessions,
     },
-    users: users.map(toUserItem),
+    users: matchedUsers.map(toUserItem),
+    total: listQuery.q ? await prisma.user.count({ where: userWhere }) : totalUsers,
+    limit: listQuery.limit,
+    offset: listQuery.offset,
   };
 }
 
@@ -520,7 +584,7 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
   const [recentAudit, recentServerLogs, failedLogins24h, successfulLogins24h, auditEvents24h, questionWrites24h, activeLockouts, lockoutRows] =
     await Promise.all([
       prisma.auditLog.findMany({
-        take: 20,
+        take: 50,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -537,7 +601,7 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
           },
         },
       }),
-      listServerLogs(20),
+      listServerLogs(50),
       prisma.auditLog.count({
         where: {
           action: "ADMIN_LOGIN_FAILURE",
@@ -593,41 +657,15 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
 
   return {
     admin: toAdminIdentity(admin),
-    posture: [
-      {
-        label: "Turnstile",
-        value:
-          env.turnstileSiteKey && env.turnstileSecretKey
-            ? "เปิดใช้"
-            : "ยังไม่ตั้งค่า",
-        tone: env.turnstileSiteKey && env.turnstileSecretKey ? "good" : "warn",
-      },
-      {
-        label: "Google Login",
-        value: env.googleLoginEnabled ? "พร้อมใช้งาน" : "ปิดอยู่",
-        tone: env.googleLoginEnabled ? "good" : "default",
-      },
-      {
-        label: "Google Sheets Export",
-        value: env.googleSheetsEnabled ? "พร้อมใช้งาน" : "ยังไม่ตั้งค่า",
-        tone: env.googleSheetsEnabled ? "good" : "warn",
-      },
-      {
-        label: "Allowed Origins",
-        value: env.allowedOrigins.length > 0 ? env.allowedOrigins.join(", ") : "ไม่ได้ตั้งค่า",
-        tone: env.allowedOrigins.length > 0 ? "good" : "warn",
-      },
-      {
-        label: "Cookie Policy",
-        value: "HttpOnly + SameSite=Strict",
-        tone: "good",
-      },
-      {
-        label: "Secrets",
-        value: "แยก secret ตาม role",
-        tone: "good",
-      },
-    ],
+    posture: buildSecurityPosture({
+      turnstileConfigured: Boolean(env.turnstileSiteKey && env.turnstileSecretKey),
+      googleLoginEnabled: env.googleLoginEnabled,
+      googleSheetsEnabled: env.googleSheetsEnabled,
+      allowedOriginsCount: env.allowedOrigins.length,
+      allowedOriginsPreview: env.allowedOrigins.slice(0, 3).join(", "),
+      isProduction: env.isProduction,
+      trustProxyIpHeaders: env.trustProxyIpHeaders,
+    }),
     metrics: {
       failedLogins24h,
       successfulLogins24h,
@@ -641,6 +679,7 @@ export async function getAdminSecurityData(admin: Pick<Admin, "email" | "name" |
       lockedUntil: toIsoString(row.lockedUntil),
       lastAttemptAt: row.lastAttemptAt.toISOString(),
       lastIpMasked: maskIpAddress(row.lastIp),
+      isActiveLockout: Boolean(row.lockedUntil && row.lockedUntil > now),
     })),
     recentAudit: recentAudit.map(toAuditItem),
     recentServerLogs: recentServerLogs.map(toServerLogItem),

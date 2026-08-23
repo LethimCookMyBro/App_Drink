@@ -30,7 +30,7 @@ export function Icon({
 
   return (
     <svg
-      viewBox="0 0 24 24"
+      viewBox="0 -960 960 960"
       fill="currentColor"
       aria-hidden="true"
       focusable="false"

@@ -420,8 +420,16 @@ async function buildSecurityTabs(
   return [
     buildTab(
       "admin_security_posture",
-      ["label", "value", "tone"],
-      data.posture.map((item) => [item.label, item.value, item.tone]),
+      ["group", "label", "value", "tone", "checked"],
+      data.posture.flatMap((group) =>
+        group.items.map((item) => [
+          group.group,
+          item.label,
+          item.value,
+          item.tone,
+          item.checked ? "checked" : "unchecked",
+        ]),
+      ),
     ),
     buildTab(
       "admin_security_metrics",

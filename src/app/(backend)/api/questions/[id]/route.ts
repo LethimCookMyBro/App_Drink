@@ -5,6 +5,7 @@ import { writeAdminAuditLog } from "@/backend/adminSecurity";
 import { enforceRateLimit, enforceSameOrigin, jsonError, jsonOk, mapServerError, parseJsonBody } from "@/backend/apiUtils";
 import logger from "@/backend/logger";
 import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
+import { evaluatePermanentDeleteEligibility } from "@/backend/questionDeleteSafety";
 import { questionUpdateSchema } from "@/shared/schemas";
 
 export const runtime = "nodejs";
@@ -156,7 +157,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/questions/[id] - Delete question
+// DELETE /api/questions/[id] - Deactivate question (default) or permanently delete (?permanent=true)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -180,6 +181,9 @@ export async function DELETE(
     }
     const { admin } = access;
 
+    const permanent =
+      new URL(request.url).searchParams.get("permanent") === "true";
+
     const { default: prisma } = await import("@/backend/db");
 
     const existing = await prisma.question.findUnique({ where: { id } });
@@ -187,10 +191,60 @@ export async function DELETE(
       return jsonError("ไม่พบคำถาม", 404);
     }
 
-    await prisma.question.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    if (permanent) {
+      // Permanent delete is destructive: GameEvent.questionId is `ON DELETE SET NULL`,
+      // so a naive prisma.question.delete would silently null out every historical
+      // event reference and destroy audit trail. Count the references first and
+      // refuse unless the question is genuinely unused.
+      const [gameEventReferences, activeSessionReferences, completedSessionReferences] =
+        await Promise.all([
+          prisma.gameEvent.count({ where: { questionId: id } }),
+          prisma.gameSession.count({
+            where: { currentQuestionId: id, status: "ACTIVE" },
+          }),
+          prisma.gameSession.count({
+            where: {
+              currentQuestionId: id,
+              status: { not: "ACTIVE" },
+            },
+          }),
+        ]);
+
+      const eligibility = evaluatePermanentDeleteEligibility({
+        gameEventReferences,
+        activeSessionReferences,
+        completedSessionReferences,
+      });
+
+      if (!eligibility.allowed) {
+        await writeAdminAuditLog({
+          adminId: admin.id,
+          action: "ADMIN_QUESTION_DELETE",
+          status: "FAILURE",
+          ip: getClientIP(request),
+          userAgent: request.headers.get("user-agent") ?? undefined,
+          metadata: {
+            questionId: existing.id,
+            type: existing.type,
+            is18Plus: existing.is18Plus,
+            permanent: true,
+            rejectionCode: eligibility.code,
+            counts: eligibility.counts,
+          },
+        });
+        return jsonError(eligibility.message, 409, {
+          code: eligibility.code,
+          counts: eligibility.counts,
+        });
+      }
+
+      await prisma.question.delete({ where: { id } });
+    } else {
+      await prisma.question.update({
+        where: { id },
+        data: { isActive: false },
+      });
+    }
 
     await writeAdminAuditLog({
       adminId: admin.id,
@@ -202,12 +256,14 @@ export async function DELETE(
         questionId: existing.id,
         type: existing.type,
         is18Plus: existing.is18Plus,
+        permanent,
       },
     });
 
     return jsonOk({
       success: true,
-      message: "ลบคำถามเรียบร้อย",
+      permanent,
+      message: permanent ? "ลบคำถามถาวรเรียบร้อย" : "ปิดใช้งานคำถามเรียบร้อย",
     });
   } catch (error) {
     logger.error("questions.delete.failed", {

@@ -17,7 +17,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint src",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test tests/*.test.{ts,tsx}",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "security:reencrypt-feedback": "npx -y node@20 scripts/reencrypt-feedback.mjs",
     "db:push": "prisma db push",

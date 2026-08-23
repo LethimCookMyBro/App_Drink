@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
 import { toAdminQuestion } from "@/backend/apiFilter";
+import {
+  buildQuestionsListOrderBy,
+  buildQuestionsListWhere,
+  parseQuestionsListQuery,
+} from "@/backend/questionsListQuery";
 import { getAdminAccessError, requireAdminRole } from "@/backend/adminAuth";
 import { writeAdminAuditLog } from "@/backend/adminSecurity";
 import {
@@ -13,38 +18,20 @@ import {
 import logger from "@/backend/logger";
 import { getClientIP, rateLimitConfigs } from "@/backend/rateLimit";
 import { questionSchema } from "@/shared/schemas";
-import { GAME_QUESTION_TYPE_SET } from "@/shared/config/gameConstants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function parseBoundedInt(
-  value: string | null,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (Number.isNaN(parsed)) {
-    return fallback;
-  }
-
-  return Math.min(max, Math.max(min, parsed));
-}
-
-function parseBooleanFlag(value: string | null): boolean | null | "invalid" {
-  if (value === null) {
-    return null;
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-
-  return "invalid";
-}
+const QUESTION_SELECT = {
+  id: true,
+  text: true,
+  type: true,
+  level: true,
+  is18Plus: true,
+  isPublic: true,
+  isActive: true,
+  usageCount: true,
+} as const;
 
 // GET /api/questions - List questions for admin management
 export async function GET(request: NextRequest) {
@@ -55,55 +42,22 @@ export async function GET(request: NextRequest) {
       return jsonError(message, status);
     }
 
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type");
-    const is18Plus = parseBooleanFlag(searchParams.get("is18Plus"));
+    const parsed = parseQuestionsListQuery(new URL(request.url).searchParams);
+    if (!parsed.ok) {
+      return jsonError(parsed.error, 400);
+    }
+    const { query } = parsed;
 
-    if (type && !GAME_QUESTION_TYPE_SET.has(type)) {
-      return jsonError("ประเภทคำถามไม่ถูกต้อง", 400);
-    }
-
-    if (is18Plus === "invalid") {
-      return jsonError("ค่า is18Plus ไม่ถูกต้อง", 400);
-    }
-
-    const levelParam = searchParams.get("level");
-    const level = levelParam ? parseBoundedInt(levelParam, 1, 1, 3) : null;
-    const limit = parseBoundedInt(searchParams.get("limit"), 50, 1, 100);
-    const offset = parseBoundedInt(searchParams.get("offset"), 0, 0, 100000);
-    const includeInactive = searchParams.get("includeInactive") === "true";
-
-    const where: Record<string, unknown> = {};
-    if (!includeInactive) {
-      where.isActive = true;
-    }
-    if (type) {
-      where.type = type;
-    }
-    if (level !== null) {
-      where.level = { lte: level };
-    }
-    if (is18Plus !== null) {
-      where.is18Plus = is18Plus;
-    }
+    const where = buildQuestionsListWhere(query);
 
     const { default: prisma } = await import("@/backend/db");
     const [questions, total] = await Promise.all([
       prisma.question.findMany({
         where,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: limit,
-        skip: offset,
-        select: {
-          id: true,
-          text: true,
-          type: true,
-          level: true,
-          is18Plus: true,
-          isPublic: true,
-          isActive: true,
-          usageCount: true,
-        },
+        orderBy: buildQuestionsListOrderBy(query.sort),
+        take: query.limit,
+        skip: query.offset,
+        select: QUESTION_SELECT,
       }),
       prisma.question.count({ where }),
     ]);
@@ -111,9 +65,9 @@ export async function GET(request: NextRequest) {
     return jsonOk({
       questions: questions.map(toAdminQuestion),
       total,
-      limit,
-      offset,
-      hasMore: offset + questions.length < total,
+      limit: query.limit,
+      offset: query.offset,
+      hasMore: query.offset + questions.length < total,
       source: "db",
     });
   } catch (error) {
@@ -167,16 +121,7 @@ export async function POST(request: NextRequest) {
         isActive: true,
         createdBy: admin.id,
       },
-      select: {
-        id: true,
-        text: true,
-        type: true,
-        level: true,
-        is18Plus: true,
-        isPublic: true,
-        isActive: true,
-        usageCount: true,
-      },
+      select: QUESTION_SELECT,
     });
 
     await writeAdminAuditLog({

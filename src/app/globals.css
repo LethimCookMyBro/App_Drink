@@ -170,6 +170,43 @@ body {
   outline-offset: 2px;
 }
 
+/* ========================================
+   Admin overlays
+   ======================================== */
+
+@keyframes admin-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes admin-dialog-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes admin-drawer-in-left {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* Smoke/Gradient Background */
 .smoke-bg {
   background: radial-gradient(
