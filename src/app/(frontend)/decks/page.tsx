@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button, GlassPanel } from "@/frontend/components/ui";
+import { usePlayerDialog } from "@/frontend/components/ui/usePlayerDialog";
 import { validateCustomQuestion } from "@/shared/validation";
 
 import { Icon } from "@/frontend/components/ui/Icon";
@@ -46,6 +47,12 @@ export default function DeckBuilderPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddQuestionModal, setShowAddQuestionModal] = useState(false);
   const [currentDeck, setCurrentDeck] = useState<Deck | null>(null);
+
+  // Modal refs and a11y hooks
+  const createModalRef = useRef<HTMLDivElement>(null);
+  const addQuestionModalRef = useRef<HTMLDivElement>(null);
+  usePlayerDialog(createModalRef, showCreateModal, () => setShowCreateModal(false));
+  usePlayerDialog(addQuestionModalRef, showAddQuestionModal, () => setShowAddQuestionModal(false));
 
   // New deck form
   const [newDeckName, setNewDeckName] = useState("");
@@ -331,14 +338,16 @@ export default function DeckBuilderPage() {
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
+              ref={createModalRef}
               role="dialog"
+              tabIndex={-1}
               aria-modal="true"
               aria-label="สร้างชุดคำถามใหม่"
               className="w-full max-w-md bg-surface rounded-t-3xl p-6"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              onClick={(e) => e.stopPropagation()}
+
             >
               <h2 className="text-xl font-bold text-white mb-6">
                 สร้างชุดคำถามใหม่
@@ -412,7 +421,7 @@ export default function DeckBuilderPage() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              onClick={(e) => e.stopPropagation()}
+
             >
               <h2 className="text-xl font-bold text-white mb-6">เพิ่มคำถาม</h2>
 

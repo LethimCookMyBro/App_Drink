@@ -18,6 +18,7 @@ import { formatAdminNumber } from "@/frontend/admin/format";
 import { useAdminRouteData } from "@/frontend/hooks/useAdminRouteData";
 import type { AdminFeedbackData, AdminFeedbackItem } from "@/backend/adminData";
 import { hasAdminRole } from "@/shared/adminRoles";
+import { applyFeedbackStatusDelta, applyFeedbackDeleteDelta } from "@/shared/feedbackSummaryDelta";
 
 import { Icon } from "@/frontend/components/ui/Icon";
 
@@ -85,11 +86,7 @@ export default function AdminFeedbackPage() {
           : item,
       );
       // Preserve server-authoritative summary; only adjust the delta
-      const summary = { ...current.summary };
-      if (oldStatus && oldStatus !== newStatus) {
-        summary[oldStatus] = Math.max(0, (summary[oldStatus] ?? 0) - 1);
-        summary[newStatus as keyof typeof summary] = (summary[newStatus as keyof typeof summary] ?? 0) + 1;
-      }
+      const summary = applyFeedbackStatusDelta(current.summary, oldStatus, newStatus);
       return { ...current, feedbacks, summary };
     });
   };
@@ -156,11 +153,9 @@ export default function AdminFeedbackPage() {
         const deleted = current.feedbacks.find((item) => item.id === pendingDelete.id);
         const remaining = current.feedbacks.filter((item) => item.id !== pendingDelete.id);
         // Preserve server-authoritative summary; only decrement the deleted item's status
-        const summary = { ...current.summary };
-        if (deleted) {
-          summary[deleted.status] = Math.max(0, (summary[deleted.status] ?? 0) - 1);
-          summary.ALL = Math.max(0, (summary.ALL ?? 0) - 1);
-        }
+        const summary = deleted
+          ? applyFeedbackDeleteDelta(current.summary, deleted.status)
+          : current.summary;
         return { ...current, feedbacks: remaining, summary };
       });
       setDetailItem((current) => (current?.id === pendingDelete.id ? null : current));

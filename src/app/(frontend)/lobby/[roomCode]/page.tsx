@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import {
 } from "@/frontend/game/gameSession";
 
 import { Icon } from "@/frontend/components/ui/Icon";
+import { usePlayerDialog } from "@/frontend/components/ui/usePlayerDialog";
 import { ButtonLink } from "@/frontend/components/ui/ButtonLink";
 
 interface LocalPlayer {
@@ -54,6 +55,8 @@ export default function LobbyPage() {
   const [players, setPlayers] = useState<LocalPlayer[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const addModalRef = useRef<HTMLDivElement>(null);
+  usePlayerDialog(addModalRef, showAddModal, () => setShowAddModal(false));
   const [roomName, setRoomName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [canManageLobby, setCanManageLobby] = useState(false);
@@ -68,6 +71,8 @@ export default function LobbyPage() {
   // Custom questions state
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const questionModalRef = useRef<HTMLDivElement>(null);
+  usePlayerDialog(questionModalRef, showQuestionModal, () => setShowQuestionModal(false));
   const [newQuestion, setNewQuestion] = useState("");
 
   const canAddMore = players.length < maxPlayers;
@@ -723,7 +728,7 @@ export default function LobbyPage() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              onClick={(e) => e.stopPropagation()}
+
             >
               <h2 className="text-xl font-bold text-white mb-6">
                 เพิ่มเพื่อนเข้าวง
@@ -803,7 +808,7 @@ export default function LobbyPage() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              onClick={(e) => e.stopPropagation()}
+
             >
               <h2 className="text-xl font-bold text-white mb-2">
                 เพิ่มคำถามพิเศษ
