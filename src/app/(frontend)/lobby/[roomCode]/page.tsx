@@ -721,13 +721,16 @@ export default function LobbyPage() {
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
+              ref={addModalRef}
               role="dialog"
+              tabIndex={-1}
               aria-modal="true"
               aria-label="เพิ่มเพื่อนเข้าวง"
               className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-t-3xl bg-surface p-6 sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
 
             >
               <h2 className="text-xl font-bold text-white mb-6">
@@ -804,10 +807,16 @@ export default function LobbyPage() {
             onClick={() => setShowQuestionModal(false)}
           >
             <motion.div
+              ref={questionModalRef}
+              role="dialog"
+              tabIndex={-1}
+              aria-modal="true"
+              aria-label="เพิ่มคำถามพิเศษ"
               className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-t-3xl bg-surface p-6 sm:max-h-[calc(100dvh-4rem)] sm:rounded-3xl"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
 
             >
               <h2 className="text-xl font-bold text-white mb-2">

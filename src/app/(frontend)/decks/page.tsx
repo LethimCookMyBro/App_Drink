@@ -347,6 +347,7 @@ export default function DeckBuilderPage() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
 
             >
               <h2 className="text-xl font-bold text-white mb-6">
@@ -417,10 +418,18 @@ export default function DeckBuilderPage() {
             onClick={() => setShowAddQuestionModal(false)}
           >
             <motion.div
-              className="w-full max-w-md bg-surface rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto"
+              ref={addQuestionModalRef}
+              role="dialog"
+              tabIndex={-1}
+              aria-modal="true"
+              aria-label="เพิ่มคำถาม"
+
+
+ className="w-full max-w-md bg-surface rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
 
             >
               <h2 className="text-xl font-bold text-white mb-6">เพิ่มคำถาม</h2>
